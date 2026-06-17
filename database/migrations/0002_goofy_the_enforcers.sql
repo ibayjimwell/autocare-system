@@ -1,0 +1,1 @@
+ALTER TABLE "staff_access" ADD COLUMN "inventory" boolean DEFAULT false NOT NULL;

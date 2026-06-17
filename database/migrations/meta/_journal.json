@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1781155024523,
+      "tag": "0000_fair_blink",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781176006146,
+      "tag": "0001_shallow_gamora",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781611035697,
+      "tag": "0002_goofy_the_enforcers",
+      "breakpoints": true
+    }
+  ]
+}
