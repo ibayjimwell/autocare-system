@@ -1,16 +1,13 @@
+// app/api/staffs/change-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { Staffs } from "@/database/models/staffs/staffs.model";
 import { eq } from "drizzle-orm";
 import { hashPassword, validatePassword, validatePasswordStrength } from "@/utils/shared";
 
-// ------------------------------------------------------------------
-// PUT /api/staffs/change-password – Change password of a staff member
-// ------------------------------------------------------------------
 export async function PUT(req: NextRequest) {
   let body: any;
 
-  // 1. Parse JSON body
   try {
     body = await req.json();
   } catch (e) {
@@ -28,7 +25,7 @@ export async function PUT(req: NextRequest) {
 
   const { username, currentPassword, newPassword } = body;
 
-  // 2. Validate required fields
+  // 1. Validate required fields
   if (!username || typeof username !== "string" || username.trim() === "") {
     return NextResponse.json(
       {
@@ -36,18 +33,6 @@ export async function PUT(req: NextRequest) {
         errorType: "fve",
         errorTitle: "Missing username",
         errorMessage: "Username is required.",
-        errorLog: null,
-      },
-      { status: 422 }
-    );
-  }
-  if (!currentPassword || typeof currentPassword !== "string" || currentPassword === "") {
-    return NextResponse.json(
-      {
-        error: true,
-        errorType: "fve",
-        errorTitle: "Missing current password",
-        errorMessage: "Current password is required.",
         errorLog: null,
       },
       { status: 422 }
@@ -66,22 +51,22 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  // 3. Validate new password strength
-  const passwordStrength = validatePasswordStrength(newPassword);
-  if (!passwordStrength.isValid) {
+  // 2. Validate new password strength
+  const strength = validatePasswordStrength(newPassword);
+  if (!strength.isValid) {
     return NextResponse.json(
       {
         error: true,
         errorType: "fve",
         errorTitle: "Weak password",
-        errorMessage: passwordStrength.errors.join(" "),
-        errorLog: passwordStrength.errors,
+        errorMessage: strength.errors.join(" "),
+        errorLog: strength.errors,
       },
       { status: 422 }
     );
   }
 
-  // 4. Fetch staff by username
+  // 3. Fetch staff
   let staff;
   try {
     const result = await Database.select()
@@ -115,55 +100,56 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  // 5. Verify current password
-  let isCurrentPasswordValid: boolean;
+  // 4. If tempPassword is true, skip current password check
+  if (staff.tempPassword !== true) {
+    // Require and validate current password
+    if (!currentPassword || typeof currentPassword !== "string" || currentPassword === "") {
+      return NextResponse.json(
+        {
+          error: true,
+          errorType: "fve",
+          errorTitle: "Missing current password",
+          errorMessage: "Current password is required.",
+          errorLog: null,
+        },
+        { status: 422 }
+      );
+    }
+
+    const isValid = await validatePassword(currentPassword, staff.password);
+    if (!isValid) {
+      return NextResponse.json(
+        {
+          error: true,
+          errorType: "auth",
+          errorTitle: "Incorrect password",
+          errorMessage: "Current password is incorrect.",
+          errorLog: null,
+        },
+        { status: 401 }
+      );
+    }
+
+    // Prevent reusing old password (only when not temp)
+    const isSame = await validatePassword(newPassword, staff.password);
+    if (isSame) {
+      return NextResponse.json(
+        {
+          error: true,
+          errorType: "fve",
+          errorTitle: "Password reuse",
+          errorMessage: "New password must be different from the current password.",
+          errorLog: null,
+        },
+        { status: 422 }
+      );
+    }
+  }
+
+  // 5. Hash new password
+  let hashedPassword: string;
   try {
-    isCurrentPasswordValid = await validatePassword(currentPassword, staff.password);
-  } catch (e) {
-    return NextResponse.json(
-      {
-        error: true,
-        errorType: "se",
-        errorTitle: "Password validation error",
-        errorMessage: "Internal error while checking current password.",
-        errorLog: e instanceof Error ? e.message : String(e),
-      },
-      { status: 500 }
-    );
-  }
-
-  if (!isCurrentPasswordValid) {
-    return NextResponse.json(
-      {
-        error: true,
-        errorType: "auth",
-        errorTitle: "Incorrect password",
-        errorMessage: "Current password is incorrect.",
-        errorLog: null,
-      },
-      { status: 401 }
-    );
-  }
-
-  // 6. Optionally, prevent reusing the same password (security best practice)
-  const isSameAsOld = await validatePassword(newPassword, staff.password);
-  if (isSameAsOld) {
-    return NextResponse.json(
-      {
-        error: true,
-        errorType: "fve",
-        errorTitle: "Password reuse",
-        errorMessage: "New password must be different from the current password.",
-        errorLog: null,
-      },
-      { status: 422 }
-    );
-  }
-
-  // 7. Hash the new password
-  let hashedNewPassword: string;
-  try {
-    hashedNewPassword = await hashPassword(newPassword);
+    hashedPassword = await hashPassword(newPassword);
   } catch (e) {
     return NextResponse.json(
       {
@@ -177,11 +163,11 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  // 8. Update password and set tempPassword = false
+  // 6. Update password and set tempPassword = false
   try {
     await Database.update(Staffs)
       .set({
-        password: hashedNewPassword,
+        password: hashedPassword,
         tempPassword: false,
       })
       .where(eq(Staffs.id, staff.id));
@@ -189,7 +175,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(
       {
         error: false,
-        message: "Password changed successfully. Please log in with your new password.",
+        message: "Password changed successfully.",
         requiresPasswordChange: false,
       },
       { status: 200 }
