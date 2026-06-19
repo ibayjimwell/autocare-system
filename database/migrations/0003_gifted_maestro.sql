@@ -1,0 +1,1 @@
+ALTER TABLE "staffs" ADD COLUMN "in_boarding" boolean DEFAULT true NOT NULL;

@@ -120,6 +120,7 @@ export async function GET() {
       fullname: Staffs.fullname,
       username: Staffs.username,
       role: Staffs.role,
+      inBoarding: Staffs.inBoarding,
       createdAt: Staffs.createdAt,
       updatedAt: Staffs.updatedAt,
     })
