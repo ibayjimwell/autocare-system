@@ -1,0 +1,1 @@
+ALTER TABLE "customers" ADD COLUMN "deactivated" boolean DEFAULT false NOT NULL;
