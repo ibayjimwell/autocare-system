@@ -43,6 +43,20 @@
       "when": 1782033445069,
       "tag": "0005_serious_alex_wilder",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782090465879,
+      "tag": "0006_hard_maestro",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782098268568,
+      "tag": "0007_nosy_gamora",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,11 @@
+'use client';
+
 import React, { useState, useEffect } from "react";
-import PageContainer from "@/components/shared/PageContainer";
-import DataModal from "@/components/shared/DataModal";
-import EmptyState from "@/components/shared/EmptyState";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import PageContainer from "@/components/shared/page-container";
+import DataModal from "@/components/shared/data-modal";
+import EmptyState from "@/components/shared/empty-state";
+import LoadingSpinner from "@/components/shared/loading-spinner";
+import ErrorHandler from "@/components/shared/error-handler";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +23,6 @@ import {
   Plus,
   Cog,
   Pencil,
-  Trash2,
   PowerOff,
   Search,
   ChevronLeft,
@@ -29,30 +31,23 @@ import {
   Tag,
   CheckCircle2,
 } from "lucide-react";
-import ConfirmationDialog from "@/components/ui/ConfirmationDialog";
+import ConfirmationDialog from "@/components/services/confirmation-dialog";
 import { cn } from "@/lib/utils";
+import { servicesApi } from "@/lib/services/services";
+import { toast } from "sonner";
 
-/**
- * ServiceTypes – Manage a catalog of service offerings.
- *
- * All API calls and business logic have been replaced with placeholders.
- * Backend team: replace each TODO comment with actual API invocations
- * (e.g., serviceTypesApi.list(), notify.success(), etc.).
- */
 export default function ServiceTypes() {
   // ==========================================================================
-  // UI State
+  // State
   // ==========================================================================
-  const [types, setTypes] = useState([]);
+  const [types, setTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState(true); // true = active, false = disabled
+  const [activeFilter, setActiveFilter] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
-
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -60,39 +55,61 @@ export default function ServiceTypes() {
     durationMinutes: "",
   });
   const [saving, setSaving] = useState(false);
+  const [apiError, setApiError] = useState<{
+    type: string;
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Dialog states
   const [deactivateDialog, setDeactivateDialog] = useState({
     open: false,
-    id: null,
+    id: null as string | null,
     name: "",
   });
   const [enableDialog, setEnableDialog] = useState({
     open: false,
-    id: null,
-    name: "",
-  });
-  const [permanentDeleteDialog, setPermanentDeleteDialog] = useState({
-    open: false,
-    id: null,
+    id: null as string | null,
     name: "",
   });
 
   // ==========================================================================
-  // Data Loading – Backend integration point
+  // Data Loading
   // ==========================================================================
   const load = async () => {
     setLoading(true);
-    // TODO: Backend – fetch service types based on activeFilter
-    // const res = await serviceTypesApi.list(activeFilter);
-    // const data = res.data?.data || res.data || [];
-    // setTypes(data);
-    setLoading(false);
+    setApiError(null);
+    try {
+      const res = await servicesApi.list(activeFilter);
+      if (res.error) {
+        setApiError({
+          type: res.errorType || "fe",
+          title: res.errorTitle || "Error",
+          message: res.errorMessage || "Failed to load services.",
+        });
+        setTypes([]);
+      } else {
+        // Map database column `estimatedDuration` to frontend `durationMinutes`
+        const mappedData = (res.data || []).map((item: any) => ({
+          ...item,
+          durationMinutes: item.estimatedDuration,
+        }));
+        setTypes(mappedData);
+      }
+    } catch (err: any) {
+      setApiError({
+        type: "se",
+        title: "Unexpected Error",
+        message: err.message || "Something went wrong.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     load();
-    setCurrentPage(1); // reset pagination on filter change
+    setCurrentPage(1);
   }, [activeFilter]);
 
   // ==========================================================================
@@ -110,16 +127,22 @@ export default function ServiceTypes() {
     currentPage * itemsPerPage
   );
 
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   // ==========================================================================
   // Form Handlers
   // ==========================================================================
   const openCreate = () => {
     setEditing(null);
     setForm({ name: "", description: "", basePrice: "", durationMinutes: "" });
+    setApiError(null);
     setModalOpen(true);
   };
 
-  const openEdit = (st) => {
+  const openEdit = (st: any) => {
     setEditing(st);
     setForm({
       name: st.name || "",
@@ -127,57 +150,92 @@ export default function ServiceTypes() {
       basePrice: st.basePrice?.toString() || "",
       durationMinutes: st.durationMinutes?.toString() || "",
     });
+    setApiError(null);
     setModalOpen(true);
   };
 
-  const handleSave = async (e) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    // TODO: Backend – create or update service type
-    // const data = { ...form, basePrice: parseFloat(form.basePrice) || 0, durationMinutes: parseInt(form.durationMinutes, 10) || 0 };
-    // if (editing) {
-    //   await serviceTypesApi.update(editing.id, data);
-    //   notify.success('Service type updated');
-    // } else {
-    //   await serviceTypesApi.create(data);
-    //   notify.success('Service type created');
-    // }
-    // setModalOpen(false);
-    // load();
-    setSaving(false);
+    setApiError(null);
+
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim() || undefined,
+      basePrice: form.basePrice ? parseFloat(form.basePrice) : undefined,
+      durationMinutes: parseInt(form.durationMinutes, 10),
+    };
+
+    try {
+      let res;
+      if (editing) {
+        res = await servicesApi.update(editing.id, payload);
+      } else {
+        res = await servicesApi.create(payload);
+      }
+      if (res.error) {
+        setApiError({
+          type: res.errorType || "fve",
+          title: res.errorTitle || "Error",
+          message: res.errorMessage || "Operation failed.",
+        });
+      } else {
+        toast.success(editing ? "Service updated." : "Service created.");
+        setModalOpen(false);
+        await load();
+      }
+    } catch (err: any) {
+      setApiError({
+        type: "se",
+        title: "Unexpected Error",
+        message: err.message || "Something went wrong.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ==========================================================================
-  // Action Handlers (deactivate, enable, permanent delete)
+  // Action Handlers (enable/disable)
   // ==========================================================================
   const handleDeactivate = async () => {
-    // TODO: Backend – deactivate service by ID
-    // await serviceTypesApi.deactivate(deactivateDialog.id);
-    // notify.success('Service deactivated');
-    setDeactivateDialog({ open: false, id: null, name: "" });
-    // load();
+    if (!deactivateDialog.id) return;
+    try {
+      const res = await servicesApi.disable(deactivateDialog.id);
+      if (res.error) {
+        toast.error(res.errorMessage || "Failed to disable service.");
+      } else {
+        toast.success(`"${deactivateDialog.name}" has been disabled.`);
+        await load();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error disabling service.");
+    } finally {
+      setDeactivateDialog({ open: false, id: null, name: "" });
+    }
   };
 
   const handleEnable = async () => {
-    // TODO: Backend – enable service by ID
-    // await serviceTypesApi.enable(enableDialog.id);
-    // notify.success(`"${enableDialog.name}" has been enabled`);
-    setEnableDialog({ open: false, id: null, name: "" });
-    // load();
-  };
-
-  const handlePermanentDelete = async () => {
-    // TODO: Backend – permanently delete service by ID
-    // await serviceTypesApi.permanentDelete(permanentDeleteDialog.id);
-    // notify.success('Service permanently removed');
-    setPermanentDeleteDialog({ open: false, id: null, name: "" });
-    // load();
+    if (!enableDialog.id) return;
+    try {
+      const res = await servicesApi.enable(enableDialog.id);
+      if (res.error) {
+        toast.error(res.errorMessage || "Failed to enable service.");
+      } else {
+        toast.success(`"${enableDialog.name}" has been enabled.`);
+        await load();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error enabling service.");
+    } finally {
+      setEnableDialog({ open: false, id: null, name: "" });
+    }
   };
 
   // ==========================================================================
-  // Formatting Helper (UI only)
+  // Formatting Helper
   // ==========================================================================
-  const formatPrice = (price) => {
+  const formatPrice = (price: any) => {
     const num = parseFloat(price);
     return isNaN(num)
       ? "0.00"
@@ -207,9 +265,19 @@ export default function ServiceTypes() {
         </Button>
       }
     >
+      {/* ===== API Error Display ===== */}
+      {apiError && (
+        <div className="mb-4">
+          <ErrorHandler
+            type={apiError.type}
+            title={apiError.title}
+            message={apiError.message}
+          />
+        </div>
+      )}
+
       {/* ===== Search & Filter Toolbar ===== */}
       <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between">
-        {/* Segmented control for active/disabled */}
         <div className="flex p-1 bg-slate-100 rounded-2xl w-full md:w-auto">
           <button
             onClick={() => setActiveFilter(true)}
@@ -235,7 +303,6 @@ export default function ServiceTypes() {
           </button>
         </div>
 
-        {/* Search field */}
         <div className="relative w-full md:max-w-xs group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
           <Input
@@ -406,22 +473,20 @@ export default function ServiceTypes() {
                             <PowerOff className="w-4 h-4" />
                           </Button>
                         ) : (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setEnableDialog({
-                                  open: true,
-                                  id: st.id,
-                                  name: st.name,
-                                })
-                              }
-                              className="h-9 w-9 rounded-xl hover:bg-green-50 text-green-500 transition-all"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                            </Button>
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setEnableDialog({
+                                open: true,
+                                id: st.id,
+                                name: st.name,
+                              })
+                            }
+                            className="h-9 w-9 rounded-xl hover:bg-green-50 text-green-500 transition-all"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -447,7 +512,7 @@ export default function ServiceTypes() {
                 <ChevronLeft className="w-4 h-4" />
               </Button>
               <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }).map((_, i) => (
+                {Array.from({ length: Math.min(totalPages, 7) }).map((_, i) => (
                   <button
                     key={i}
                     onClick={() => setCurrentPage(i + 1)}
@@ -484,7 +549,15 @@ export default function ServiceTypes() {
         onSubmit={handleSave}
         isLoading={saving}
       >
-        <div className="space-y-6 max-h-[70vh] overflow-y-auto px-2 pb-2 custom-scrollbar">
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto px-2 pb-2">
+          {apiError && (
+            <ErrorHandler
+              type={apiError.type}
+              title={apiError.title}
+              message={apiError.message}
+            />
+          )}
+
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
               Service Name
@@ -553,7 +626,6 @@ export default function ServiceTypes() {
         description={`This will hide "${deactivateDialog.name}" from the customer booking portal. You can reactivate it later.`}
         onConfirm={handleDeactivate}
         confirmText="Deactivate Service"
-        variant="default"
       />
 
       <ConfirmationDialog
@@ -563,19 +635,6 @@ export default function ServiceTypes() {
         description={`Reactivate "${enableDialog.name}"? It will become available again in the customer booking portal.`}
         onConfirm={handleEnable}
         confirmText="Enable Service"
-        variant="default"
-      />
-
-      <ConfirmationDialog
-        open={permanentDeleteDialog.open}
-        onOpenChange={(open) =>
-          setPermanentDeleteDialog({ ...permanentDeleteDialog, open })
-        }
-        title="Permanent Removal"
-        description={`Are you sure you want to delete "${permanentDeleteDialog.name}"? All associated history for this specific service type configuration will be lost.`}
-        onConfirm={handlePermanentDelete}
-        confirmText="Delete Permanently"
-        variant="destructive"
       />
     </PageContainer>
   );
