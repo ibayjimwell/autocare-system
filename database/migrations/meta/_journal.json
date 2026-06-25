@@ -57,6 +57,41 @@
       "when": 1782098268568,
       "tag": "0007_nosy_gamora",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782185873624,
+      "tag": "0008_clever_tiger_shark",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782288763577,
+      "tag": "0009_slippery_franklin_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782303742775,
+      "tag": "0010_closed_klaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782306905110,
+      "tag": "0011_freezing_boomerang",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782307045089,
+      "tag": "0012_cooing_selene",
+      "breakpoints": true
     }
   ]
 }

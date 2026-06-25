@@ -7,6 +7,7 @@ export const Services = pgTable('services', {
   basePrice: decimal('base_price', { precision: 10, scale: 2 }),
   estimatedDuration: integer('duration_minutes').notNull(),
   active: boolean('active').default(true).notNull(),
+  type: varchar('type', { length: 50 }).default('REPAIR'), // 'PMS', 'REPAIR', 'CHECKUP'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
