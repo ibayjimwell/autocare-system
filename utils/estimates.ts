@@ -1,9 +1,9 @@
 import { Database } from "@/lib/drizzle";
-import { EstimatedCosts } from "@/database/models/billing/estimated-costs.model";
-import { EstimateFindings } from "@/database/models/billing/estimate-findings.model";
-import { EstimateFindingParts } from "@/database/models/billing/estimate-finding-parts.model";
-import { EstimateFees } from "@/database/models/billing/estimate-fees.model";
-import { EstimateDiscounts } from "@/database/models/billing/estimate-discounts.model";
+import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
+import { EstimateFindings } from "@/database/models/payments/estimate-findings.model";
+import { EstimateFindingParts } from "@/database/models/payments/estimate-finding-parts.model";
+import { EstimateFees } from "@/database/models/payments/estimate-fees.model";
+import { EstimateDiscounts } from "@/database/models/payments/estimate-discounts.model";
 import { Services } from "@/database/models/services/services.model";
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { eq } from "drizzle-orm";
@@ -21,7 +21,10 @@ export async function recalculateEstimate(estimateId: string) {
     const parts = await Database.select()
       .from(EstimateFindingParts)
       .where(eq(EstimateFindingParts.estimateFindingId, f.id));
-    const partsTotal = parts.reduce((sum, p) => sum + parseFloat(p.totalPrice), 0);
+    const partsTotal = parts.reduce(
+      (sum, p) => sum + parseFloat(p.totalPrice),
+      0,
+    );
     // Update the finding's partsSubtotal if needed
     if (f.partsSubtotal !== partsTotal.toString()) {
       await Database.update(EstimateFindings)
@@ -47,7 +50,7 @@ export async function recalculateEstimate(estimateId: string) {
   const subtotalBeforeDiscount = findingsSubtotal + feesTotal; // we'll add serviceSubtotal later
   for (const d of discounts) {
     let amount = 0;
-    if (d.type === 'fixed') {
+    if (d.type === "fixed") {
       amount = parseFloat(d.value);
     } else {
       // percentage of subtotalBeforeDiscount (but excluding serviceSubtotal for now)
@@ -69,7 +72,7 @@ export async function recalculateEstimate(estimateId: string) {
 
   let totalDiscount = 0;
   for (const d of discounts) {
-    if (d.type === 'fixed') {
+    if (d.type === "fixed") {
       totalDiscount += parseFloat(d.value);
     } else {
       // percentage discount applies to baseTotal (which already includes serviceSubtotal and fees and findings subtotal)

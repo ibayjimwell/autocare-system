@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
-import { EstimatedCosts } from "@/database/models/billing/estimated-costs.model";
-import { EstimateFindings } from "@/database/models/billing/estimate-findings.model";
-import { EstimateFindingParts } from "@/database/models/billing/estimate-finding-parts.model";
+import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
+import { EstimateFindings } from "@/database/models/payments/estimate-findings.model";
+import { EstimateFindingParts } from "@/database/models/payments/estimate-finding-parts.model";
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { Services } from "@/database/models/services/services.model";
 import { InspectionFindings } from "@/database/models/service-tracking/inspection-findings.model";
@@ -19,36 +19,45 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch (e) {
-    return NextResponse.json({
-      error: true,
-      errorType: "fe",
-      errorTitle: "Invalid JSON",
-      errorMessage: "Request body must be valid JSON.",
-      errorLog: e instanceof Error ? e.message : String(e),
-    }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: "fe",
+        errorTitle: "Invalid JSON",
+        errorMessage: "Request body must be valid JSON.",
+        errorLog: e instanceof Error ? e.message : String(e),
+      },
+      { status: 400 },
+    );
   }
 
   const { appointmentId } = body;
   if (!appointmentId || !isValidUUID(appointmentId)) {
-    return NextResponse.json({
-      error: true,
-      errorType: "fve",
-      errorTitle: "Invalid appointment",
-      errorMessage: "appointmentId is required and must be a valid UUID.",
-      errorLog: null,
-    }, { status: 422 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: "fve",
+        errorTitle: "Invalid appointment",
+        errorMessage: "appointmentId is required and must be a valid UUID.",
+        errorLog: null,
+      },
+      { status: 422 },
+    );
   }
 
   // Verify appointment exists
   const exists = await appointmentExists(appointmentId);
   if (!exists) {
-    return NextResponse.json({
-      error: true,
-      errorType: "auth",
-      errorTitle: "Appointment not found",
-      errorMessage: "Appointment does not exist.",
-      errorLog: null,
-    }, { status: 404 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: "auth",
+        errorTitle: "Appointment not found",
+        errorMessage: "Appointment does not exist.",
+        errorLog: null,
+      },
+      { status: 404 },
+    );
   }
 
   // Check if estimate already exists for this appointment
@@ -56,13 +65,16 @@ export async function POST(req: NextRequest) {
     .from(EstimatedCosts)
     .where(eq(EstimatedCosts.appointmentId, appointmentId));
   if (existing.length > 0) {
-    return NextResponse.json({
-      error: true,
-      errorType: "fve",
-      errorTitle: "Estimate exists",
-      errorMessage: "An estimate already exists for this appointment.",
-      errorLog: null,
-    }, { status: 409 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: "fve",
+        errorTitle: "Estimate exists",
+        errorMessage: "An estimate already exists for this appointment.",
+        errorLog: null,
+      },
+      { status: 409 },
+    );
   }
 
   try {
@@ -78,7 +90,10 @@ export async function POST(req: NextRequest) {
         .from(Services)
         .where(inArray(Services.id, serviceIds));
       serviceDetails = svcs;
-      serviceSubtotal = svcs.reduce((sum, s) => sum + (parseFloat(s.basePrice) || 0), 0);
+      serviceSubtotal = svcs.reduce(
+        (sum, s) => sum + (parseFloat(s.basePrice) || 0),
+        0,
+      );
     }
 
     // 2. Fetch inspection findings and their parts
@@ -93,7 +108,7 @@ export async function POST(req: NextRequest) {
         .from(InspectionFindingParts)
         .where(eq(InspectionFindingParts.findingId, f.id));
       let findingPartsTotal = 0;
-      const partsData = parts.map(p => {
+      const partsData = parts.map((p) => {
         const total = (p.quantity || 1) * parseFloat(p.priceAtTime);
         findingPartsTotal += total;
         return {
@@ -118,11 +133,11 @@ export async function POST(req: NextRequest) {
     const [newEstimate] = await Database.insert(EstimatedCosts)
       .values({
         appointmentId,
-        status: 'PENDING',
+        status: "PENDING",
         serviceSubtotal: serviceSubtotal.toString(),
         findingsSubtotal: findingsSubtotal.toString(),
-        feesTotal: '0',
-        discountTotal: '0',
+        feesTotal: "0",
+        discountTotal: "0",
         grandTotal: (serviceSubtotal + findingsSubtotal).toString(),
       })
       .returning();
@@ -140,31 +155,36 @@ export async function POST(req: NextRequest) {
         .returning();
 
       for (const part of ef.parts) {
-        await Database.insert(EstimateFindingParts)
-          .values({
-            estimateFindingId: newEstFinding.id,
-            partName: part.partName,
-            quantity: part.quantity,
-            priceAtTime: part.priceAtTime,
-            isPms: part.isPms,
-            totalPrice: part.totalPrice,
-          });
+        await Database.insert(EstimateFindingParts).values({
+          estimateFindingId: newEstFinding.id,
+          partName: part.partName,
+          quantity: part.quantity,
+          priceAtTime: part.priceAtTime,
+          isPms: part.isPms,
+          totalPrice: part.totalPrice,
+        });
       }
     }
 
-    return NextResponse.json({
-      error: false,
-      message: "Estimate generated.",
-      data: newEstimate,
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        error: false,
+        message: "Estimate generated.",
+        data: newEstimate,
+      },
+      { status: 201 },
+    );
   } catch (e) {
     console.error("[POST /api/service-tracking/estimates] Error:", e);
-    return NextResponse.json({
-      error: true,
-      errorType: "dbe",
-      errorTitle: "Database error",
-      errorMessage: "Could not generate estimate.",
-      errorLog: e instanceof Error ? e.message : String(e),
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: "dbe",
+        errorTitle: "Database error",
+        errorMessage: "Could not generate estimate.",
+        errorLog: e instanceof Error ? e.message : String(e),
+      },
+      { status: 500 },
+    );
   }
 }

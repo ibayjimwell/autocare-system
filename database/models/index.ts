@@ -17,22 +17,22 @@ export * from "./appointments/appointments-status-history.model";
 export * from "./appointments/enum/appointments-status.enum";
 
 // Service Tracking
-export * from './inventory/inventory.model';
-export * from './service-tracking/inspection-tasks.model';
-export * from './service-tracking/inspection-findings.model';
-export * from './service-tracking/inspection-finding-parts.model';
-export * from './service-tracking/work-tasks.model';
+export * from "./inventory/inventory.model";
+export * from "./service-tracking/inspection-tasks.model";
+export * from "./service-tracking/inspection-findings.model";
+export * from "./service-tracking/inspection-finding-parts.model";
+export * from "./service-tracking/work-tasks.model";
 
 // Billing
-export * from './billing/estimated-costs.model';
-export * from './billing/estimate-findings.model';
-export * from './billing/estimate-finding-parts.model';
-export * from './billing/estimate-fees.model';
-export * from './billing/estimate-discounts.model';
+export * from "./payments/estimated-costs.model";
+export * from "./payments/estimate-findings.model";
+export * from "./payments/estimate-finding-parts.model";
+export * from "./payments/estimate-fees.model";
+export * from "./payments/estimate-discounts.model";
 
-export * from './billing/final-bill.model';
-export * from './billing/final-bill-findings.model';
-export * from './billing/final-bill-finding-parts.model';
-export * from './billing/final-bill-fees.model';
-export * from './billing/final-bill-discounts.model';
-export * from './billing/final-bill-work-tasks.model';
+export * from "./payments/final-bill.model";
+export * from "./payments/final-bill-findings.model";
+export * from "./payments/final-bill-finding-parts.model";
+export * from "./payments/final-bill-fees.model";
+export * from "./payments/final-bill-discounts.model";
+export * from "./payments/final-bill-work-tasks.model";

@@ -17,7 +17,7 @@ import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
 import { workTasksApi } from "@/lib/service-tracking/work-tasks";
 import { findingsApi } from "@/lib/service-tracking/findings";
 import { estimatesApi } from "@/lib/service-tracking/estimates";
-import { finalBillsApi } from "@/lib/billing/final-bills";
+import { finalBillsApi } from "@/lib/payments/final-bills";
 import {
   ArrowLeft,
   User,
