@@ -12,6 +12,7 @@ import {
   Trash2,
   FileText,
   Package,
+  Pencil,
 } from "lucide-react";
 import ConfirmationDialog from "@/components/shared/confimation-dialog";
 
@@ -19,11 +20,19 @@ interface TaskCardProps {
   task: any;
   onUpdate: (taskId: string, status: string) => void;
   onDelete: (taskId: string) => void;
+  onEdit: () => void;
   appointmentId: string;
   isInProgress: boolean;
 }
 
-export default function TaskCard({ task, onUpdate, onDelete, appointmentId, isInProgress }: TaskCardProps) {
+export default function TaskCard({
+  task,
+  onUpdate,
+  onDelete,
+  onEdit,
+  appointmentId,
+  isInProgress,
+}: TaskCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
   const [markDoneConfirmOpen, setMarkDoneConfirmOpen] = useState(false);
@@ -104,6 +113,14 @@ export default function TaskCard({ task, onUpdate, onDelete, appointmentId, isIn
               <Button
                 size="icon"
                 variant="ghost"
+                onClick={onEdit}
+                className="h-9 w-9 rounded-full text-muted-foreground hover:text-primary"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={() => setDeleteDialogOpen(true)}
                 className="h-9 w-9 rounded-full text-muted-foreground hover:text-red-500"
               >
@@ -112,7 +129,7 @@ export default function TaskCard({ task, onUpdate, onDelete, appointmentId, isIn
             </div>
           </div>
 
-          {/* Findings (if any) – not used for work tasks */}
+          {/* Findings */}
           {task.findings && task.findings.length > 0 && (
             <div className="mt-4 space-y-3">
               <Separator className="bg-border/50" />

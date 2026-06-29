@@ -12,6 +12,7 @@ import ConfirmationDialog from "@/components/shared/confimation-dialog";
 import AddTaskModal from "@/components/shared/add-task-modal";
 import TaskCard from "./task-card";
 import FindingModal from "./finding-modal";
+import FindingsList from "./findings-list";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
 import { workTasksApi } from "@/lib/service-tracking/work-tasks";
@@ -390,29 +391,12 @@ export default function ServiceDetailPanel({
           </div>
 
           {/* Findings List (only for inspection) */}
-          {isInspection && findings.length > 0 && (
-            <div className="bg-card border shadow-sm rounded-2xl p-4 sm:p-5 space-y-4">
-              <h4 className="font-bold flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" /> Recorded Findings
-              </h4>
-              <div className="space-y-3">
-                {findings.map((f) => (
-                  <div key={f.id} className="bg-muted/30 border rounded-xl p-4 space-y-2">
-                    <p className="text-sm font-medium">{f.description}</p>
-                    {f.parts && f.parts.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {f.parts.map((p, i) => (
-                          <Badge key={i} variant="secondary" className="text-[10px]">
-                            {p.quantity}x {p.partName || "Part"} {p.isPms && "(PMS)"}
-                            {!p.isPms && ` ₱${Number(p.priceAtTime).toFixed(2)}`}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+          {isInspection && (
+            <FindingsList
+              findings={findings}
+              appointmentId={appointment.id}
+              onFindingsUpdated={loadData}
+            />
           )}
         </div>
 

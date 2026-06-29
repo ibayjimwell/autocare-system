@@ -6,6 +6,7 @@ import { validateTaskData, appointmentExists } from "@/utils/service-tracking";
 import { eq, and, sql } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
+import { isValidUUID } from "@/utils/shared"; 
 
 // ------------------------------------------------------------------
 // GET /api/service-tracking/inspection-tasks?appointmentId=...

@@ -5,6 +5,7 @@ import PageContainer from "@/components/shared/page-container";
 import LoadingSpinner from "@/components/shared/loading-spinner";
 import EmptyState from "@/components/shared/empty-state";
 import StatusBadge from "@/components/shared/status-badge";
+import ConfirmationDialog from "@/components/shared/confimation-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -46,6 +47,10 @@ export default function ServiceTracking() {
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState("CONFIRMED");
 
+  // Confirmation dialog state
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [pendingAppointment, setPendingAppointment] = useState<any>(null);
+
   const loadAppointments = async () => {
     setLoading(true);
     try {
@@ -69,7 +74,37 @@ export default function ServiceTracking() {
   }, [activeFilter]);
 
   const handleInspect = (appt: any) => {
-    setSelectedAppointment(appt);
+    // If status is CONFIRMED, show confirmation dialog
+    if (appt.status === "CONFIRMED") {
+      setPendingAppointment(appt);
+      setConfirmDialogOpen(true);
+    } else {
+      // For other statuses, go directly to detail
+      setSelectedAppointment(appt);
+    }
+  };
+
+  const handleConfirmStartInspection = async () => {
+    if (!pendingAppointment) return;
+
+    try {
+      // Update appointment status to UNDER_INSPECTION
+      const res = await appointmentsApi.updateStatus(pendingAppointment.id, "UNDER_INSPECTION");
+      if (res.error) {
+        toast.error(res.errorMessage || "Failed to start inspection.");
+      } else {
+        toast.success("Inspection started!");
+        setConfirmDialogOpen(false);
+        // Navigate to the detail panel with the updated appointment
+        setSelectedAppointment(pendingAppointment);
+        // Refresh the list in background
+        loadAppointments();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error starting inspection.");
+    } finally {
+      setPendingAppointment(null);
+    }
   };
 
   const handleBack = () => {
@@ -203,6 +238,16 @@ export default function ServiceTracking() {
           ))}
         </div>
       )}
+
+      {/* Confirmation Dialog for Starting Inspection */}
+      <ConfirmationDialog
+        open={confirmDialogOpen}
+        onOpenChange={setConfirmDialogOpen}
+        title="Start Inspection"
+        description={`Begin inspection for ${pendingAppointment?.vehicle?.make || "Unknown"} ${pendingAppointment?.vehicle?.model || ""} (${pendingAppointment?.vehicle?.plateNumber || "N/A"})?`}
+        onConfirm={handleConfirmStartInspection}
+        confirmText="Confirm & Start"
+      />
     </PageContainer>
   );
 }

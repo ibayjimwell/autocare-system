@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { InspectionFindings } from "@/database/models/service-tracking/inspection-findings.model";
 import { InspectionFindingParts } from "@/database/models/service-tracking/inspection-finding-parts.model";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray} from "drizzle-orm";
 import { appointmentExists } from "@/utils/service-tracking";
 import { isValidUUID } from "@/utils/shared";
 
@@ -28,13 +28,13 @@ export async function GET(req: NextRequest) {
       .where(eq(InspectionFindings.appointmentId, appointmentId))
       .orderBy(InspectionFindings.createdAt);
 
-    // Fetch parts for each finding
+    // Fetch parts for each finding using inArray (safer than sql`ANY`)
     const findingIds = findings.map(f => f.id);
     let partsMap: Record<string, any[]> = {};
     if (findingIds.length > 0) {
       const parts = await Database.select()
         .from(InspectionFindingParts)
-        .where(eq(InspectionFindingParts.findingId, sql`ANY(${findingIds})`));
+        .where(inArray(InspectionFindingParts.findingId, findingIds)); // ✅ fixed
       for (const p of parts) {
         if (!partsMap[p.findingId]) partsMap[p.findingId] = [];
         partsMap[p.findingId].push(p);

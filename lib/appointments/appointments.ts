@@ -1,3 +1,5 @@
+// /lib/appointments/appointments.ts
+
 export const appointmentsApi = {
   list: async (params?: { status?: string; customerId?: string; from?: string; to?: string; page?: number; limit?: number }) => {
     let url = '/api/appointments';
