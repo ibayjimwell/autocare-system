@@ -13,17 +13,12 @@ import LoadingSpinner from "@/components/shared/loading-spinner";
 import StatusBadge from "@/components/shared/status-badge";
 import ErrorHandler from "@/components/shared/error-handler";
 import AppointmentCalendar from "@/components/appointments/appointment-calendar";
+import CustomerPickerModal from "@/components/appointments/customer-picker-modal";
+import VehiclePickerModal from "@/components/appointments/vehicle-picker-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -77,6 +72,7 @@ interface Customer {
   fullname: string;
   email: string;
   phone: string;
+  deactivated?: boolean;
 }
 
 interface Vehicle {
@@ -161,6 +157,12 @@ export default function AppointmentsPage() {
   const [customTimeChecked, setCustomTimeChecked] = useState<{ available: boolean; message: string } | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [selectedSlotType, setSelectedSlotType] = useState<"preset" | "custom">("preset");
+
+  // Picker modals
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
   // Decline modal
   const [declineModal, setDeclineModal] = useState<{
@@ -269,6 +271,15 @@ export default function AppointmentsPage() {
         try {
           const res = await vehiclesApi.list(watchCustomerId);
           setVehicles(res.error ? [] : (res.data || []));
+          // Reset selected vehicle if it's not in the new list
+          const currentVehicleId = watch("vehicleId");
+          if (currentVehicleId && !res.data?.some(v => v.id === currentVehicleId)) {
+            setSelectedVehicle(null);
+            setValue("vehicleId", "");
+          }
+          // Update selected customer name
+          const found = customers.find(c => c.id === watchCustomerId);
+          if (found) setSelectedCustomer(found);
         } catch {
           setVehicles([]);
         }
@@ -276,8 +287,11 @@ export default function AppointmentsPage() {
       fetchVehicles();
     } else {
       setVehicles([]);
+      setSelectedVehicle(null);
+      setSelectedCustomer(null);
     }
-  }, [watchCustomerId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCustomerId, customers]);
 
   // ==========================================================================
   // Dynamic: Available slots
@@ -488,27 +502,23 @@ export default function AppointmentsPage() {
                     <Label className="text-xs font-black uppercase text-slate-500">
                       Customer
                     </Label>
-                    <Select
-                      onValueChange={(val) => setValue("customerId", val)}
-                      value={watchCustomerId || ""}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-12 rounded-xl bg-white border-slate-200 justify-start text-left font-normal hover:bg-white/80"
+                      onClick={() => setCustomerPickerOpen(true)}
                     >
-                      <SelectTrigger className="h-12 rounded-xl bg-white border-slate-200">
-                        <SelectValue placeholder="Identify customer..." />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        {customers.map((c) => (
-                          <SelectItem key={c.id} value={c.id} className="text-xs">
-                            {c.fullname}
-                            <span className="text-[10px] opacity-50 ml-2">
-                              ({c.phone})
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.customerId && (
-                      <p className="text-xs text-destructive">{errors.customerId.message}</p>
-                    )}
+                      {watchCustomerId && selectedCustomer ? (
+                        <span className="flex items-center gap-2">
+                          <UserCircle className="w-4 h-4 text-primary" />
+                          <span className="font-medium">{selectedCustomer.fullname}</span>
+                          <span className="text-xs text-muted-foreground">({selectedCustomer.phone})</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Identify customer...</span>
+                      )}
+                    </Button>
+                    {errors.customerId && <p className="text-xs text-destructive">{errors.customerId.message}</p>}
                   </div>
 
                   {/* Vehicle */}
@@ -516,31 +526,26 @@ export default function AppointmentsPage() {
                     <Label className="text-xs font-black uppercase text-slate-500">
                       Vehicle
                     </Label>
-                    <Select
-                      onValueChange={(val) => setValue("vehicleId", val)}
-                      value={watch("vehicleId") || ""}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-12 rounded-xl bg-white border-slate-200 justify-start text-left font-normal hover:bg-white/80"
+                      onClick={() => setVehiclePickerOpen(true)}
                       disabled={!watchCustomerId}
                     >
-                      <SelectTrigger className="h-12 rounded-xl bg-white border-slate-200">
-                        <SelectValue
-                          placeholder={
-                            watchCustomerId
-                              ? "Select asset..."
-                              : "Select customer first"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        {vehicles.map((v) => (
-                          <SelectItem key={v.id} value={v.id} className="text-xs">
-                            {v.make} {v.model} [{v.plateNumber}]
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.vehicleId && (
-                      <p className="text-xs text-destructive">{errors.vehicleId.message}</p>
-                    )}
+                      {watch("vehicleId") && selectedVehicle ? (
+                        <span className="flex items-center gap-2">
+                          <Car className="w-4 h-4 text-primary" />
+                          <span className="font-medium">{selectedVehicle.make} {selectedVehicle.model}</span>
+                          <span className="text-xs text-muted-foreground">({selectedVehicle.plateNumber})</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {watchCustomerId ? "Select asset..." : "Select customer first"}
+                        </span>
+                      )}
+                    </Button>
+                    {errors.vehicleId && <p className="text-xs text-destructive">{errors.vehicleId.message}</p>}
                   </div>
 
                   {/* Services (multi-select) */}
@@ -599,9 +604,7 @@ export default function AppointmentsPage() {
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    {errors.services && (
-                      <p className="text-xs text-destructive">{errors.services.message}</p>
-                    )}
+                    {errors.services && <p className="text-xs text-destructive">{errors.services.message}</p>}
                   </div>
 
                   {/* Notes */}
@@ -954,6 +957,33 @@ export default function AppointmentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ===== Customer Picker Modal ===== */}
+      <CustomerPickerModal
+        open={customerPickerOpen}
+        onOpenChange={setCustomerPickerOpen}
+        customers={customers}
+        onSelect={(customer) => {
+          setSelectedCustomer(customer);
+          setValue("customerId", customer.id);
+          setSelectedVehicle(null);
+          setValue("vehicleId", "");
+        }}
+        selectedCustomerId={watchCustomerId}
+      />
+
+      {/* ===== Vehicle Picker Modal ===== */}
+      <VehiclePickerModal
+        open={vehiclePickerOpen}
+        onOpenChange={setVehiclePickerOpen}
+        vehicles={vehicles}
+        onSelect={(vehicle) => {
+          setSelectedVehicle(vehicle);
+          setValue("vehicleId", vehicle.id);
+        }}
+        selectedVehicleId={watch("vehicleId")}
+        customerName={selectedCustomer?.fullname}
+      />
     </PageContainer>
   );
 }
