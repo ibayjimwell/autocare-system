@@ -114,7 +114,7 @@ export default function ServiceCard({ serviceId, className }: ServiceCardProps) 
   return (
     <div 
       className={cn(
-        "group w-full rounded-md border border-border/80 bg-card p-3 transition-colors hover:bg-muted/40 flex items-center justify-between gap-4 select-none",
+        "group w-full rounded-md border border-border/80 bg-card p-3 transition-colors flex items-center justify-between gap-4 select-none",
         !service.active && "opacity-60 grayscale-[30%]",
         className
       )}
@@ -143,7 +143,7 @@ export default function ServiceCard({ serviceId, className }: ServiceCardProps) 
             />
           </div>
 
-          <h4 className="font-sans text-sm font-bold tracking-tight text-foreground truncate group-hover:text-primary transition-colors">
+          <h4 className="font-sans text-sm font-bold tracking-tight text-foreground truncate">
             {service.name}
           </h4>
 

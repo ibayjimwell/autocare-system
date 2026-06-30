@@ -15,6 +15,10 @@ import ErrorHandler from "@/components/shared/error-handler";
 import AppointmentCalendar from "@/components/appointments/appointment-calendar";
 import CustomerPickerModal from "@/components/appointments/customer-picker-modal";
 import VehiclePickerModal from "@/components/appointments/vehicle-picker-modal";
+import AppointmentCard from "@/components/appointments/appointment-card";
+import CustomerCard from "@/components/customers/customer-card";
+import VehicleCard from "@/components/customers/vehicle-card";
+import ServiceCard from "@/components/services/service-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,7 +101,6 @@ interface Staff {
   username: string;
 }
 
-// ✅ Appointment interface – services is an array of Service objects
 interface Appointment {
   id: string;
   customerId: string;
@@ -139,7 +142,7 @@ export default function AppointmentsPage() {
   // ==========================================================================
   // State
   // ==========================================================================
-  const [appointments, setAppointments] = useState<Appointment[]>([]); // ✅ defined here
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -432,7 +435,7 @@ export default function AppointmentsPage() {
   };
 
   // ==========================================================================
-  // Filtered appointments for sidebar (using `appointments`)
+  // Filtered appointments for sidebar
   // ==========================================================================
   const filteredAppointments = appointments
     .filter((a) => {
@@ -794,102 +797,36 @@ export default function AppointmentsPage() {
                 </div>
               ) : (
                 filteredAppointments.map((appt) => (
-                  <div
-                    key={appt.id}
-                    className="group p-4 rounded-2xl border border-slate-100 hover:border-primary/30 bg-white hover:shadow-md transition-all"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-full">
-                        <Clock className="w-3.5 h-3.5 text-primary" />
-                        <span className="text-xs font-black text-slate-700">
-                          {formatTime12h(appt.appointmentTime)}
-                        </span>
+                  <AppointmentCard key={appt.id} appointmentId={appt.id}>
+                    <CustomerCard customerId={appt.customerId} />
+                    <VehicleCard
+                      vehicleId={appt.vehicleId}
+                      customerId={appt.customerId}
+                    />
+                    {/* Service Cards */}
+                    {appt.services && appt.services.length > 0 ? (
+                      appt.services.map((service) => (
+                        <ServiceCard key={service.id} serviceId={service.id} />
+                      ))
+                    ) : (
+                      <div className="text-xs text-muted-foreground italic">
+                        No services selected.
                       </div>
-                      <StatusBadge
-                        status={appt.status || "PENDING"}
-                        className="text-[9px] font-black"
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      {/* Vehicle */}
-                      <div className="flex gap-3">
-                        <div className="bg-primary/10 p-2 rounded-lg h-fit">
-                          <Car className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-black uppercase text-slate-900">
-                            {appt.vehicle?.make} {appt.vehicle?.model}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                            Plate: {appt.vehicle?.plateNumber}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* ✅ Services (display names) – using appt.services */}
-                      <div className="flex gap-3">
-                        <div className="bg-primary/10 p-2 rounded-lg h-fit">
-                          <Wrench className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-black uppercase text-slate-900">
-                            {appt.services?.map(s => s.name).join(", ") || "Services"}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                            {appt.services?.length || 0} service(s)
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Customer */}
-                      <div className="flex gap-3">
-                        <div className="bg-slate-100 p-2 rounded-lg h-fit">
-                          <UserCircle className="w-4 h-4 text-slate-500" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-700 leading-none mt-1">
-                            {appt.customer?.fullname}
-                          </p>
-                          <p className="text-[10px] text-slate-400 mt-1">
-                            {appt.customer?.phone}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Notes */}
-                      {appt.notes && (
-                        <div className="flex gap-3 mt-2">
-                          <div className="bg-amber-50 p-2 rounded-lg h-fit">
-                            <FileText className="w-4 h-4 text-amber-600" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-[10px] font-bold uppercase text-amber-700 mb-0.5">
-                              Customer Note
-                            </p>
-                            <p className="text-xs text-slate-600 italic leading-relaxed">
-                              {appt.notes}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
+                    )}
                     {/* Pending Quick Actions */}
                     {appt.status === "PENDING" && (
-                      <div className="grid grid-cols-2 gap-2 mt-4">
+                      <div className="flex gap-2 mt-2">
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="text-green-600 hover:bg-green-50 h-8 text-[10px] font-black uppercase"
+                          className="flex-1 text-green-600 bg-green-50 hover:bg-green-100 h-8 text-[10px] font-black uppercase"
                           onClick={() => handleConfirm(appt)}
                         >
-                          Confirm
+                          <CheckCircle className="w-3.5 h-3.5 mr-1" /> Confirm
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-red-400 hover:bg-red-50 h-8 text-[10px] font-black uppercase"
+                          className="flex-1 text-red-400 hover:bg-red-50 h-8 text-[10px] font-black uppercase"
                           onClick={() =>
                             setDeclineModal({
                               open: true,
@@ -898,11 +835,11 @@ export default function AppointmentsPage() {
                             })
                           }
                         >
-                          Decline
+                          <XCircle className="w-3.5 h-3.5 mr-1" /> Decline
                         </Button>
                       </div>
                     )}
-                  </div>
+                  </AppointmentCard>
                 ))
               )}
             </CardContent>

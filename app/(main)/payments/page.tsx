@@ -20,6 +20,9 @@ import {
   Eye,
   XCircle,
   Check,
+  PlusCircle,
+  Percent,
+  Tag,
 } from "lucide-react";
 import PageContainer from "@/components/shared/page-container";
 import LoadingSpinner from "@/components/shared/loading-spinner";
@@ -55,11 +58,16 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 // API imports
 import { estimatesApi } from "@/lib/payments/estimates";
+import { estimateAdjustmentsApi } from "@/lib/payments/estimates";
 import { finalBillsApi } from "@/lib/payments/final-bills";
+import { appointmentsApi } from "@/lib/appointments/appointments";
+import ServiceCard from "@/components/services/service-card";
 
 // Types
 interface Estimate {
@@ -80,6 +88,7 @@ interface Estimate {
     appointmentTime: string;
     customer: { fullname: string; email: string; phone: string };
     vehicle: { make: string; model: string; year: number; plateNumber: string };
+    services?: any[];
   };
   findings?: any[];
   fees?: any[];
@@ -131,12 +140,14 @@ export default function PaymentsPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [detailType, setDetailType] = useState<"estimate" | "final-bill">("estimate");
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // Fee/Discount modals
   const [feeModalOpen, setFeeModalOpen] = useState(false);
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
-  const [feeForm, setFeeForm] = useState({ title: "", amount: "", findingId: "" });
+  const [feeForm, setFeeForm] = useState({ title: "", amount: "", findingId: "none" });
   const [discountForm, setDiscountForm] = useState({ title: "", type: "fixed", value: "" });
+  const [submittingAdjustment, setSubmittingAdjustment] = useState(false);
 
   // Delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -237,7 +248,6 @@ export default function PaymentsPage() {
   // Final bill actions
   const handleMarkPaid = async (billId: string) => {
     try {
-      // We need an update method for final bills – we'll use a generic PUT
       const res = await fetch(`/api/payments/final-bills/${billId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -255,11 +265,93 @@ export default function PaymentsPage() {
     }
   };
 
-  // Detail modal
-  const openDetail = (item: any, type: "estimate" | "final-bill") => {
+  // Detail modal – now fetches appointment services separately
+  const openDetail = async (item: any, type: "estimate" | "final-bill") => {
+    setDetailLoading(true);
     setSelectedItem(item);
     setDetailType(type);
     setDetailModalOpen(true);
+
+    if (type === "estimate") {
+      try {
+        const [estRes, apptRes] = await Promise.all([
+          estimatesApi.get(item.id),
+          appointmentsApi.get(item.appointmentId),
+        ]);
+        if (!estRes.error) {
+          const data = estRes.data;
+          // Merge appointment services if available
+          if (!apptRes.error && apptRes.data) {
+            data.appointment.services = apptRes.data.services || [];
+          }
+          setSelectedItem(data);
+        }
+      } catch (err) {
+        console.error("Failed to refresh estimate details", err);
+      }
+    }
+    setDetailLoading(false);
+  };
+
+  // Fee/Discount handlers
+  const handleAddFee = async () => {
+    if (!feeForm.title.trim() || !feeForm.amount || parseFloat(feeForm.amount) <= 0) {
+      toast.error("Please enter a title and a valid amount.");
+      return;
+    }
+    setSubmittingAdjustment(true);
+    try {
+      const res = await estimateAdjustmentsApi.addFee(selectedItem.id, {
+        title: feeForm.title.trim(),
+        amount: parseFloat(feeForm.amount),
+        findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
+      });
+      if (res.error) {
+        toast.error(res.errorMessage || "Failed to add fee.");
+      } else {
+        toast.success("Fee added.");
+        setFeeModalOpen(false);
+        setFeeForm({ title: "", amount: "", findingId: "none" });
+        // Refresh detail
+        const refreshed = await estimatesApi.get(selectedItem.id);
+        if (!refreshed.error) setSelectedItem(refreshed.data);
+        loadData();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error adding fee.");
+    } finally {
+      setSubmittingAdjustment(false);
+    }
+  };
+
+  const handleAddDiscount = async () => {
+    if (!discountForm.title.trim() || !discountForm.value || parseFloat(discountForm.value) <= 0) {
+      toast.error("Please enter a title and a valid value.");
+      return;
+    }
+    setSubmittingAdjustment(true);
+    try {
+      const res = await estimateAdjustmentsApi.addDiscount(selectedItem.id, {
+        title: discountForm.title.trim(),
+        type: discountForm.type as 'fixed' | 'percentage',
+        value: parseFloat(discountForm.value),
+      });
+      if (res.error) {
+        toast.error(res.errorMessage || "Failed to add discount.");
+      } else {
+        toast.success("Discount added.");
+        setDiscountModalOpen(false);
+        setDiscountForm({ title: "", type: "fixed", value: "" });
+        // Refresh detail
+        const refreshed = await estimatesApi.get(selectedItem.id);
+        if (!refreshed.error) setSelectedItem(refreshed.data);
+        loadData();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error adding discount.");
+    } finally {
+      setSubmittingAdjustment(false);
+    }
   };
 
   // Delete
@@ -293,16 +385,6 @@ export default function PaymentsPage() {
   const formatCurrency = (amount: string | number) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
     return isNaN(num) ? "0.00" : num.toFixed(2);
-  };
-
-  const getStatusVariant = (status: string) => {
-    const s = status?.toUpperCase() || "";
-    if (s === "PENDING") return "secondary";
-    if (s === "WAITING_FOR_APPROVAL") return "warning";
-    if (s === "APPROVED") return "success";
-    if (s === "DECLINED" || s === "CANCELLED") return "destructive";
-    if (s === "PAID") return "default";
-    return "secondary";
   };
 
   if (loading && estimates.length === 0 && finalBills.length === 0) return <LoadingSpinner />;
@@ -637,53 +719,311 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Detail Modal */}
+      {/* ===== Updated Estimate Details Modal ===== */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-black flex items-center gap-2">
               {detailType === "estimate" ? "Estimate Details" : "Final Bill Details"}
               {selectedItem && <StatusBadge status={selectedItem.status} />}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-6">
-            {selectedItem && (
-              <>
-                <div className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-2xl">
+
+          {detailLoading ? (
+            <LoadingSpinner />
+          ) : selectedItem ? (
+            <div className="space-y-6">
+              {/* Header Info */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted/20 rounded-2xl">
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Amount</p>
+                  <p className="text-2xl font-black text-primary">₱{formatCurrency(selectedItem.grandTotal)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Created</p>
+                  <p className="font-bold">{format(new Date(selectedItem.createdAt), "MMM dd, yyyy")}</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* ✅ Services Section */}
+                {selectedItem.appointment?.services && selectedItem.appointment.services.length > 0 && (
                   <div>
-                    <p className="text-xs text-muted-foreground">Total Amount</p>
-                    <p className="text-2xl font-black text-primary">₱{formatCurrency(selectedItem.grandTotal)}</p>
+                    <h4 className="font-bold flex items-center gap-2 mb-3">
+                      <Tag className="w-4 h-4 text-primary" /> Services
+                    </h4>
+                    <div className="space-y-2">
+                      {selectedItem.appointment.services.map((service: any) => (
+                        <ServiceCard key={service.id} serviceId={service.id} />
+                      ))}
+                    </div>
+                    <div className="flex justify-end mt-2 text-sm font-bold">
+                      <span>Service Subtotal: ₱{formatCurrency(selectedItem.serviceSubtotal)}</span>
+                    </div>
+                    <Separator className="my-3" />
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Created</p>
-                    <p className="font-bold">{format(new Date(selectedItem.createdAt), "MMM dd, yyyy")}</p>
+                )}
+
+                {/* Findings Section */}
+                {selectedItem.findings && selectedItem.findings.length > 0 && (
+                  <div>
+                    <h4 className="font-bold flex items-center gap-2 mb-3">
+                      <FileText className="w-4 h-4 text-primary" /> Findings
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedItem.findings.map((finding: any) => (
+                        <div
+                          key={finding.id}
+                          className={cn(
+                            "border rounded-xl p-3 transition-all",
+                            finding.included ? "bg-card" : "opacity-60 bg-muted/30 line-through"
+                          )}
+                        >
+                          <div className="flex items-start justify-between">
+                            <p className="text-sm font-medium">{finding.description}</p>
+                            <span className="text-xs font-bold text-muted-foreground">
+                              ₱{formatCurrency(finding.partsSubtotal)}
+                            </span>
+                          </div>
+                          {finding.parts && finding.parts.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {finding.parts.map((part: any, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className="text-[10px] bg-muted/30 px-2 py-1 rounded-md"
+                                >
+                                  {part.quantity}x {part.partName || "Part"}
+                                  {!part.isPms && ` (₱${formatCurrency(part.totalPrice)})`}
+                                  {part.isPms && " (PMS)"}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end mt-2 text-sm font-bold">
+                      <span>Findings Subtotal: ₱{formatCurrency(selectedItem.findingsSubtotal)}</span>
+                    </div>
+                    <Separator className="my-3" />
                   </div>
+                )}
+
+                {/* Fees Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-bold flex items-center gap-2">
+                      <PlusCircle className="w-4 h-4 text-primary" /> Fees
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setFeeModalOpen(true)}
+                      className="h-8 text-xs font-bold"
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Add Fee
+                    </Button>
+                  </div>
+                  {selectedItem.fees && selectedItem.fees.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedItem.fees.map((fee: any) => (
+                        <div key={fee.id} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg">
+                          <span className="text-sm font-medium">{fee.title}</span>
+                          <span className="text-sm font-bold">₱{formatCurrency(fee.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No fees added.</p>
+                  )}
+                  <div className="flex justify-end mt-2 text-sm font-bold">
+                    <span>Fees Total: ₱{formatCurrency(selectedItem.feesTotal)}</span>
+                  </div>
+                  <Separator className="my-3" />
                 </div>
-                <div className="space-y-2">
-                  <h4 className="font-bold">Breakdown</h4>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between"><span>Service Subtotal</span><span>₱{formatCurrency(selectedItem.serviceSubtotal)}</span></div>
-                    {detailType === "estimate" && (
-                      <div className="flex justify-between"><span>Findings Subtotal</span><span>₱{formatCurrency(selectedItem.findingsSubtotal)}</span></div>
-                    )}
-                    {detailType === "final-bill" && (
-                      <div className="flex justify-between"><span>Work Tasks Subtotal</span><span>₱{formatCurrency(selectedItem.workTasksSubtotal)}</span></div>
-                    )}
-                    <div className="flex justify-between"><span>Fees Total</span><span>₱{formatCurrency(selectedItem.feesTotal)}</span></div>
-                    <div className="flex justify-between text-red-500"><span>Discount Total</span><span>-₱{formatCurrency(selectedItem.discountTotal)}</span></div>
-                    <div className="flex justify-between font-bold text-lg border-t pt-2"><span>Grand Total</span><span>₱{formatCurrency(selectedItem.grandTotal)}</span></div>
+
+                {/* Discounts Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-bold flex items-center gap-2">
+                      <Percent className="w-4 h-4 text-primary" /> Discounts
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setDiscountModalOpen(true)}
+                      className="h-8 text-xs font-bold"
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Add Discount
+                    </Button>
                   </div>
+                  {selectedItem.discounts && selectedItem.discounts.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedItem.discounts.map((discount: any) => (
+                        <div key={discount.id} className="flex items-center justify-between p-2 bg-muted/20 rounded-lg">
+                          <div>
+                            <span className="text-sm font-medium">{discount.title}</span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              ({discount.type === 'fixed' ? 'Fixed' : 'Percentage'})
+                            </span>
+                          </div>
+                          <span className="text-sm font-bold text-red-500">-₱{formatCurrency(discount.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No discounts applied.</p>
+                  )}
+                  <div className="flex justify-end mt-2 text-sm font-bold">
+                    <span>Discount Total: -₱{formatCurrency(selectedItem.discountTotal)}</span>
+                  </div>
+                  <Separator className="my-3" />
                 </div>
+
+                {/* Grand Total */}
+                <div className="flex justify-between items-center p-4 bg-primary/5 rounded-2xl border border-primary/20">
+                  <span className="text-lg font-black">Grand Total</span>
+                  <span className="text-2xl font-black text-primary">₱{formatCurrency(selectedItem.grandTotal)}</span>
+                </div>
+
                 {selectedItem.reason && (
                   <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
                     <p className="text-xs font-bold text-yellow-700">Reason: {selectedItem.reason}</p>
                   </div>
                 )}
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground">No details available.</p>
+          )}
+
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDetailModalOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Fee Modal ===== */}
+      <Dialog open={feeModalOpen} onOpenChange={setFeeModalOpen}>
+        <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-black">Add Fee</DialogTitle>
+            <DialogDescription>Add a service fee or labor charge to the estimate.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Title</Label>
+              <Input
+                value={feeForm.title}
+                onChange={(e) => setFeeForm({ ...feeForm, title: e.target.value })}
+                placeholder="e.g., Labor - Engine Work"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Amount (₱)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={feeForm.amount}
+                onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })}
+                placeholder="0.00"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Finding (Optional)</Label>
+              <Select
+                value={feeForm.findingId}
+                onValueChange={(v) => setFeeForm({ ...feeForm, findingId: v })}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Select finding (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {selectedItem?.findings?.map((f: any) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setFeeModalOpen(false)} disabled={submittingAdjustment}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddFee}
+              disabled={submittingAdjustment}
+              className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 font-bold shadow-lg shadow-primary/20"
+            >
+              {submittingAdjustment ? "Adding..." : "Add Fee"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Discount Modal ===== */}
+      <Dialog open={discountModalOpen} onOpenChange={setDiscountModalOpen}>
+        <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-black">Add Discount</DialogTitle>
+            <DialogDescription>Apply a discount to the estimate.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Title</Label>
+              <Input
+                value={discountForm.title}
+                onChange={(e) => setDiscountForm({ ...discountForm, title: e.target.value })}
+                placeholder="e.g., Loyalty Discount"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Type</Label>
+              <Select
+                value={discountForm.type}
+                onValueChange={(v) => setDiscountForm({ ...discountForm, type: v })}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Fixed (₱)</SelectItem>
+                  <SelectItem value="percentage">Percentage (%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Value</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={discountForm.value}
+                onChange={(e) => setDiscountForm({ ...discountForm, value: e.target.value })}
+                placeholder={discountForm.type === 'fixed' ? '0.00' : '0'}
+                className="rounded-xl"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                {discountForm.type === 'fixed' ? 'Enter a fixed amount in ₱.' : 'Enter a percentage (e.g., 10 for 10%).'}
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setDiscountModalOpen(false)} disabled={submittingAdjustment}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddDiscount}
+              disabled={submittingAdjustment}
+              className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 font-bold shadow-lg shadow-primary/20"
+            >
+              {submittingAdjustment ? "Adding..." : "Add Discount"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

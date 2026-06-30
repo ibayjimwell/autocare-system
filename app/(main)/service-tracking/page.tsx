@@ -8,6 +8,10 @@ import StatusBadge from "@/components/shared/status-badge";
 import ConfirmationDialog from "@/components/shared/confimation-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import AppointmentCard from "@/components/appointments/appointment-card";
+import CustomerCard from "@/components/customers/customer-card";
+import VehicleCard from "@/components/customers/vehicle-card";
+import ServiceCard from "@/components/services/service-card";
 import {
   Calendar,
   Clock,
@@ -159,79 +163,50 @@ export default function ServiceTracking() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {appointments.map((appt) => (
-            <Card
+            <AppointmentCard
               key={appt.id}
-              className="group relative overflow-hidden rounded-[2rem] border-slate-200/60 bg-white hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 hover:-translate-y-1"
+              appointmentId={appt.id}
+              className="h-full"
             >
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-100 group-hover:bg-primary/20 transition-colors" />
-              <CardHeader className="pt-7 pb-4">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="space-y-1 min-w-0">
-                    <CardTitle className="text-xl font-black tracking-tight text-slate-800 truncate uppercase">
-                      {appt.vehicle?.make || "Unknown"} {appt.vehicle?.model || ""}
-                    </CardTitle>
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-500">{appt.vehicle?.year || "N/A"}</span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        {appt.customer?.fullname || "Walk-in"}
-                      </span>
-                    </div>
+              <div className="space-y-3">
+                <CustomerCard customerId={appt.customerId} />
+                <VehicleCard
+                  vehicleId={appt.vehicleId}
+                  customerId={appt.customerId}
+                />
+                {/* Service Cards */}
+                {appt.services && appt.services.length > 0 ? (
+                  appt.services.map((service: any) => (
+                    <ServiceCard key={service.id} serviceId={service.id} />
+                  ))
+                ) : (
+                  <div className="text-xs text-muted-foreground italic">
+                    No services selected.
                   </div>
-                  <StatusBadge status={appt.status || "PENDING"} className="rounded-xl px-3 border-none shadow-sm" />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-100 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm">
-                      <Wrench className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Requested Job</p>
-                      <p className="text-sm font-bold text-slate-700 truncate">
-                        {appt.services?.length > 0
-                          ? appt.services.map(s => s.name).join(", ")
-                          : "General Service"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 pt-1 border-t border-slate-200/50">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="text-xs font-bold text-slate-600">{appt.appointmentDate}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="text-xs font-bold text-slate-600">{formatTime12h(appt.appointmentTime)}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-2">
-                  <Button
-                    className={cn(
-                      "w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95",
-                      appt.status === "CONFIRMED"
-                        ? "bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
-                        : "bg-slate-900 hover:bg-black text-white"
-                    )}
-                    onClick={() => handleInspect(appt)}
-                  >
-                    {appt.status === "CONFIRMED" ? (
-                      <>
-                        <Eye className="w-4 h-4 mr-2" /> Start Inspection
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" /> Continue Work
-                      </>
-                    )}
-                    <ArrowRight className="w-4 h-4 ml-auto opacity-50" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                )}
+                {/* Action Button */}
+                <Button
+                  className={cn(
+                    "w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95",
+                    appt.status === "CONFIRMED"
+                      ? "bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+                      : "bg-slate-900 hover:bg-black text-white"
+                  )}
+                  onClick={() => handleInspect(appt)}
+                >
+                  {appt.status === "CONFIRMED" ? (
+                    <>
+                      <Eye className="w-4 h-4 mr-2" /> Start Inspection
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 mr-2" /> Continue Work
+                    </>
+                  )}
+                  <ArrowRight className="w-4 h-4 ml-auto opacity-50" />
+                </Button>
+              </div>
+            </AppointmentCard>
           ))}
         </div>
       )}
