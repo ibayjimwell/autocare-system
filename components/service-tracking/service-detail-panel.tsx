@@ -214,8 +214,13 @@ export default function ServiceDetailPanel({
 
   if (loading) return <LoadingSpinner />;
 
-  // Compute subtotal
-  const servicePrice = parseFloat(appointment.serviceType?.basePrice || 0);
+  // ✅ Compute service price from services array
+  const servicePrice = appointment.services?.reduce(
+    (sum: number, s: any) => sum + parseFloat(s.basePrice || 0),
+    0
+  ) || 0;
+
+  // ✅ Compute findings subtotal
   const findingsTotal = findings.reduce((sum, f) => {
     const partsTotal = (f.parts || []).reduce((s, p) => {
       if (p.isPms) return s;
@@ -254,7 +259,7 @@ export default function ServiceDetailPanel({
               </span>
               <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
                 <Wrench className="w-4 h-4 text-primary" />{" "}
-                {appointment.serviceType?.name || "Service"}
+                {appointment.services?.map((s: any) => s.name).join(", ") || "Service"}
               </span>
               {appointment.appointmentDate && (
                 <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
@@ -413,8 +418,10 @@ export default function ServiceDetailPanel({
                 {/* Service Fee */}
                 <div className="flex justify-between items-start text-sm">
                   <div className="min-w-0">
-                    <p className="font-semibold truncate">{appointment.serviceType?.name || "Service"}</p>
-                    <p className="text-xs text-muted-foreground">Base Service</p>
+                    <p className="font-semibold truncate">
+                      {appointment.services?.map((s: any) => s.name).join(", ") || "Service"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Base Service(s)</p>
                   </div>
                   <span className="font-mono font-medium shrink-0 ml-4">
                     ₱{servicePrice.toFixed(2)}

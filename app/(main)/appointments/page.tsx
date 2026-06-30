@@ -97,11 +97,12 @@ interface Staff {
   username: string;
 }
 
+// ✅ Appointment interface – services is an array of Service objects
 interface Appointment {
   id: string;
   customerId: string;
   vehicleId: string;
-  services: string[];
+  services: Service[]; // full service objects
   trackingNumber: string;
   appointmentDate: string;
   appointmentTime: string;
@@ -111,7 +112,6 @@ interface Appointment {
   updatedAt: string;
   customer?: Customer;
   vehicle?: Vehicle;
-  serviceDetails?: Service[];
 }
 
 // Form schema
@@ -126,7 +126,6 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-// Helper: format time
 const formatTime12h = (time24: string) => {
   if (!time24) return "";
   const [hour, minute] = time24.split(":");
@@ -140,7 +139,7 @@ export default function AppointmentsPage() {
   // ==========================================================================
   // State
   // ==========================================================================
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]); // ✅ defined here
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -271,13 +270,11 @@ export default function AppointmentsPage() {
         try {
           const res = await vehiclesApi.list(watchCustomerId);
           setVehicles(res.error ? [] : (res.data || []));
-          // Reset selected vehicle if it's not in the new list
           const currentVehicleId = watch("vehicleId");
           if (currentVehicleId && !res.data?.some(v => v.id === currentVehicleId)) {
             setSelectedVehicle(null);
             setValue("vehicleId", "");
           }
-          // Update selected customer name
           const found = customers.find(c => c.id === watchCustomerId);
           if (found) setSelectedCustomer(found);
         } catch {
@@ -435,7 +432,7 @@ export default function AppointmentsPage() {
   };
 
   // ==========================================================================
-  // Filtered appointments for sidebar
+  // Filtered appointments for sidebar (using `appointments`)
   // ==========================================================================
   const filteredAppointments = appointments
     .filter((a) => {
@@ -830,17 +827,17 @@ export default function AppointmentsPage() {
                         </div>
                       </div>
 
-                      {/* Services (display names) */}
+                      {/* ✅ Services (display names) – using appt.services */}
                       <div className="flex gap-3">
                         <div className="bg-primary/10 p-2 rounded-lg h-fit">
                           <Wrench className="w-4 h-4 text-primary" />
                         </div>
                         <div>
                           <p className="text-xs font-black uppercase text-slate-900">
-                            {appt.serviceDetails?.map(s => s.name).join(", ") || "Services"}
+                            {appt.services?.map(s => s.name).join(", ") || "Services"}
                           </p>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                            {appt.serviceDetails?.length || 0} service(s)
+                            {appt.services?.length || 0} service(s)
                           </p>
                         </div>
                       </div>

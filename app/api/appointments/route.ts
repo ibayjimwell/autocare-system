@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       .leftJoin(Customers, eq(Appointments.customerId, Customers.id))
       .leftJoin(Vehicles, eq(Appointments.vehicleId, Vehicles.id));
 
-    // Filters
+    // ✅ Apply filters
     if (status) {
       query = query.where(eq(Appointments.status, status.toUpperCase()));
     }
@@ -104,13 +104,11 @@ export async function GET(req: NextRequest) {
           .from(Services)
           .where(inArray(Services.id, Array.from(allServiceIds)));
 
-        // Build a map of service ID → service object
         const serviceObjMap = serviceList.reduce((acc, s) => {
           acc[s.id] = s;
           return acc;
         }, {} as Record<string, any>);
 
-        // For each appointment, map its service IDs to full service objects
         for (const appt of appointments) {
           if (appt.services && Array.isArray(appt.services)) {
             serviceMap[appt.id] = appt.services
@@ -132,12 +130,7 @@ export async function GET(req: NextRequest) {
       error: false,
       message: "Appointments retrieved successfully.",
       data,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     }, { status: 200 });
   } catch (e) {
     console.error("[GET /api/appointments] Error:", e);

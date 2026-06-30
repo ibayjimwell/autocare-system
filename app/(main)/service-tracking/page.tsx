@@ -74,12 +74,10 @@ export default function ServiceTracking() {
   }, [activeFilter]);
 
   const handleInspect = (appt: any) => {
-    // If status is CONFIRMED, show confirmation dialog
     if (appt.status === "CONFIRMED") {
       setPendingAppointment(appt);
       setConfirmDialogOpen(true);
     } else {
-      // For other statuses, go directly to detail
       setSelectedAppointment(appt);
     }
   };
@@ -88,16 +86,13 @@ export default function ServiceTracking() {
     if (!pendingAppointment) return;
 
     try {
-      // Update appointment status to UNDER_INSPECTION
       const res = await appointmentsApi.updateStatus(pendingAppointment.id, "UNDER_INSPECTION");
       if (res.error) {
         toast.error(res.errorMessage || "Failed to start inspection.");
       } else {
         toast.success("Inspection started!");
         setConfirmDialogOpen(false);
-        // Navigate to the detail panel with the updated appointment
         setSelectedAppointment(pendingAppointment);
-        // Refresh the list in background
         loadAppointments();
       }
     } catch (err: any) {
@@ -109,7 +104,7 @@ export default function ServiceTracking() {
 
   const handleBack = () => {
     setSelectedAppointment(null);
-    loadAppointments(); // refresh list on return
+    loadAppointments();
   };
 
   if (loading) return <LoadingSpinner />;
@@ -196,7 +191,9 @@ export default function ServiceTracking() {
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Requested Job</p>
                       <p className="text-sm font-bold text-slate-700 truncate">
-                        {appt.serviceType?.name || "General Service"}
+                        {appt.services?.length > 0
+                          ? appt.services.map(s => s.name).join(", ")
+                          : "General Service"}
                       </p>
                     </div>
                   </div>

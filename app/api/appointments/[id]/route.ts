@@ -4,7 +4,7 @@ import { Appointments } from "@/database/models/appointments/appointments.model"
 import { Customers } from "@/database/models/customers/customers.model";
 import { Vehicles } from "@/database/models/customers/vehicles.model";
 import { Services } from "@/database/models/services/services.model";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { validateAppointmentId } from "@/utils/appointments";
 
 // ------------------------------------------------------------------
@@ -60,7 +60,7 @@ export async function GET(
       }, { status: 404 });
     }
 
-    // Fetch service details
+    // ✅ Fetch service details using inArray (safe)
     let serviceDetails: any[] = [];
     if (appointment.services && appointment.services.length > 0) {
       serviceDetails = await Database.select({
@@ -71,7 +71,7 @@ export async function GET(
         estimatedDuration: Services.estimatedDuration,
       })
         .from(Services)
-        .where(eq(Services.id, sql`ANY(${appointment.services})`));
+        .where(inArray(Services.id, appointment.services)); // ✅ fixed
     }
 
     return NextResponse.json({
