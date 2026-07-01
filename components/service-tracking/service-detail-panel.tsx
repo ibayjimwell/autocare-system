@@ -32,6 +32,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const TRACKING_STATUSES = [
   "PENDING",
@@ -194,11 +195,14 @@ export default function ServiceDetailPanel({
   const handleWorkDone = async () => {
     setIsSubmitting(true);
     try {
+      // Generate final bill
       const billRes = await finalBillsApi.generate(appointment.id);
       if (billRes.error) {
         toast.error(billRes.errorMessage || "Failed to generate final bill.");
       } else {
         toast.success("Job completed! Final bill generated.");
+        // Update appointment status to COMPLETED
+        await appointmentsApi.updateStatus(appointment.id, "COMPLETED");
         onStatusChanged();
         onBack();
       }
@@ -214,13 +218,12 @@ export default function ServiceDetailPanel({
 
   if (loading) return <LoadingSpinner />;
 
-  // ✅ Compute service price from services array
+  // Compute service price & findings subtotal only for inspection
   const servicePrice = appointment.services?.reduce(
     (sum: number, s: any) => sum + parseFloat(s.basePrice || 0),
     0
   ) || 0;
 
-  // ✅ Compute findings subtotal
   const findingsTotal = findings.reduce((sum, f) => {
     const partsTotal = (f.parts || []).reduce((s, p) => {
       if (p.isPms) return s;
@@ -323,7 +326,10 @@ export default function ServiceDetailPanel({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* ----- Tasks Column ----- */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className={cn(
+          "space-y-6",
+          isInProgress ? "lg:col-span-12" : "lg:col-span-7"
+        )}>
           <div className="bg-card border shadow-sm rounded-2xl p-4 sm:p-5 space-y-4">
             <div className="flex items-center justify-between gap-2 border-b pb-4 flex-wrap">
               <div className="flex items-center gap-2">
@@ -405,77 +411,79 @@ export default function ServiceDetailPanel({
           )}
         </div>
 
-        {/* ----- Estimated Cost Sidebar ----- */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-card border shadow-md rounded-2xl overflow-hidden flex flex-col h-full">
-            <div className="p-4 sm:p-5 border-b bg-muted/30 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-primary shrink-0" />
-              <h3 className="font-bold text-sm sm:text-base">Estimated Cost</h3>
-            </div>
-
-            <ScrollArea className="flex-1 max-h-[400px] sm:max-h-[500px]">
-              <div className="p-4 sm:p-5 space-y-4">
-                {/* Service Fee */}
-                <div className="flex justify-between items-start text-sm">
-                  <div className="min-w-0">
-                    <p className="font-semibold truncate">
-                      {appointment.services?.map((s: any) => s.name).join(", ") || "Service"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Base Service(s)</p>
-                  </div>
-                  <span className="font-mono font-medium shrink-0 ml-4">
-                    ₱{servicePrice.toFixed(2)}
-                  </span>
-                </div>
-                <Separator />
-
-                {/* Findings */}
-                {findings.map((f) => (
-                  <div key={f.id} className="space-y-1">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">
-                      {f.description}
-                    </p>
-                    {f.parts && f.parts.map((p, i) => (
-                      <div key={i} className="flex justify-between text-sm pl-4">
-                        <span className="truncate">
-                          {p.quantity}x {p.partName || "Part"} {p.isPms && "(PMS)"}
-                        </span>
-                        <span className="font-mono shrink-0 ml-4">
-                          {p.isPms ? "₱0.00" : `₱${(p.priceAtTime * p.quantity).toFixed(2)}`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-
-                <Separator />
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-base sm:text-lg">Subtotal</span>
-                  <span className="text-xl sm:text-2xl font-black text-primary font-mono tracking-tighter">
-                    ₱{subtotal.toFixed(2)}
-                  </span>
-                </div>
+        {/* ----- Estimated Cost Sidebar (only for inspection) ----- */}
+        {isInspection && (
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-card border shadow-md rounded-2xl overflow-hidden flex flex-col h-full">
+              <div className="p-4 sm:p-5 border-b bg-muted/30 flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-primary shrink-0" />
+                <h3 className="font-bold text-sm sm:text-base">Estimated Cost</h3>
               </div>
-            </ScrollArea>
 
-            <div className="p-4 sm:p-5 bg-primary/5 border-t">
-              {(isInspection || isInProgress) && !isCompleted && (
-                <Button
-                  onClick={() => setSendConfirmOpen(true)}
-                  className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl h-12 shadow-lg shadow-primary/20"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Submitting..." : "Submit to Billing"}
-                </Button>
-              )}
-              {isCompleted && (
-                <Button disabled className="w-full bg-green-600 text-white rounded-xl h-12">
-                  Job Completed
-                </Button>
-              )}
+              <ScrollArea className="flex-1 max-h-[400px] sm:max-h-[500px]">
+                <div className="p-4 sm:p-5 space-y-4">
+                  {/* Service Fee */}
+                  <div className="flex justify-between items-start text-sm">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">
+                        {appointment.services?.map((s: any) => s.name).join(", ") || "Service"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Base Service(s)</p>
+                    </div>
+                    <span className="font-mono font-medium shrink-0 ml-4">
+                      ₱{servicePrice.toFixed(2)}
+                    </span>
+                  </div>
+                  <Separator />
+
+                  {/* Findings */}
+                  {findings.map((f) => (
+                    <div key={f.id} className="space-y-1">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">
+                        {f.description}
+                      </p>
+                      {f.parts && f.parts.map((p, i) => (
+                        <div key={i} className="flex justify-between text-sm pl-4">
+                          <span className="truncate">
+                            {p.quantity}x {p.partName || "Part"} {p.isPms && "(PMS)"}
+                          </span>
+                          <span className="font-mono shrink-0 ml-4">
+                            {p.isPms ? "₱0.00" : `₱${(p.priceAtTime * p.quantity).toFixed(2)}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+
+                  <Separator />
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-base sm:text-lg">Subtotal</span>
+                    <span className="text-xl sm:text-2xl font-black text-primary font-mono tracking-tighter">
+                      ₱{subtotal.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </ScrollArea>
+
+              <div className="p-4 sm:p-5 bg-primary/5 border-t">
+                {!isCompleted && (
+                  <Button
+                    onClick={() => setSendConfirmOpen(true)}
+                    className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl h-12 shadow-lg shadow-primary/20"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Submitting..." : "Submit to Billing"}
+                  </Button>
+                )}
+                {isCompleted && (
+                  <Button disabled className="w-full bg-green-600 text-white rounded-xl h-12">
+                    Job Completed
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Modals */}

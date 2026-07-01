@@ -24,9 +24,14 @@ export async function PATCH(
     }, { status: 422 });
   }
 
-  // Verify task exists
-  const exists = await taskExists(id);
-  if (!exists) {
+  // Verify task exists – directly query the WorkTasks table
+  const [existingTask] = await Database
+    .select({ id: WorkTasks.id })
+    .from(WorkTasks)
+    .where(eq(WorkTasks.id, id))
+    .limit(1);
+
+  if (!existingTask) {
     return NextResponse.json({
       error: true,
       errorType: "auth",

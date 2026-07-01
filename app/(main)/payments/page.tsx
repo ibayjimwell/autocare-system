@@ -23,6 +23,8 @@ import {
   PlusCircle,
   Percent,
   Tag,
+  Wrench,
+  ListChecks,
 } from "lucide-react";
 import PageContainer from "@/components/shared/page-container";
 import LoadingSpinner from "@/components/shared/loading-spinner";
@@ -107,6 +109,14 @@ interface FinalBill {
   grandTotal: string;
   createdAt: string;
   updatedAt: string;
+  appointment?: {
+    id: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    customer: { fullname: string };
+    vehicle: { plateNumber: string };
+    services?: any[];
+  };
   findings?: any[];
   fees?: any[];
   discounts?: any[];
@@ -148,6 +158,13 @@ export default function PaymentsPage() {
   const [feeForm, setFeeForm] = useState({ title: "", amount: "", findingId: "none" });
   const [discountForm, setDiscountForm] = useState({ title: "", type: "fixed", value: "" });
   const [submittingAdjustment, setSubmittingAdjustment] = useState(false);
+
+  // Part edit modal
+  const [editPartModalOpen, setEditPartModalOpen] = useState(false);
+  const [editingPart, setEditingPart] = useState<any>(null);
+  const [editingFindingId, setEditingFindingId] = useState<string | null>(null);
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  const [editPartForm, setEditPartForm] = useState({ quantity: 1, priceAtTime: 0 });
 
   // Delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -265,14 +282,40 @@ export default function PaymentsPage() {
     }
   };
 
-  // Detail modal – now fetches appointment services separately
+  // Detail modal – now fetches full final bill with appointment and work tasks
   const openDetail = async (item: any, type: "estimate" | "final-bill") => {
     setDetailLoading(true);
     setSelectedItem(item);
     setDetailType(type);
     setDetailModalOpen(true);
 
-    if (type === "estimate") {
+    if (type === "final-bill") {
+      try {
+        const [billRes, apptRes] = await Promise.all([
+          finalBillsApi.get(item.id),
+          appointmentsApi.get(item.appointmentId),
+        ]);
+        if (billRes.error || !billRes.data) {
+          toast.error(billRes.errorMessage || "Could not load full bill details.");
+          setDetailLoading(false);
+          return;
+        }
+        const bill = billRes.data;
+        if (!apptRes.error && apptRes.data) {
+          bill.appointment = {
+            ...bill.appointment,
+            customer: apptRes.data.customer,
+            vehicle: apptRes.data.vehicle,
+            services: apptRes.data.services || [],
+          };
+        }
+        setSelectedItem(bill);
+      } catch (err) {
+        console.error("Failed to fetch final bill details", err);
+        toast.error("Error loading bill details.");
+      }
+    } else {
+      // Estimates – keep existing logic
       try {
         const [estRes, apptRes] = await Promise.all([
           estimatesApi.get(item.id),
@@ -280,7 +323,6 @@ export default function PaymentsPage() {
         ]);
         if (!estRes.error) {
           const data = estRes.data;
-          // Merge appointment services if available
           if (!apptRes.error && apptRes.data) {
             data.appointment.services = apptRes.data.services || [];
           }
@@ -312,7 +354,6 @@ export default function PaymentsPage() {
         toast.success("Fee added.");
         setFeeModalOpen(false);
         setFeeForm({ title: "", amount: "", findingId: "none" });
-        // Refresh detail
         const refreshed = await estimatesApi.get(selectedItem.id);
         if (!refreshed.error) setSelectedItem(refreshed.data);
         loadData();
@@ -342,13 +383,47 @@ export default function PaymentsPage() {
         toast.success("Discount added.");
         setDiscountModalOpen(false);
         setDiscountForm({ title: "", type: "fixed", value: "" });
-        // Refresh detail
         const refreshed = await estimatesApi.get(selectedItem.id);
         if (!refreshed.error) setSelectedItem(refreshed.data);
         loadData();
       }
     } catch (err: any) {
       toast.error(err.message || "Error adding discount.");
+    } finally {
+      setSubmittingAdjustment(false);
+    }
+  };
+
+  // Part edit handlers
+  const handleEditPartOpen = (part: any, findingId: string, billId: string) => {
+    setEditingPart(part);
+    setEditingFindingId(findingId);
+    setEditingBillId(billId);
+    setEditPartForm({ quantity: part.quantity, priceAtTime: parseFloat(part.priceAtTime) });
+    setEditPartModalOpen(true);
+  };
+
+  const handleEditPartSave = async () => {
+    if (!editingPart || !editingFindingId || !editingBillId) return;
+    setSubmittingAdjustment(true);
+    try {
+      const res = await finalBillsApi.updatePart(
+        editingBillId,
+        editingFindingId,
+        editingPart.id,
+        editPartForm
+      );
+      if (res.error) {
+        toast.error(res.errorMessage || "Failed to update part.");
+      } else {
+        toast.success("Part updated.");
+        setEditPartModalOpen(false);
+        const refreshed = await finalBillsApi.get(editingBillId);
+        if (!refreshed.error) setSelectedItem(refreshed.data);
+        loadData();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error updating part.");
     } finally {
       setSubmittingAdjustment(false);
     }
@@ -719,7 +794,7 @@ export default function PaymentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== Updated Estimate Details Modal ===== */}
+      {/* ===== Updated Detail Modal (Estimate & Final Bill) ===== */}
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -786,16 +861,28 @@ export default function PaymentsPage() {
                             </span>
                           </div>
                           {finding.parts && finding.parts.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-2">
+                            <div className="mt-2 space-y-1">
                               {finding.parts.map((part: any, idx: number) => (
-                                <span
-                                  key={idx}
-                                  className="text-[10px] bg-muted/30 px-2 py-1 rounded-md"
-                                >
-                                  {part.quantity}x {part.partName || "Part"}
-                                  {!part.isPms && ` (₱${formatCurrency(part.totalPrice)})`}
-                                  {part.isPms && " (PMS)"}
-                                </span>
+                                <div key={idx} className="flex items-center justify-between bg-muted/20 rounded-lg px-2 py-1">
+                                  <span className="text-[11px]">
+                                    {part.quantity}x {part.partName || "Part"}
+                                    {!part.isPms && ` (₱${formatCurrency(part.priceAtTime)} each)`}
+                                    {part.isPms && " (PMS)"}
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[11px] font-bold">₱{formatCurrency(part.totalPrice)}</span>
+                                    {selectedItem.status === 'PENDING' && detailType === 'final-bill' && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5 text-muted-foreground hover:text-primary"
+                                        onClick={() => handleEditPartOpen(part, finding.id, selectedItem.id)}
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
                               ))}
                             </div>
                           )}
@@ -809,20 +896,43 @@ export default function PaymentsPage() {
                   </div>
                 )}
 
+                {/* Work Tasks Section (Final Bills only) */}
+                {detailType === "final-bill" && selectedItem.workTasks && selectedItem.workTasks.length > 0 && (
+                  <div>
+                    <h4 className="font-bold flex items-center gap-2 mb-3">
+                      <Wrench className="w-4 h-4 text-primary" /> Completed Work Tasks
+                    </h4>
+                    <div className="space-y-2">
+                      {selectedItem.workTasks.map((task: any) => (
+                        <div key={task.id} className="flex items-center gap-2 p-2 bg-muted/20 rounded-lg">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-sm">{task.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end mt-2 text-sm font-bold">
+                      <span>Work Tasks Subtotal: ₱{formatCurrency(selectedItem.workTasksSubtotal)}</span>
+                    </div>
+                    <Separator className="my-3" />
+                  </div>
+                )}
+
                 {/* Fees Section */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="font-bold flex items-center gap-2">
                       <PlusCircle className="w-4 h-4 text-primary" /> Fees
                     </h4>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setFeeModalOpen(true)}
-                      className="h-8 text-xs font-bold"
-                    >
-                      <Plus className="w-3 h-3 mr-1" /> Add Fee
-                    </Button>
+                    {detailType === "estimate" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setFeeModalOpen(true)}
+                        className="h-8 text-xs font-bold"
+                      >
+                        <Plus className="w-3 h-3 mr-1" /> Add Fee
+                      </Button>
+                    )}
                   </div>
                   {selectedItem.fees && selectedItem.fees.length > 0 ? (
                     <div className="space-y-2">
@@ -848,14 +958,16 @@ export default function PaymentsPage() {
                     <h4 className="font-bold flex items-center gap-2">
                       <Percent className="w-4 h-4 text-primary" /> Discounts
                     </h4>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setDiscountModalOpen(true)}
-                      className="h-8 text-xs font-bold"
-                    >
-                      <Plus className="w-3 h-3 mr-1" /> Add Discount
-                    </Button>
+                    {detailType === "estimate" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDiscountModalOpen(true)}
+                        className="h-8 text-xs font-bold"
+                      >
+                        <Plus className="w-3 h-3 mr-1" /> Add Discount
+                      </Button>
+                    )}
                   </div>
                   {selectedItem.discounts && selectedItem.discounts.length > 0 ? (
                     <div className="space-y-2">
@@ -1023,6 +1135,57 @@ export default function PaymentsPage() {
               className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 font-bold shadow-lg shadow-primary/20"
             >
               {submittingAdjustment ? "Adding..." : "Add Discount"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Edit Part Modal (Final Bill Findings) ===== */}
+      <Dialog open={editPartModalOpen} onOpenChange={setEditPartModalOpen}>
+        <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-black">Edit Part</DialogTitle>
+            <DialogDescription>Change the quantity or unit price.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Part Name</Label>
+              <p className="text-sm font-medium">{editingPart?.partName || "Part"}</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quantity</Label>
+              <Input
+                type="number"
+                min="1"
+                value={editPartForm.quantity}
+                onChange={(e) => setEditPartForm({ ...editPartForm, quantity: parseInt(e.target.value) || 1 })}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Price per unit (₱)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editPartForm.priceAtTime}
+                onChange={(e) => setEditPartForm({ ...editPartForm, priceAtTime: parseFloat(e.target.value) || 0 })}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Total: ₱{(editPartForm.quantity * editPartForm.priceAtTime).toFixed(2)}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setEditPartModalOpen(false)} disabled={submittingAdjustment}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditPartSave}
+              disabled={submittingAdjustment}
+              className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 font-bold shadow-lg shadow-primary/20"
+            >
+              {submittingAdjustment ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
