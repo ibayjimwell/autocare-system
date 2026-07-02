@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const { appointmentId, title, order } = body;
+  const { appointmentId, title, order, durationMinutes } = body;
 
   if (!appointmentId || !isValidUUID(appointmentId)) {
     return NextResponse.json({
@@ -108,16 +108,9 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         status: 'PENDING',
         order: order !== undefined ? order : nextOrder,
+        durationMinutes: durationMinutes ?? null,
       })
       .returning();
-
-    // Optionally update appointment status if this is the first work task
-    const [countResult] = await Database.select({ count: sql<number>`count(*)` })
-      .from(WorkTasks)
-      .where(eq(WorkTasks.appointmentId, appointmentId));
-    if (Number(countResult?.count || 0) === 1) {
-      // If the appointment is still IN_PROGRESS, we keep it; but we could add a log.
-    }
 
     return NextResponse.json({
       error: false,

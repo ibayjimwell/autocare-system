@@ -53,12 +53,35 @@ export async function PATCH(
   }
 
   try {
+    // Get current task to check if startedAt should be set
+    const [currentTask] = await Database
+      .select({ status: InspectionTasks.status, startedAt: InspectionTasks.startedAt })
+      .from(InspectionTasks)
+      .where(eq(InspectionTasks.id, id))
+      .limit(1);
+
+    if (!currentTask) {
+      return NextResponse.json({
+        error: true,
+        errorType: "auth",
+        errorTitle: "Task not found",
+        errorMessage: "Task does not exist.",
+        errorLog: null,
+      }, { status: 404 });
+    }
+
+    const updateData: any = { status, updatedAt: new Date() };
+
+    // Set startedAt when moving to IN_PROGRESS for the first time
+    if (status === 'IN_PROGRESS' && currentTask.status !== 'IN_PROGRESS') {
+      updateData.startedAt = new Date();
+    }
+
     const [updated] = await Database.update(InspectionTasks)
-      .set({ status, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(InspectionTasks.id, id))
       .returning();
 
-    // Optionally, if all tasks are DONE, trigger a notification or update appointment status?
     return NextResponse.json({
       error: false,
       message: "Task status updated.",

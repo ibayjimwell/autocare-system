@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import {
   FileText,
   Package,
   Pencil,
+  Clock,
 } from "lucide-react";
 import ConfirmationDialog from "@/components/shared/confimation-dialog";
 
@@ -36,6 +37,33 @@ export default function TaskCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
   const [markDoneConfirmOpen, setMarkDoneConfirmOpen] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  const duration = task.durationMinutes;
+
+  // Real‑time progress calculation (only when IN_PROGRESS and duration is set)
+  useEffect(() => {
+    if (task.status !== 'IN_PROGRESS' || !task.startedAt || !duration) return;
+
+    const startTime = new Date(task.startedAt).getTime();
+    const durationMs = duration * 60 * 1000;
+
+    const update = () => {
+      const now = Date.now();
+      const diff = Math.min(durationMs, now - startTime);
+      setElapsed(diff);
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [task.status, task.startedAt, duration]);
+
+  const progressPercent = (() => {
+    if (task.status === 'DONE') return 100;
+    if (task.status === 'PENDING' || !duration) return 0;
+    return Math.min(100, Math.round((elapsed / (duration * 60 * 1000)) * 100));
+  })();
 
   const isActive = task.status === "IN_PROGRESS";
   const isDone = task.status === "DONE";
@@ -74,15 +102,23 @@ export default function TaskCard({
               <div className="flex items-center gap-2">
                 {currentStatus.icon}
                 <h4
-                  className={`font-bold text-sm sm:text-base tracking-tight ${isDone ? "text-muted-foreground line-through" : "text-foreground"}`}
+                  className={`font-bold text-sm sm:text-base tracking-tight ${
+                    isDone ? "text-muted-foreground line-through" : "text-foreground"
+                  }`}
                 >
                   {task.title}
                 </h4>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline" className="text-[10px] uppercase h-5 px-1.5">
                   {currentStatus.label}
                 </Badge>
+                {duration && (
+                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {duration} min
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -128,6 +164,22 @@ export default function TaskCard({
               </Button>
             </div>
           </div>
+
+          {/* Progress Bar (only if duration is set) */}
+          {duration && (
+            <div className="mt-3 space-y-1">
+              <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
+                <span>Progress</span>
+                <span>{progressPercent}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="h-2 rounded-full bg-secondary transition-all duration-700"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Findings */}
           {task.findings && task.findings.length > 0 && (

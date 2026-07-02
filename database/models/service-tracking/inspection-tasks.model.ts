@@ -18,6 +18,8 @@ export const InspectionTasks = pgTable(
     title: text("title").notNull(),
     status: text("status").notNull().default("PENDING"), // PENDING, IN_PROGRESS, DONE
     order: integer("order").default(0),
+    durationMinutes: integer("duration_minutes"), // estimated duration in minutes (nullable)
+    startedAt: timestamp("started_at"), // when task was started
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

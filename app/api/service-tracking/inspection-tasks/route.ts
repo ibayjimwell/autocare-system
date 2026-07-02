@@ -3,10 +3,10 @@ import { Database } from "@/lib/drizzle";
 import { InspectionTasks } from "@/database/models/service-tracking/inspection-tasks.model";
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { validateTaskData, appointmentExists } from "@/utils/service-tracking";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
-import { isValidUUID } from "@/utils/shared"; 
+import { isValidUUID } from "@/utils/shared";
 
 // ------------------------------------------------------------------
 // GET /api/service-tracking/inspection-tasks?appointmentId=...
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
-  const { appointmentId, title, order } = body;
+  const { appointmentId, title, order, durationMinutes } = body;
 
   // Verify appointment exists
   const exists = await appointmentExists(appointmentId);
@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         order: order || taskCount + 1,
         status: 'PENDING',
+        durationMinutes: durationMinutes ?? null,   // new field
       })
       .returning();
 
@@ -119,7 +120,6 @@ export async function POST(req: NextRequest) {
       await Database.update(Appointments)
         .set({ status: 'UNDER_INSPECTION', updatedAt: new Date() })
         .where(eq(Appointments.id, appointmentId));
-      // Optionally log status change
     }
 
     return NextResponse.json({

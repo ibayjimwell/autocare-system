@@ -11,14 +11,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Save, X } from "lucide-react";
+import { Loader2, Save, X, Clock } from "lucide-react";
 
 interface AddTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddTask: (title: string) => void;
-  editingTask?: { id: string; title: string } | null;
-  onEditTask?: (id: string, title: string) => void;
+  onAddTask: (title: string, durationMinutes?: number) => void;   // extended signature
+  editingTask?: { id: string; title: string; durationMinutes?: number } | null;
+  onEditTask?: (id: string, title: string, durationMinutes?: number) => void;
   isLoading?: boolean;
 }
 
@@ -31,12 +31,15 @@ export default function AddTaskModal({
   isLoading = false,
 }: AddTaskModalProps) {
   const [title, setTitle] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (editingTask) {
       setTitle(editingTask.title);
+      setDurationMinutes(editingTask.durationMinutes ?? undefined);
     } else {
       setTitle("");
+      setDurationMinutes(undefined);
     }
   }, [editingTask, open]);
 
@@ -44,11 +47,12 @@ export default function AddTaskModal({
     e.preventDefault();
     if (!title.trim()) return;
     if (editingTask && onEditTask) {
-      onEditTask(editingTask.id, title.trim());
+      onEditTask(editingTask.id, title.trim(), durationMinutes);
     } else {
-      onAddTask(title.trim());
+      onAddTask(title.trim(), durationMinutes);
     }
     setTitle("");
+    setDurationMinutes(undefined);
     onOpenChange(false);
   };
 
@@ -73,6 +77,27 @@ export default function AddTaskModal({
               autoFocus
             />
           </div>
+
+          {/* Duration Input */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Duration (minutes, optional)
+            </Label>
+            <Input
+              type="number"
+              min="1"
+              value={durationMinutes ?? ""}
+              onChange={(e) =>
+                setDurationMinutes(e.target.value ? parseInt(e.target.value) : undefined)
+              }
+              placeholder="e.g., 30"
+              className="rounded-xl border-slate-200"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Estimated time to complete this task.
+            </p>
+          </div>
+
           <DialogFooter className="gap-2">
             <Button
               type="button"

@@ -1,10 +1,8 @@
-// app/api/service-tracking/work-tasks/[id]/status/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { WorkTasks } from "@/database/models/service-tracking/work-tasks.model";
 import { eq } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
-import { taskExists } from "@/utils/service-tracking";
 
 // ------------------------------------------------------------------
 // PATCH /api/service-tracking/work-tasks/:id/status
@@ -26,7 +24,7 @@ export async function PATCH(
 
   // Verify task exists – directly query the WorkTasks table
   const [existingTask] = await Database
-    .select({ id: WorkTasks.id })
+    .select({ id: WorkTasks.id, status: WorkTasks.status, startedAt: WorkTasks.startedAt })
     .from(WorkTasks)
     .where(eq(WorkTasks.id, id))
     .limit(1);
@@ -66,8 +64,15 @@ export async function PATCH(
   }
 
   try {
+    const updateData: any = { status, updatedAt: new Date() };
+
+    // Set startedAt when status becomes IN_PROGRESS for the first time
+    if (status === 'IN_PROGRESS' && existingTask.status !== 'IN_PROGRESS') {
+      updateData.startedAt = new Date();
+    }
+
     const [updated] = await Database.update(WorkTasks)
-      .set({ status, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(WorkTasks.id, id))
       .returning();
 

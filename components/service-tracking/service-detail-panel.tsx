@@ -13,6 +13,7 @@ import AddTaskModal from "@/components/shared/add-task-modal";
 import TaskCard from "./task-card";
 import FindingModal from "./finding-modal";
 import FindingsList from "./findings-list";
+import OverallProgressBar from "./overall-progress-bar";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
 import { workTasksApi } from "@/lib/service-tracking/work-tasks";
@@ -107,11 +108,19 @@ export default function ServiceDetailPanel({
   }, [appointment.id, appointment.status]);
 
   // Handlers
-  const handleAddTask = async (title: string) => {
+  const handleAddTask = async (title: string, durationMinutes?: number) => {
     try {
       const res = isInspection
-        ? await inspectionTasksApi.create({ appointmentId: appointment.id, title })
-        : await workTasksApi.create({ appointmentId: appointment.id, title });
+        ? await inspectionTasksApi.create({ 
+            appointmentId: appointment.id, 
+            title,
+            durationMinutes,
+          })
+        : await workTasksApi.create({ 
+            appointmentId: appointment.id, 
+            title,
+            durationMinutes,
+          });
       if (res.error) {
         toast.error(res.errorMessage || "Failed to add task.");
       } else {
@@ -195,13 +204,11 @@ export default function ServiceDetailPanel({
   const handleWorkDone = async () => {
     setIsSubmitting(true);
     try {
-      // Generate final bill
       const billRes = await finalBillsApi.generate(appointment.id);
       if (billRes.error) {
         toast.error(billRes.errorMessage || "Failed to generate final bill.");
       } else {
         toast.success("Job completed! Final bill generated.");
-        // Update appointment status to COMPLETED
         await appointmentsApi.updateStatus(appointment.id, "COMPLETED");
         onStatusChanged();
         onBack();
@@ -218,7 +225,6 @@ export default function ServiceDetailPanel({
 
   if (loading) return <LoadingSpinner />;
 
-  // Compute service price & findings subtotal only for inspection
   const servicePrice = appointment.services?.reduce(
     (sum: number, s: any) => sum + parseFloat(s.basePrice || 0),
     0
@@ -353,6 +359,13 @@ export default function ServiceDetailPanel({
                 <Plus className="w-4 h-4 mr-2" /> New Task
               </Button>
             </div>
+
+            {/* Overall Progress Bar */}
+            {currentTasks.length > 0 && (
+              <div className="px-2">
+                <OverallProgressBar tasks={currentTasks} />
+              </div>
+            )}
 
             {currentTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 bg-muted/20 rounded-xl border border-dashed">

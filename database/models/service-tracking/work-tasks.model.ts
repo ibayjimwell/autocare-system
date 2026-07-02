@@ -18,12 +18,12 @@ export const WorkTasks = pgTable(
     title: text("title").notNull(),
     status: text("status").notNull().default("PENDING"), // PENDING, IN_PROGRESS, DONE
     order: integer("order").default(0),
+    durationMinutes: integer("duration_minutes"), // estimated duration in minutes
+    startedAt: timestamp("started_at"), // when task was started
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
-    appointmentIdx: index("work_tasks_appointment_idx").on(
-      table.appointmentId,
-    ),
+    appointmentIdx: index("work_tasks_appointment_idx").on(table.appointmentId),
   }),
 );
