@@ -1,6 +1,7 @@
+// components/service-detail/service-detail-panel.tsx
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -11,9 +12,11 @@ import LoadingSpinner from "@/components/shared/loading-spinner";
 import ConfirmationDialog from "@/components/shared/confimation-dialog";
 import AddTaskModal from "@/components/shared/add-task-modal";
 import TaskCard from "./task-card";
+import TaskCardSkeleton from "@/components/skeleton/task-card-skeleton";
 import FindingModal from "./finding-modal";
 import FindingsList from "./findings-list";
 import OverallProgressBar from "./overall-progress-bar";
+import { useRealtimeTask } from "@/connections/useRealtimeTask";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
 import { workTasksApi } from "@/lib/service-tracking/work-tasks";
@@ -67,7 +70,8 @@ export default function ServiceDetailPanel({
   const [workTasks, setWorkTasks] = useState<any[]>([]);
   const [findings, setFindings] = useState<any[]>([]);
   const [estimate, setEstimate] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [tasksLoading, setTasksLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal states
@@ -83,9 +87,15 @@ export default function ServiceDetailPanel({
   const currentTasks = isInspection ? inspectionTasks : workTasks;
   const allTasksDone = currentTasks.length > 0 && currentTasks.every((t) => t.status === "DONE");
 
-  // Load data
-  const loadData = async () => {
-    setLoading(true);
+  // Ref to track if this is the initial load
+  const isInitial = useRef(true);
+
+  // Load data function – used for both initial and subsequent refreshes
+  const loadData = useCallback(async (showSkeleton: boolean = false) => {
+    if (showSkeleton) {
+      setTasksLoading(true);
+    }
+
     try {
       if (isInspection) {
         const tasksRes = await inspectionTasksApi.list(appointment.id);
@@ -99,25 +109,37 @@ export default function ServiceDetailPanel({
     } catch (err) {
       console.error("Failed to load data", err);
     } finally {
-      setLoading(false);
+      if (isInitial.current) {
+        setInitialLoading(false);
+        isInitial.current = false;
+      }
+      setTasksLoading(false);
     }
-  };
+  }, [appointment.id, isInspection, isInProgress]);
 
+  // Initial load on mount (full page spinner)
   useEffect(() => {
-    loadData();
-  }, [appointment.id, appointment.status]);
+    loadData(false);
+  }, [loadData]);
 
-  // Handlers
+  // Realtime subscription – refresh with skeleton cards
+  useRealtimeTask({
+    appointmentId: appointment.id,
+    isInspection,
+    onDataChanged: () => loadData(true),
+  });
+
+  // Handlers – API calls fire-and-forget, realtime refreshes the list
   const handleAddTask = async (title: string, durationMinutes?: number) => {
     try {
       const res = isInspection
-        ? await inspectionTasksApi.create({ 
-            appointmentId: appointment.id, 
+        ? await inspectionTasksApi.create({
+            appointmentId: appointment.id,
             title,
             durationMinutes,
           })
-        : await workTasksApi.create({ 
-            appointmentId: appointment.id, 
+        : await workTasksApi.create({
+            appointmentId: appointment.id,
             title,
             durationMinutes,
           });
@@ -125,7 +147,7 @@ export default function ServiceDetailPanel({
         toast.error(res.errorMessage || "Failed to add task.");
       } else {
         toast.success("Task added.");
-        await loadData();
+        // Realtime will refresh the list
       }
     } catch (err: any) {
       toast.error(err.message || "Error adding task.");
@@ -139,9 +161,8 @@ export default function ServiceDetailPanel({
         : await workTasksApi.updateStatus(taskId, status);
       if (res.error) {
         toast.error(res.errorMessage || "Failed to update task.");
-      } else {
-        await loadData();
       }
+      // Realtime will refresh
     } catch (err: any) {
       toast.error(err.message || "Error updating task.");
     }
@@ -187,7 +208,7 @@ export default function ServiceDetailPanel({
 
   const handleFindingsSaved = async () => {
     setFindingModalOpen(false);
-    await loadData();
+    await loadData(true); // show skeleton
     try {
       const genRes = await estimatesApi.create(appointment.id);
       if (genRes.error) {
@@ -223,7 +244,8 @@ export default function ServiceDetailPanel({
 
   const currentStatusIdx = TRACKING_STATUSES.indexOf(appointment.status);
 
-  if (loading) return <LoadingSpinner />;
+  // Show full-page spinner only on very first load
+  if (initialLoading) return <LoadingSpinner />;
 
   const servicePrice = appointment.services?.reduce(
     (sum: number, s: any) => sum + parseFloat(s.basePrice || 0),
@@ -367,7 +389,22 @@ export default function ServiceDetailPanel({
               </div>
             )}
 
-            {currentTasks.length === 0 ? (
+            {/* Task List or Skeletons */}
+            {tasksLoading && currentTasks.length === 0 ? (
+              // Initial load with no tasks → show a few skeletons
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <TaskCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : tasksLoading && currentTasks.length > 0 ? (
+              // Refresh while tasks exist: show skeleton cards matching previous count
+              <div className="space-y-4">
+                {currentTasks.map((_, i) => (
+                  <TaskCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : currentTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 bg-muted/20 rounded-xl border border-dashed">
                 <div className="p-3 bg-background rounded-full shadow-sm">
                   <AlertCircle className="w-6 h-6 text-muted-foreground" />
@@ -419,7 +456,7 @@ export default function ServiceDetailPanel({
             <FindingsList
               findings={findings}
               appointmentId={appointment.id}
-              onFindingsUpdated={loadData}
+              onFindingsUpdated={() => loadData(true)}
             />
           )}
         </div>

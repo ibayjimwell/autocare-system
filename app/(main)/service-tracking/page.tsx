@@ -1,13 +1,12 @@
+// app/(main)/service-tracking/page.tsx
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import PageContainer from "@/components/shared/page-container";
-import LoadingSpinner from "@/components/shared/loading-spinner";
 import EmptyState from "@/components/shared/empty-state";
-import StatusBadge from "@/components/shared/status-badge";
 import ConfirmationDialog from "@/components/shared/confimation-dialog";
+import ServiceTrackingSkeleton from "@/components/skeleton/service-tracking-skeleton";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import AppointmentCard from "@/components/appointments/appointment-card";
 import CustomerCard from "@/components/customers/customer-card";
 import VehicleCard from "@/components/customers/vehicle-card";
@@ -29,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { toast } from "sonner";
 import ServiceDetailPanel from "@/components/service-tracking/service-detail-panel";
+import { useRealtimeAppointment } from "@/connections/useRealtimeAppointment";
 
 const FILTER_OPTIONS = [
   { value: "CONFIRMED", label: "Confirmed", icon: ClipboardCheck },
@@ -47,7 +47,7 @@ const formatTime12h = (time24: string) => {
 
 export default function ServiceTracking() {
   const [appointments, setAppointments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);   // only true on first mount
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState("CONFIRMED");
 
@@ -55,8 +55,7 @@ export default function ServiceTracking() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingAppointment, setPendingAppointment] = useState<any>(null);
 
-  const loadAppointments = async () => {
-    setLoading(true);
+  const loadAppointments = useCallback(async () => {
     try {
       const res = await appointmentsApi.list({ status: activeFilter });
       if (res.error) {
@@ -68,14 +67,36 @@ export default function ServiceTracking() {
     } catch (err: any) {
       toast.error(err.message || "Error loading appointments.");
       setAppointments([]);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadAppointments();
   }, [activeFilter]);
+
+  // First mount: show skeleton, then load data
+  useEffect(() => {
+    const init = async () => {
+      setInitialLoading(true);
+      await loadAppointments();
+      setInitialLoading(false);
+    };
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch when filter changes (skip the initial mount because it's already handled)
+  const isFirstFilterChange = useRef(true);
+  useEffect(() => {
+    if (isFirstFilterChange.current) {
+      isFirstFilterChange.current = false;
+      return;
+    }
+    loadAppointments();
+  }, [activeFilter, loadAppointments]);
+
+  // Realtime subscription – silently refresh the list when any appointment changes
+  const handleRealtimeRefresh = useCallback(() => {
+    loadAppointments();
+  }, [loadAppointments]);
+
+  useRealtimeAppointment({ onDataChanged: handleRealtimeRefresh });
 
   const handleInspect = (appt: any) => {
     if (appt.status === "CONFIRMED") {
@@ -97,7 +118,7 @@ export default function ServiceTracking() {
         toast.success("Inspection started!");
         setConfirmDialogOpen(false);
         setSelectedAppointment(pendingAppointment);
-        loadAppointments();
+        // Realtime will refresh the list
       }
     } catch (err: any) {
       toast.error(err.message || "Error starting inspection.");
@@ -108,10 +129,20 @@ export default function ServiceTracking() {
 
   const handleBack = () => {
     setSelectedAppointment(null);
-    loadAppointments();
+    // No need to manually call loadAppointments – realtime will keep it updated
   };
 
-  if (loading) return <LoadingSpinner />;
+  // Show skeleton only on initial page load
+  if (initialLoading) {
+    return (
+      <PageContainer
+        title="Service Tracking"
+        subtitle="Monitor and manage real‑time workshop operations"
+      >
+        <ServiceTrackingSkeleton />
+      </PageContainer>
+    );
+  }
 
   if (selectedAppointment) {
     return (
@@ -165,7 +196,7 @@ export default function ServiceTracking() {
           {appointments.map((appt) => (
             <AppointmentCard
               key={appt.id}
-              appointmentId={appt.id}
+              appointment={appt}                // pass full object
               className="h-full"
             >
               <div className="space-y-3">

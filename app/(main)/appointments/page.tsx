@@ -1,3 +1,4 @@
+// app/(main)/appointments/page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -9,8 +10,6 @@ import { toast } from "sonner";
 
 // Components
 import PageContainer from "@/components/shared/page-container";
-import LoadingSpinner from "@/components/shared/loading-spinner";
-import StatusBadge from "@/components/shared/status-badge";
 import ErrorHandler from "@/components/shared/error-handler";
 import AppointmentCalendar from "@/components/appointments/appointment-calendar";
 import CustomerPickerModal from "@/components/appointments/customer-picker-modal";
@@ -19,6 +18,7 @@ import AppointmentCard from "@/components/appointments/appointment-card";
 import CustomerCard from "@/components/customers/customer-card";
 import VehicleCard from "@/components/customers/vehicle-card";
 import ServiceCard from "@/components/services/service-card";
+import AppointmentsSkeleton from "@/components/skeleton/appointments-skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -49,15 +49,11 @@ import {
   Loader2,
   Car,
   UserCircle,
-  Phone,
   Clock,
   CheckCircle,
   XCircle,
-  Filter,
   Search,
   PlusCircle,
-  Wrench,
-  FileText,
   Check,
   ChevronsUpDown,
 } from "lucide-react";
@@ -69,6 +65,9 @@ import { customersApi } from "@/lib/customers/customers";
 import { vehiclesApi } from "@/lib/customers/vehicles";
 import { servicesApi } from "@/lib/services/services";
 import { staffApi } from "@/lib/staffs/staffs";
+
+// Realtime hook
+import { useRealtimeAppointment } from "@/connections/useRealtimeAppointment";
 
 // Types
 interface Customer {
@@ -105,7 +104,7 @@ interface Appointment {
   id: string;
   customerId: string;
   vehicleId: string;
-  services: Service[]; // full service objects
+  services: Service[];
   trackingNumber: string;
   appointmentDate: string;
   appointmentTime: string;
@@ -143,7 +142,7 @@ export default function AppointmentsPage() {
   // State
   // ==========================================================================
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [sidebarFilter, setSidebarFilter] = useState("");
@@ -244,7 +243,7 @@ export default function AppointmentsPage() {
     try {
       const [custRes, svcRes, staffRes] = await Promise.all([
         customersApi.list(),
-        servicesApi.list(true), // active only
+        servicesApi.list(true),
         staffApi.list(),
       ]);
       setCustomers(custRes.error ? [] : (custRes.data || []));
@@ -255,14 +254,23 @@ export default function AppointmentsPage() {
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     const init = async () => {
-      setLoading(true);
+      setInitialLoading(true);
       await Promise.all([loadAppointments(), loadDependencies()]);
-      setLoading(false);
+      setInitialLoading(false);
     };
     init();
-  }, [loadAppointments, loadDependencies]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Realtime subscription
+  const handleRealtimeRefresh = useCallback(() => {
+    loadAppointments();
+  }, [loadAppointments]);
+
+  useRealtimeAppointment({ onDataChanged: handleRealtimeRefresh });
 
   // ==========================================================================
   // Dynamic: Vehicles by customer
@@ -353,7 +361,6 @@ export default function AppointmentsPage() {
         });
         setCustomTime("");
         setCustomTimeChecked(null);
-        await loadAppointments();
       }
     } catch (err: any) {
       setApiError({
@@ -377,7 +384,6 @@ export default function AppointmentsPage() {
         toast.error(res.errorMessage || "Failed to confirm.");
       } else {
         toast.success("Appointment confirmed.");
-        await loadAppointments();
       }
     } catch (err: any) {
       toast.error(err.message || "Error confirming.");
@@ -398,7 +404,6 @@ export default function AppointmentsPage() {
       } else {
         toast.success("Appointment declined.");
         setDeclineModal({ open: false, appointment: null, reason: "" });
-        await loadAppointments();
       }
     } catch (err: any) {
       toast.error(err.message || "Error declining.");
@@ -449,9 +454,15 @@ export default function AppointmentsPage() {
     .sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || ""));
 
   // ==========================================================================
-  // Loading state
+  // Initial page skeleton
   // ==========================================================================
-  if (loading) return <LoadingSpinner />;
+  if (initialLoading) {
+    return (
+      <PageContainer title="Service Scheduler" subtitle="Confirm or decline customer bookings">
+        <AppointmentsSkeleton />
+      </PageContainer>
+    );
+  }
 
   // ==========================================================================
   // Render
@@ -797,13 +808,12 @@ export default function AppointmentsPage() {
                 </div>
               ) : (
                 filteredAppointments.map((appt) => (
-                  <AppointmentCard key={appt.id} appointmentId={appt.id}>
+                  <AppointmentCard key={appt.id} appointment={appt}>
                     <CustomerCard customerId={appt.customerId} />
                     <VehicleCard
                       vehicleId={appt.vehicleId}
                       customerId={appt.customerId}
                     />
-                    {/* Service Cards */}
                     {appt.services && appt.services.length > 0 ? (
                       appt.services.map((service) => (
                         <ServiceCard key={service.id} serviceId={service.id} />
@@ -813,7 +823,6 @@ export default function AppointmentsPage() {
                         No services selected.
                       </div>
                     )}
-                    {/* Pending Quick Actions */}
                     {appt.status === "PENDING" && (
                       <div className="flex gap-2 mt-2">
                         <Button
