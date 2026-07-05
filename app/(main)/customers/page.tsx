@@ -29,8 +29,10 @@ import {
   Mail,
   Phone,
   User,
-  Lock,
+  Copy,
+  EyeOff,
   ShieldCheck,
+  CheckCircle2,
   Filter,
   UserX,
   UserCheck,
@@ -45,10 +47,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { customersApi } from "@/lib/customers/customers";
 import { toast } from "sonner";
-// 👇 Import the CustomerDetail component
+// Import the CustomerDetail component
 import CustomerDetail from "@/components/customers/customer-detail";
 
 // Validation functions matching backend
@@ -57,9 +66,6 @@ const validateEmail = (email: string) => {
 };
 const validatePhone = (phone: string) => {
   return /^\+?[0-9]{7,15}$/.test(phone);
-};
-const validatePassword = (password: string) => {
-  return password.length >= 6;
 };
 
 export default function Customers() {
@@ -78,8 +84,6 @@ export default function Customers() {
     fullname: "",
     email: "",
     phone: "",
-    password: "",
-    confirmPassword: "",
   });
   const [saving, setSaving] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
@@ -98,14 +102,24 @@ export default function Customers() {
     fullname?: string;
     email?: string;
     phone?: string;
-    password?: string;
-    confirmPassword?: string;
   }>({});
   const [apiError, setApiError] = useState<{
     type: string;
     title: string;
     message: string;
   } | null>(null);
+
+  // Temp Password Dialog (like Staffs)
+  const [tempPasswordDialog, setTempPasswordDialog] = useState<{
+    open: boolean;
+    tempPassword: string;
+    customerName: string;
+  }>({
+    open: false,
+    tempPassword: "",
+    customerName: "",
+  });
+  const [showTempPassword, setShowTempPassword] = useState(false);
 
   // ==========================================================================
   // Data Loading
@@ -123,7 +137,12 @@ export default function Customers() {
         });
         setCustomers([]);
       } else {
-        setCustomers(res.data || []);
+        // Sort by createdAt descending (newest first)
+        const sorted = (res.data || []).sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setCustomers(sorted);
       }
     } catch (err: any) {
       setApiError({
@@ -152,7 +171,7 @@ export default function Customers() {
   );
 
   // ==========================================================================
-  // Client-side validation helpers
+  // Client-side validation helpers (password removed)
   // ==========================================================================
   const validateForm = () => {
     const errors: any = {};
@@ -167,25 +186,6 @@ export default function Customers() {
     } else if (!validatePhone(form.phone.trim())) {
       errors.phone = "Phone must be 7-15 digits, optional leading +.";
     }
-    // Only validate password for new customer
-    if (!editingCustomer) {
-      if (!form.password) {
-        errors.password = "Password is required.";
-      } else if (!validatePassword(form.password)) {
-        errors.password = "Password must be at least 6 characters.";
-      }
-      if (form.password !== form.confirmPassword) {
-        errors.confirmPassword = "Passwords do not match.";
-      }
-    } else {
-      // For editing, password is optional and only validate if provided
-      if (form.password && !validatePassword(form.password)) {
-        errors.password = "Password must be at least 6 characters.";
-      }
-      if (form.password && form.password !== form.confirmPassword) {
-        errors.confirmPassword = "Passwords do not match.";
-      }
-    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -195,7 +195,7 @@ export default function Customers() {
   // ==========================================================================
   const openCreate = () => {
     setEditingCustomer(null);
-    setForm({ fullname: "", email: "", phone: "", password: "", confirmPassword: "" });
+    setForm({ fullname: "", email: "", phone: "" });
     setFormErrors({});
     setApiError(null);
     setModalOpen(true);
@@ -207,12 +207,22 @@ export default function Customers() {
       fullname: c.fullname || "",
       email: c.email || "",
       phone: c.phone || "",
-      password: "",
-      confirmPassword: "",
     });
     setFormErrors({});
     setApiError(null);
     setModalOpen(true);
+  };
+
+  // Generate a temporary password: first name (lowercase) + random 4 digits
+  const generateTempPassword = (fullname: string) => {
+    const firstName = fullname.trim().split(' ')[0]?.toLowerCase() || 'cust';
+    const random = Math.floor(1000 + Math.random() * 9000);
+    return `${firstName}${random}`;
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Password copied to clipboard.');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -227,27 +237,45 @@ export default function Customers() {
         email: form.email.trim(),
         phone: form.phone.trim(),
       };
-      let res;
+
       if (editingCustomer) {
-        // Editing – only send fullname, email, phone (password is ignored)
-        res = await customersApi.update(editingCustomer.id, payload);
+        // Editing – only send fullname, email, phone (password not changed)
+        const res = await customersApi.update(editingCustomer.id, payload);
+        if (res.error) {
+          setApiError({
+            type: res.errorType || "fve",
+            title: res.errorTitle || "Error",
+            message: res.errorMessage || "Operation failed.",
+          });
+        } else {
+          toast.success("Customer updated.");
+          setModalOpen(false);
+          await loadCustomers();
+        }
       } else {
-        // Creating – send password as well
-        res = await customersApi.create({
+        // Creating – auto-generate password
+        const tempPw = generateTempPassword(form.fullname.trim());
+        const res = await customersApi.create({
           ...payload,
-          password: form.password,
+          password: tempPw,
+          tempPassword: true,   // will be sent to API if supported
         });
-      }
-      if (res.error) {
-        setApiError({
-          type: res.errorType || "fve",
-          title: res.errorTitle || "Error",
-          message: res.errorMessage || "Operation failed.",
-        });
-      } else {
-        toast.success(editingCustomer ? "Customer updated." : "Customer created.");
-        setModalOpen(false);
-        await loadCustomers();
+        if (res.error) {
+          setApiError({
+            type: res.errorType || "fve",
+            title: res.errorTitle || "Error",
+            message: res.errorMessage || "Operation failed.",
+          });
+        } else {
+          // Show temp password dialog
+          setTempPasswordDialog({
+            open: true,
+            tempPassword: tempPw,
+            customerName: form.fullname.trim(),
+          });
+          setModalOpen(false);
+          await loadCustomers();
+        }
       }
     } catch (err: any) {
       setApiError({
@@ -296,7 +324,6 @@ export default function Customers() {
         customer={selectedCustomer}
         onBack={() => {
           setSelectedCustomer(null);
-          // Reload the list to reflect any changes made in the detail view
           loadCustomers();
         }}
       />
@@ -603,7 +630,7 @@ export default function Customers() {
         </div>
       )}
 
-      {/* ===== Create / Edit Modal ===== */}
+      {/* ===== Create / Edit Modal (No password fields) ===== */}
       <DataModal
         open={modalOpen}
         onOpenChange={setModalOpen}
@@ -612,7 +639,6 @@ export default function Customers() {
         isLoading={saving}
       >
         <div className="space-y-6 pt-4 px-2">
-          {/* API errors inside modal */}
           {apiError && (
             <ErrorHandler
               type={apiError.type}
@@ -721,81 +747,77 @@ export default function Customers() {
             </div>
           </div>
 
-          {/* Separator – only show for new customer */}
-          {!editingCustomer && (
-            <>
-              <div className="h-[1px] w-full bg-slate-100" />
-              {/* Password Section – only for new customer */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold text-slate-700">
-                    Password
-                  </Label>
-                  <div className="relative group">
-                    <Lock
-                      className={cn(
-                        "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors",
-                        focusField === "pass" ? "text-primary" : "text-slate-400"
-                      )}
-                    />
-                    <Input
-                      id="password"
-                      type="password"
-                      value={form.password}
-                      onFocus={() => setFocusField("pass")}
-                      onBlur={() => setFocusField(null)}
-                      onChange={(e) => {
-                        setForm({ ...form, password: e.target.value });
-                        if (formErrors.password) setFormErrors({ ...formErrors, password: undefined });
-                      }}
-                      className={cn(
-                        "pl-10 h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white",
-                        formErrors.password && "border-destructive focus:ring-destructive"
-                      )}
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  {formErrors.password && (
-                    <p className="text-xs text-destructive">{formErrors.password}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold text-slate-700">
-                    Confirm Password
-                  </Label>
-                  <div className="relative group">
-                    <ShieldCheck
-                      className={cn(
-                        "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors",
-                        focusField === "confirm" ? "text-primary" : "text-slate-400"
-                      )}
-                    />
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={form.confirmPassword}
-                      onFocus={() => setFocusField("confirm")}
-                      onBlur={() => setFocusField(null)}
-                      onChange={(e) => {
-                        setForm({ ...form, confirmPassword: e.target.value });
-                        if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: undefined });
-                      }}
-                      className={cn(
-                        "pl-10 h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white",
-                        formErrors.confirmPassword && "border-destructive focus:ring-destructive"
-                      )}
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  {formErrors.confirmPassword && (
-                    <p className="text-xs text-destructive">{formErrors.confirmPassword}</p>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+          {/* Password fields are REMOVED */}
         </div>
       </DataModal>
+
+      {/* ===== Temp Password Dialog (exact copy from Staffs) ===== */}
+      <Dialog
+        open={tempPasswordDialog.open}
+        onOpenChange={() => setTempPasswordDialog({ open: false, tempPassword: "", customerName: "" })}
+      >
+        <DialogContent className="rounded-[2rem] sm:max-w-md border-none shadow-2xl">
+          <DialogHeader className="items-center text-center">
+            <div className="w-16 h-16 bg-green-50 rounded-3xl flex items-center justify-center mb-4">
+              <ShieldCheck className="w-8 h-8 text-green-500" />
+            </div>
+            <DialogTitle className="text-xl font-black text-slate-800">
+              Customer Registered
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-sm">
+              A temporary password has been generated for{' '}
+              <strong>{tempPasswordDialog.customerName}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-slate-900 p-6 rounded-[2rem] space-y-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full -mr-12 -mt-12 blur-2xl" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">
+              Temporary Password
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <code className="text-3xl font-mono font-black text-white tracking-tighter">
+                {showTempPassword
+                  ? tempPasswordDialog.tempPassword
+                  : '••••••••'}
+              </code>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 text-slate-400 hover:text-white"
+                  onClick={() => setShowTempPassword(!showTempPassword)}
+                >
+                  {showTempPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 text-slate-400 hover:text-white"
+                  onClick={() => copyToClipboard(tempPasswordDialog.tempPassword)}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl">
+            <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+              Please save this password. The customer can use it to log in and
+              will be prompted to change it after first login.
+            </p>
+          </div>
+
+          <Button
+            className="w-full rounded-2xl h-12 font-black uppercase tracking-widest"
+            onClick={() => setTempPasswordDialog({ open: false, tempPassword: "", customerName: "" })}
+          >
+            Done
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {/* ===== Status Change Confirmation Dialog ===== */}
       <AlertDialog

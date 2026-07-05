@@ -1,0 +1,1 @@
+ALTER TABLE "customers" ADD COLUMN "temp_password" boolean DEFAULT true NOT NULL;

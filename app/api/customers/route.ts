@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
         email: rawData.email.trim(),
         phone: rawData.phone.trim(),
         password: hashedPassword,
+        tempPassword: rawData.tempPassword ?? true
       })
       .returning();
 
