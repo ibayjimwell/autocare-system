@@ -71,6 +71,10 @@ import { finalBillsApi } from "@/lib/payments/final-bills";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import ServiceCard from "@/components/services/service-card";
 
+// Cashier & Receipt modals
+import CashierModal from "@/components/payments/cashier-modal";
+import ReceiptModal from "@/components/payments/cashier-modal";
+
 // Types
 interface Estimate {
   id: string;
@@ -170,6 +174,15 @@ export default function PaymentsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
+  // Cashier modal
+  const [cashierModalOpen, setCashierModalOpen] = useState(false);
+  const [selectedBillForPayment, setSelectedBillForPayment] = useState<any>(null);
+
+  // Receipt modal
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState<any>(null);
+  const [receiptReference, setReceiptReference] = useState<string>("");
+
   // Loading data
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -262,24 +275,23 @@ export default function PaymentsPage() {
     }
   };
 
-  // Final bill actions
-  const handleMarkPaid = async (billId: string) => {
-    try {
-      const res = await fetch(`/api/payments/final-bills/${billId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'PAID' }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        toast.error(data.errorMessage || "Failed to mark as paid.");
-      } else {
-        toast.success("Bill marked as paid.");
-        loadData();
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Error.");
-    }
+  // Final bill actions – open cashier modal
+  const handleOpenCashier = (bill: any) => {
+    setSelectedBillForPayment(bill);
+    setCashierModalOpen(true);
+  };
+
+  const handlePaymentSuccess = (referenceNumber: string) => {
+    toast.success(`Payment processed! Receipt ${referenceNumber} generated.`);
+    loadData();
+    // Optionally you can fetch and show the receipt here
+  };
+
+  const handlePaidAndOpenReceipt = (referenceNumber: string, data: any) => {
+    setReceiptReference(referenceNumber);
+    setReceiptData(data);
+    setReceiptModalOpen(true);
+    loadData();
   };
 
   // Detail modal – now fetches full final bill with appointment and work tasks
@@ -670,8 +682,8 @@ export default function PaymentsPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {bill.status !== "PAID" && (
-                          <Button size="sm" onClick={() => handleMarkPaid(bill.id)} className="h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">
-                            <DollarSign className="w-3.5 h-3.5 mr-1" /> Mark as Paid
+                          <Button size="sm" onClick={() => handleOpenCashier(bill)} className="h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">
+                            <DollarSign className="w-3.5 h-3.5 mr-1" /> Pay
                           </Button>
                         )}
                         <Button size="sm" variant="outline" onClick={() => openDetail(bill, "final-bill")} className="h-8 text-xs font-bold">
@@ -712,7 +724,7 @@ export default function PaymentsPage() {
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             {bill.status !== "PAID" && (
-                              <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold" onClick={() => handleMarkPaid(bill.id)}>
+                              <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold" onClick={() => handleOpenCashier(bill)}>
                                 <DollarSign className="w-3.5 h-3.5 mr-1" /> Pay
                               </Button>
                             )}
@@ -1204,6 +1216,22 @@ export default function PaymentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ===== Cashier Modal ===== */}
+      <CashierModal
+        open={cashierModalOpen}
+        onOpenChange={setCashierModalOpen}
+        bill={selectedBillForPayment}
+        onPaid={handlePaymentSuccess}
+      />
+
+      {/* ===== Receipt Modal ===== */}
+      <ReceiptModal
+        open={receiptModalOpen}
+        onOpenChange={setReceiptModalOpen}
+        receiptData={receiptData}
+        referenceNumber={receiptReference}
+      />
     </PageContainer>
   );
 }

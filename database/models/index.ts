@@ -36,3 +36,5 @@ export * from "./payments/final-bill-finding-parts.model";
 export * from "./payments/final-bill-fees.model";
 export * from "./payments/final-bill-discounts.model";
 export * from "./payments/final-bill-work-tasks.model";
+
+export * from "./payments/receipts.model";
