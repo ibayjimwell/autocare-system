@@ -75,4 +75,9 @@ export const appointmentsApi = {
     });
     return res.json();
   },
+
+  getHistoryForCustomer: async (customerId: string) => {
+    const res = await fetch(`/api/customers/${customerId}/appointments-history`);
+    return res.json();
+  },
 };
