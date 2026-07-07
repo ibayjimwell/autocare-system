@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import PageContainer from "@/components/shared/page-container";
 import DataModal from "@/components/shared/data-modal";
 import EmptyState from "@/components/shared/empty-state";
@@ -20,6 +20,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Plus,
   Cog,
   Pencil,
@@ -30,11 +42,18 @@ import {
   Clock,
   Tag,
   CheckCircle2,
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  X,
 } from "lucide-react";
 import ConfirmationDialog from "@/components/services/confirmation-dialog";
 import { cn } from "@/lib/utils";
 import { servicesApi } from "@/lib/services/services";
 import { toast } from "sonner";
+
+type SortField = "name" | "basePrice" | "durationMinutes" | "type" | "status";
 
 export default function ServiceTypes() {
   // ==========================================================================
@@ -42,10 +61,19 @@ export default function ServiceTypes() {
   // ==========================================================================
   const [types, setTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<string>("active"); // active, disabled, all
+  const [typeFilter, setTypeFilter] = useState<string>("ALL"); // PMS, REPAIR, CHECKUP, ALL
+
+  // Sorting
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({
@@ -53,6 +81,7 @@ export default function ServiceTypes() {
     description: "",
     basePrice: "",
     durationMinutes: "",
+    type: "REPAIR",
   });
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<{
@@ -73,14 +102,18 @@ export default function ServiceTypes() {
     name: "",
   });
 
+  // Filter popover
+  const [filterOpen, setFilterOpen] = useState(false);
+
   // ==========================================================================
-  // Data Loading
+  // Data Loading (all services, filtering client-side)
   // ==========================================================================
   const load = async () => {
     setLoading(true);
     setApiError(null);
     try {
-      const res = await servicesApi.list(activeFilter);
+      // Fetch all services (no filter) – we filter client-side
+      const res = await servicesApi.list();
       if (res.error) {
         setApiError({
           type: res.errorType || "fe",
@@ -89,7 +122,7 @@ export default function ServiceTypes() {
         });
         setTypes([]);
       } else {
-        // Map database column `estimatedDuration` to frontend `durationMinutes`
+        // Map estimatedDuration to durationMinutes for display
         const mappedData = (res.data || []).map((item: any) => ({
           ...item,
           durationMinutes: item.estimatedDuration,
@@ -110,16 +143,68 @@ export default function ServiceTypes() {
   useEffect(() => {
     load();
     setCurrentPage(1);
-  }, [activeFilter]);
+  }, []);
 
   // ==========================================================================
-  // Filtering & Pagination
+  // Filtering & Sorting & Searching
   // ==========================================================================
-  const filteredTypes = types.filter(
-    (t) =>
-      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTypes = useMemo(() => {
+    let data = [...types];
+
+    // Search (client-side)
+    if (searchQuery.trim()) {
+      const term = searchQuery.toLowerCase();
+      data = data.filter(
+        (t) =>
+          t.name.toLowerCase().includes(term) ||
+          (t.description || "").toLowerCase().includes(term) ||
+          (t.type || "").toLowerCase().includes(term)
+      );
+    }
+
+    // Status filter
+    if (statusFilter === "active") data = data.filter((t) => t.active);
+    else if (statusFilter === "disabled") data = data.filter((t) => !t.active);
+
+    // Type filter
+    if (typeFilter !== "ALL") {
+      data = data.filter((t) => t.type === typeFilter);
+    }
+
+    // Sorting
+    data.sort((a, b) => {
+      let valA: any, valB: any;
+      switch (sortField) {
+        case "name":
+          valA = (a.name || "").toLowerCase();
+          valB = (b.name || "").toLowerCase();
+          break;
+        case "basePrice":
+          valA = parseFloat(a.basePrice) || 0;
+          valB = parseFloat(b.basePrice) || 0;
+          break;
+        case "durationMinutes":
+          valA = a.durationMinutes || 0;
+          valB = b.durationMinutes || 0;
+          break;
+        case "type":
+          valA = (a.type || "").toLowerCase();
+          valB = (b.type || "").toLowerCase();
+          break;
+        case "status":
+          valA = a.active ? 0 : 1;
+          valB = b.active ? 0 : 1;
+          break;
+        default:
+          return 0;
+      }
+      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return data;
+  }, [types, searchQuery, statusFilter, typeFilter, sortField, sortDirection]);
 
   const totalPages = Math.ceil(filteredTypes.length / itemsPerPage);
   const paginatedData = filteredTypes.slice(
@@ -127,17 +212,46 @@ export default function ServiceTypes() {
     currentPage * itemsPerPage
   );
 
-  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, statusFilter, typeFilter, sortField, sortDirection]);
+
+  // ==========================================================================
+  // Sorting helpers
+  // ==========================================================================
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-4 h-4 text-slate-400" />;
+    return sortDirection === "asc" ? (
+      <ArrowUp className="w-4 h-4 text-primary" />
+    ) : (
+      <ArrowDown className="w-4 h-4 text-primary" />
+    );
+  };
+
+  // ==========================================================================
+  // Filter reset
+  // ==========================================================================
+  const resetFilters = () => {
+    setStatusFilter("active");
+    setTypeFilter("ALL");
+    setSearchQuery("");
+  };
 
   // ==========================================================================
   // Form Handlers
   // ==========================================================================
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", description: "", basePrice: "", durationMinutes: "" });
+    setForm({ name: "", description: "", basePrice: "", durationMinutes: "", type: "REPAIR" });
     setApiError(null);
     setModalOpen(true);
   };
@@ -149,6 +263,7 @@ export default function ServiceTypes() {
       description: st.description || "",
       basePrice: st.basePrice?.toString() || "",
       durationMinutes: st.durationMinutes?.toString() || "",
+      type: st.type || "REPAIR",
     });
     setApiError(null);
     setModalOpen(true);
@@ -164,6 +279,7 @@ export default function ServiceTypes() {
       description: form.description.trim() || undefined,
       basePrice: form.basePrice ? parseFloat(form.basePrice) : undefined,
       durationMinutes: parseInt(form.durationMinutes, 10),
+      type: form.type, // send type
     };
 
     try {
@@ -242,14 +358,24 @@ export default function ServiceTypes() {
       : num.toLocaleString("en-PH", { minimumFractionDigits: 2 });
   };
 
+  const typeBadge = (type: string) => {
+    const config: Record<string, string> = {
+      PMS: "bg-emerald-100 text-emerald-800",
+      REPAIR: "bg-primary/10 text-primary",
+      CHECKUP: "bg-blue-100 text-blue-800",
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${config[type] || "bg-slate-100 text-slate-600"}`}>
+        {type}
+      </span>
+    );
+  };
+
   // ==========================================================================
   // Loading state
   // ==========================================================================
   if (loading && types.length === 0) return <LoadingSpinner />;
 
-  // ==========================================================================
-  // Main Render
-  // ==========================================================================
   return (
     <PageContainer
       title="Service Catalog"
@@ -280,10 +406,10 @@ export default function ServiceTypes() {
       <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between">
         <div className="flex p-1 bg-slate-100 rounded-2xl w-full md:w-auto">
           <button
-            onClick={() => setActiveFilter(true)}
+            onClick={() => setStatusFilter("active")}
             className={cn(
               "flex-1 md:flex-none px-6 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all",
-              activeFilter
+              statusFilter === "active"
                 ? "bg-white text-primary shadow-sm"
                 : "text-slate-500 hover:text-slate-700"
             )}
@@ -291,10 +417,10 @@ export default function ServiceTypes() {
             Active
           </button>
           <button
-            onClick={() => setActiveFilter(false)}
+            onClick={() => setStatusFilter("disabled")}
             className={cn(
               "flex-1 md:flex-none px-6 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all",
-              !activeFilter
+              statusFilter === "disabled"
                 ? "bg-white text-primary shadow-sm"
                 : "text-slate-500 hover:text-slate-700"
             )}
@@ -303,14 +429,46 @@ export default function ServiceTypes() {
           </button>
         </div>
 
-        <div className="relative w-full md:max-w-xs group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-          <Input
-            placeholder="Search services..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 rounded-2xl border-slate-200 focus:ring-primary/20 transition-all"
-          />
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative w-full md:w-64 group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
+            <Input
+              placeholder="Search services..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 rounded-2xl border-slate-200 focus:ring-primary/20 transition-all"
+            />
+          </div>
+
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="border-slate-200 flex-none">
+                <Filter className="w-4 h-4 mr-2" /> Type
+                {typeFilter !== "ALL" && (
+                  <span className="ml-1 h-2 w-2 rounded-full bg-primary" />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2 rounded-xl shadow-lg border-slate-200">
+              <div className="space-y-1">
+                <button
+                  onClick={() => { setTypeFilter("ALL"); setFilterOpen(false); }}
+                  className={cn("w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg", typeFilter === "ALL" && "bg-primary/5 text-primary")}
+                >
+                  All Types
+                </button>
+                {["PMS", "REPAIR", "CHECKUP"].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => { setTypeFilter(t); setFilterOpen(false); }}
+                    className={cn("w-full text-left px-3 py-1.5 text-xs font-bold rounded-lg", typeFilter === t && "bg-primary/5 text-primary")}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -318,10 +476,10 @@ export default function ServiceTypes() {
       {filteredTypes.length === 0 ? (
         <EmptyState
           icon={Cog}
-          title={`No ${activeFilter ? "active" : "disabled"} services found`}
+          title={`No ${statusFilter === "disabled" ? "disabled" : "active"} services found`}
           description={
-            searchQuery
-              ? "Try adjusting your search terms."
+            searchQuery || typeFilter !== "ALL"
+              ? "Try adjusting your search or filters."
               : "Start by creating a new service category."
           }
         />
@@ -343,6 +501,7 @@ export default function ServiceTypes() {
                       <p className="text-xs text-slate-500 line-clamp-1">
                         {st.description}
                       </p>
+                      <div className="mt-1">{typeBadge(st.type)}</div>
                     </div>
                     <div className="flex gap-1">
                       <Button
@@ -353,7 +512,7 @@ export default function ServiceTypes() {
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
-                      {activeFilter ? (
+                      {st.active ? (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -406,14 +565,45 @@ export default function ServiceTypes() {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow className="hover:bg-transparent border-slate-100">
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-8">
-                    Service Detail
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-8 cursor-pointer select-none"
+                    onClick={() => handleSort("name")}
+                  >
+                    <div className="flex items-center gap-2">
+                      Service Detail <SortIcon field="name" />
+                    </div>
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Pricing
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort("type")}
+                  >
+                    <div className="flex items-center gap-2">
+                      Type <SortIcon field="type" />
+                    </div>
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Duration
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort("basePrice")}
+                  >
+                    <div className="flex items-center gap-2">
+                      Pricing <SortIcon field="basePrice" />
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort("durationMinutes")}
+                  >
+                    <div className="flex items-center gap-2">
+                      Duration <SortIcon field="durationMinutes" />
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort("status")}
+                  >
+                    <div className="flex items-center gap-2">
+                      Status <SortIcon field="status" />
+                    </div>
                   </TableHead>
                   <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-right pr-8">
                     Actions
@@ -436,6 +626,7 @@ export default function ServiceTypes() {
                         </p>
                       </div>
                     </TableCell>
+                    <TableCell>{typeBadge(st.type)}</TableCell>
                     <TableCell>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-primary/5 text-primary text-xs font-black">
                         ₱{formatPrice(st.basePrice)}
@@ -447,6 +638,17 @@ export default function ServiceTypes() {
                         {st.durationMinutes} minutes
                       </div>
                     </TableCell>
+                    <TableCell>
+                      {st.active ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                          Disabled
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="pr-8">
                       <div className="flex items-center justify-end gap-1">
                         <Button
@@ -457,7 +659,7 @@ export default function ServiceTypes() {
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        {activeFilter ? (
+                        {st.active ? (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -568,6 +770,24 @@ export default function ServiceTypes() {
               placeholder="e.g. Executive Oil Change"
               className="rounded-xl border-slate-200"
             />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+              Service Type
+            </Label>
+            <Select
+              value={form.type}
+              onValueChange={(value) => setForm({ ...form, type: value })}
+            >
+              <SelectTrigger className="rounded-xl border-slate-200">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="REPAIR">Repair</SelectItem>
+                <SelectItem value="PMS">PMS</SelectItem>
+                <SelectItem value="CHECKUP">Checkup</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">

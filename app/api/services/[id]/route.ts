@@ -114,6 +114,7 @@ export async function PUT(
   if (body.description !== undefined) updateData.description = body.description?.trim() || null;
   if (body.basePrice !== undefined) updateData.basePrice = body.basePrice ? parseFloat(body.basePrice) : null;
   if (body.durationMinutes) updateData.estimatedDuration = parseInt(body.durationMinutes, 10); // ← key change
+  if (body.type) updateData.type = body.type.trim();
   updateData.updatedAt = new Date();
 
   try {

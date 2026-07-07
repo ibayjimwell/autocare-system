@@ -14,22 +14,18 @@ export const servicesApi = {
     return res.json();
   },
 
-  // CREATE service
-  create: async (data: { name: string; description?: string; basePrice?: number; durationMinutes: number }) => {
+  create: async (data: { name: string; description?: string; basePrice?: number; durationMinutes: number; type?: string }) => {
     const formData = new FormData();
     formData.append('name', data.name);
     if (data.description) formData.append('description', data.description);
     if (data.basePrice !== undefined) formData.append('basePrice', String(data.basePrice));
     formData.append('durationMinutes', String(data.durationMinutes));
-    const res = await fetch(`${API_BASE}/api/services`, {
-      method: 'POST',
-      body: formData,
-    });
+    if (data.type) formData.append('type', data.type);
+    const res = await fetch(`${API_BASE}/api/services`, { method: 'POST', body: formData });
     return res.json();
   },
-
-  // UPDATE service
-  update: async (id: string, data: { name?: string; description?: string; basePrice?: number; durationMinutes?: number }) => {
+  
+  update: async (id: string, data: { name?: string; description?: string; basePrice?: number; durationMinutes?: number; type?: string }) => {
     const res = await fetch(`${API_BASE}/api/services/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

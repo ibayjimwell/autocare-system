@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
     basePrice: rawData.basePrice ? parseFloat(rawData.basePrice) : null,
     estimatedDuration: rawData.durationMinutes ? parseInt(rawData.durationMinutes, 10) : null, // ← key change: durationMinutes → estimatedDuration
     active: true,
+    type: rawData.type
   };
 
   try {
