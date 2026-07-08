@@ -18,6 +18,7 @@ import AppointmentCard from "@/components/appointments/appointment-card";
 import CustomerCard from "@/components/customers/customer-card";
 import VehicleCard from "@/components/customers/vehicle-card";
 import ServiceCard from "@/components/services/service-card";
+import StaffCards from "@/components/staffs/staff-cards";
 import AppointmentsSkeleton from "@/components/skeleton/appointments-skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -823,6 +824,8 @@ export default function AppointmentsPage() {
                         No services selected.
                       </div>
                     )}
+                    {/* Staff Cards – display involved staff per status */}
+                    <StaffCards appointmentId={appt.id} />
                     {appt.status === "PENDING" && (
                       <div className="flex gap-2 mt-2">
                         <Button

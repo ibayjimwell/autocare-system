@@ -11,6 +11,7 @@ import AppointmentCard from "@/components/appointments/appointment-card";
 import CustomerCard from "@/components/customers/customer-card";
 import VehicleCard from "@/components/customers/vehicle-card";
 import ServiceCard from "@/components/services/service-card";
+import StaffCards from "@/components/staffs/staff-cards";
 import {
   Calendar,
   Clock,
@@ -215,6 +216,8 @@ export default function ServiceTracking() {
                     No services selected.
                   </div>
                 )}
+                {/* Staff Cards – who did what */}
+                <StaffCards appointmentId={appt.id} />
                 {/* Action Button */}
                 <Button
                   className={cn(
