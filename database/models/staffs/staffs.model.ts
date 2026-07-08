@@ -9,6 +9,8 @@ export const Staffs = pgTable('staffs', {
   role: varchar('role', { length: 50 }),
   tempPassword: boolean('temp_password').default(true).notNull(),
   inBoarding: boolean('in_boarding').default(true).notNull(),
+  isOnline: boolean('is_online').default(false).notNull(),
+  currentModule: varchar('current_module', { length: 50 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({

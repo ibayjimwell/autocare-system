@@ -36,4 +36,14 @@ export const staffApi = {
     });
     return res.json();
   },
+
+  updateOnlineStatus: async (data: { isOnline?: boolean; currentModule?: string }) => {
+    const res = await fetch('/api/staffs/online-status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  
 };

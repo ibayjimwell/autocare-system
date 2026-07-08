@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Sidebar } from "@/components/shared/sidebar";
 import { Header, MobileHeader } from "@/components/shared/header";
 import { Toaster } from "@/components/ui/sonner";
+import { useStaffActivity } from "@/hooks/use-staff-activity";
 
 // ================================================================
 // MAIN LAYOUT – Used by the (main) route group
@@ -15,6 +16,7 @@ export default function MainLayout({
   children: React.ReactNode;
 }>) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  useStaffActivity();
 
   return (
     <div className="flex min-h-screen bg-background">

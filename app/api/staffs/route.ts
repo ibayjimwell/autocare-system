@@ -121,6 +121,8 @@ export async function GET() {
       username: Staffs.username,
       role: Staffs.role,
       inBoarding: Staffs.inBoarding,
+      isOnline: Staffs.isOnline,
+      currentModule: Staffs.currentModule,
       createdAt: Staffs.createdAt,
       updatedAt: Staffs.updatedAt,
     })

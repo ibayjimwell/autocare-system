@@ -93,7 +93,7 @@ export function NavLinks({ items, collapsed, onNavigate }) {
 
 
 export function Sidebar({ mobileOpen, onMobileClose }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const { hasPermission, logout, user } = useAuth();
 
   // ================================================================

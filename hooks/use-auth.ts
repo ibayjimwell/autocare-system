@@ -1,5 +1,6 @@
 // lib/auth/staffs/useAuth.ts
 import { useSession, signOut } from "next-auth/react";
+import { staffApi } from "@/lib/staffs/staffs";
 
 // Mapping from module names (as used in the sidebar) to the actual keys in the `access` object
 const MODULE_KEY_MAP: Record<string, string> = {
@@ -50,8 +51,9 @@ export function useAuth() {
   /**
    * Logout the current user and redirect to the login page.
    */
-  const logout = () => {
-    signOut({ callbackUrl: "/login" });
+  const logout = async () => {
+    await staffApi.updateOnlineStatus({ isOnline: false, currentModule: "" });
+    await signOut({ callbackUrl: '/login' });
   };
 
   return {

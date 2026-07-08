@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import PageContainer from '@/components/shared/page-container';
 import DataModal from '@/components/shared/data-modal';
 import EmptyState from '@/components/shared/empty-state';
@@ -35,6 +35,13 @@ import {
   CheckCircle2,
   LogOut,
   Key,
+  Filter,
+  X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -51,9 +58,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { staffApi } from '@/lib/staffs/staffs';
 import { accessApi } from '@/lib/staffs/access';
 import { toast } from 'sonner';
+import { useRealtimeStaffMonitor } from '@/connections/useRealtimeStaffMonitor';
 
 // All possible module names (must match StaffAccess table columns)
 const MODULES = [
@@ -82,6 +95,8 @@ const MODULE_LABELS: Record<string, string> = {
 // Predefined roles
 const PREDEFINED_ROLES = ['Admin', 'Mechanic', 'Assistant', 'Cashier'];
 
+type SortField = 'fullname' | 'username' | 'role' | 'status' | 'accessCount' | 'currentModule';
+
 export default function StaffManagement() {
   // ----------------------------------------------------------------
   // State
@@ -89,6 +104,17 @@ export default function StaffManagement() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  // Filters
+  const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL'); // 'all', 'online', 'offline', 'offboarded'
+
+  // Sorting
+  const [sortField, setSortField] = useState<SortField>('fullname');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Filter popover
+  const [filterOpen, setFilterOpen] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -145,12 +171,13 @@ export default function StaffManagement() {
   };
 
   // ----------------------------------------------------------------
-  // Data Loading – includes access count
+  // Data Loading – fetch all staff (no search) + access counts
   // ----------------------------------------------------------------
-  const loadStaff = async () => {
+  const loadStaff = useCallback(async () => {
     setLoading(true);
     try {
-      const staffRes = await staffApi.list(search || undefined);
+      // Fetch all staff (client-side filtering later)
+      const staffRes = await staffApi.list();
       if (staffRes.error) {
         toast.error(staffRes.errorMessage || 'Failed to load staff');
         setStaffList([]);
@@ -172,46 +199,127 @@ export default function StaffManagement() {
         accessCount: accessMap[staff.id] || 0,
       }));
 
-      const sorted = staffWithCount.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setStaffList(sorted);
+      setStaffList(staffWithCount);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load staff');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadStaff();
-    setCurrentPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [loadStaff]);
+
+  // Realtime subscription – silently refresh list on any staff change
+  useRealtimeStaffMonitor({ onDataChanged: loadStaff });
 
   // ----------------------------------------------------------------
-  // Filter & Pagination
+  // Client-side filtering, searching, sorting
   // ----------------------------------------------------------------
-  const filteredStaff = staffList.filter((staff) => {
-    const term = search.toLowerCase();
-    return (
-      staff.fullname?.toLowerCase().includes(term) ||
-      staff.username?.toLowerCase().includes(term) ||
-      staff.role?.toLowerCase().includes(term)
-    );
-  });
+  const filteredAndSortedStaff = useMemo(() => {
+    let data = [...staffList];
 
-  const totalPages = Math.ceil(filteredStaff.length / itemsPerPage);
-  const paginatedStaff = filteredStaff.slice(
+    // Search (client-side)
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      data = data.filter(staff =>
+        staff.fullname?.toLowerCase().includes(term) ||
+        staff.username?.toLowerCase().includes(term) ||
+        staff.role?.toLowerCase().includes(term)
+      );
+    }
+
+    // Role filter
+    if (roleFilter !== 'ALL') {
+      data = data.filter(staff => staff.role === roleFilter);
+    }
+
+    // Status filter (online, offline, offboarded)
+    if (statusFilter === 'online') {
+      data = data.filter(staff => staff.isOnline === true);
+    } else if (statusFilter === 'offline') {
+      data = data.filter(staff => staff.isOnline !== true && staff.inBoarding !== false);
+    } else if (statusFilter === 'offboarded') {
+      data = data.filter(staff => staff.inBoarding === false);
+    }
+
+    // Sort
+    data.sort((a, b) => {
+      let valA: any, valB: any;
+      switch (sortField) {
+        case 'fullname':
+          valA = (a.fullname || '').toLowerCase();
+          valB = (b.fullname || '').toLowerCase();
+          break;
+        case 'username':
+          valA = (a.username || '').toLowerCase();
+          valB = (b.username || '').toLowerCase();
+          break;
+        case 'role':
+          valA = (a.role || '').toLowerCase();
+          valB = (b.role || '').toLowerCase();
+          break;
+        case 'status':
+          // 0 = online, 1 = offline, 2 = offboarded
+          valA = a.inBoarding === false ? 2 : (a.isOnline ? 0 : 1);
+          valB = b.inBoarding === false ? 2 : (b.isOnline ? 0 : 1);
+          break;
+        case 'accessCount':
+          valA = a.accessCount || 0;
+          valB = b.accessCount || 0;
+          break;
+        case 'currentModule':
+          valA = (a.currentModule || '').toLowerCase();
+          valB = (b.currentModule || '').toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return data;
+  }, [staffList, search, roleFilter, statusFilter, sortField, sortDirection]);
+
+  const totalPages = Math.ceil(filteredAndSortedStaff.length / itemsPerPage);
+  const paginatedStaff = filteredAndSortedStaff.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
+  // Reset page on filter/search/sort change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, roleFilter, statusFilter, sortField, sortDirection]);
+
+  // ----------------------------------------------------------------
+  // Sorting helpers
+  // ----------------------------------------------------------------
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-4 h-4 text-slate-400" />;
+    return sortDirection === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />;
+  };
+
+  // ----------------------------------------------------------------
+  // Filter reset
+  // ----------------------------------------------------------------
+  const resetFilters = () => {
+    setRoleFilter('ALL');
+    setStatusFilter('ALL');
+  };
 
   // ----------------------------------------------------------------
   // Helpers
@@ -489,7 +597,7 @@ export default function StaffManagement() {
         </Button>
       }
     >
-      {/* ---- Search & Stats ---- */}
+      {/* ---- Search & Filter Bar ---- */}
       <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
         <div className="relative w-full md:max-w-md group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
@@ -500,19 +608,70 @@ export default function StaffManagement() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
-          <UserCircle2 className="w-3 h-3" />
-          {filteredStaff.length} Total Personnel
+        <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
+            <UserCircle2 className="w-3 h-3" />
+            {filteredAndSortedStaff.length} Total Personnel
+          </div>
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="border-slate-200">
+                <Filter className="w-4 h-4 mr-2" /> Filters
+                {(roleFilter !== 'ALL' || statusFilter !== 'ALL') && (
+                  <span className="ml-1 h-2 w-2 rounded-full bg-primary" />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-60 p-4 rounded-2xl shadow-lg border-slate-200">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm">Filter Staff</h4>
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-xs">
+                    <X className="w-3 h-3 mr-1" /> Reset
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500">Role</Label>
+                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+                    <SelectTrigger className="h-9 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Roles</SelectItem>
+                      {PREDEFINED_ROLES.map(role => (
+                        <SelectItem key={role} value={role}>{role}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500">Status</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-9 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All</SelectItem>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="offline">Offline</SelectItem>
+                      <SelectItem value="offboarded">Offboarded</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setFilterOpen(false)}>
+                  Apply Filters
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
       {/* ---- Empty State ---- */}
-      {filteredStaff.length === 0 ? (
+      {filteredAndSortedStaff.length === 0 ? (
         <EmptyState
           icon={UserCog}
           title="No staff members found"
           description={
-            search ? 'Try a different search term' : 'Your team directory is currently empty.'
+            search || roleFilter !== 'ALL' || statusFilter !== 'ALL'
+              ? 'Try adjusting your search or filters.'
+              : 'Your team directory is currently empty.'
           }
         />
       ) : (
@@ -530,25 +689,37 @@ export default function StaffManagement() {
                 <CardContent className="p-4 space-y-4">
                   <div className="flex justify-between items-start">
                     <div className="flex gap-3 items-center">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
-                        {staff.fullname?.charAt(0) || '?'}
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
+                          {staff.fullname?.charAt(0) || '?'}
+                        </div>
+                        {staff.isOnline && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
+                        )}
                       </div>
                       <div className="min-w-0">
                         <p className="font-black text-slate-800 leading-tight truncate">
                           {staff.fullname}
                         </p>
                         <p className="text-xs text-slate-400">@{staff.username}</p>
+                        {staff.isOnline && staff.currentModule && (
+                          <p className="text-[10px] text-primary font-semibold mt-0.5">
+                            Viewing: {MODULE_LABELS[staff.currentModule] || staff.currentModule}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <Badge
                       className={cn(
                         'rounded-lg border-none px-2 py-0.5 text-[10px] font-black uppercase tracking-tighter',
-                        staff.inBoarding !== false
+                        staff.inBoarding === false
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : staff.isOnline
                           ? 'bg-green-100 text-green-600'
-                          : 'bg-yellow-100 text-yellow-700'
+                          : 'bg-slate-100 text-slate-500'
                       )}
                     >
-                      {staff.inBoarding !== false ? 'Active' : 'Offboarded'}
+                      {staff.inBoarding === false ? 'Offboarded' : staff.isOnline ? 'Online' : 'Offline'}
                     </Badge>
                   </div>
 
@@ -557,30 +728,9 @@ export default function StaffManagement() {
                       {staff.role}
                     </span>
                     <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEdit(staff)}
-                        className="h-9 w-9 rounded-xl text-slate-400"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditAccess(staff.id)}
-                        className="h-9 w-9 rounded-xl text-slate-400"
-                      >
-                        <Key className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOutboard(staff)}
-                        className="h-9 w-9 rounded-xl text-yellow-500"
-                      >
-                        <LogOut className="w-4 h-4" />
-                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(staff)} className="h-9 w-9 rounded-xl text-slate-400"><Pencil className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEditAccess(staff.id)} className="h-9 w-9 rounded-xl text-slate-400"><Key className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl text-yellow-500"><LogOut className="w-4 h-4" /></Button>
                     </div>
                   </div>
                 </CardContent>
@@ -593,21 +743,37 @@ export default function StaffManagement() {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow className="border-slate-100 hover:bg-transparent">
-                  <TableHead className="pl-8 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Team Member
+                  <TableHead
+                    className="pl-8 text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort('fullname')}
+                  >
+                    <div className="flex items-center gap-2">Team Member <SortIcon field="fullname" /></div>
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Username
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort('username')}
+                  >
+                    <div className="flex items-center gap-2">Username <SortIcon field="username" /></div>
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Role & Access
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort('role')}
+                  >
+                    <div className="flex items-center gap-2">Role & Access <SortIcon field="role" /></div>
                   </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Status
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center gap-2">Status <SortIcon field="status" /></div>
                   </TableHead>
-                  <TableHead className="pr-8 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Actions
+                  <TableHead
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none"
+                    onClick={() => handleSort('currentModule')}
+                  >
+                    <div className="flex items-center gap-2">Current Module <SortIcon field="currentModule" /></div>
                   </TableHead>
+                  <TableHead className="pr-8 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -621,71 +787,50 @@ export default function StaffManagement() {
                   >
                     <TableCell className="pl-8 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-500 font-black text-sm">
-                          {staff.fullname?.charAt(0) || '?'}
+                        <div className="relative">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-500 font-black text-sm">
+                            {staff.fullname?.charAt(0) || '?'}
+                          </div>
+                          {staff.isOnline && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
+                          )}
                         </div>
                         <div>
-                          <p className="font-black text-slate-800 text-sm">
-                            {staff.fullname}
-                          </p>
+                          <p className="font-black text-slate-800 text-sm">{staff.fullname}</p>
                           <p className="text-xs text-slate-400">Internal Personnel</p>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <code className="text-xs font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded-md">
-                        {staff.username}
-                      </code>
-                    </TableCell>
+                    <TableCell><code className="text-xs font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded-md">{staff.username}</code></TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <span className="text-xs font-bold text-slate-700">
-                          {staff.role}
-                        </span>
-                        <p className="text-[9px] text-slate-400 font-medium">
-                          {staff.accessCount || 0} modules assigned
-                        </p>
+                        <span className="text-xs font-bold text-slate-700">{staff.role}</span>
+                        <p className="text-[9px] text-slate-400 font-medium">{staff.accessCount || 0} modules assigned</p>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-widest border-none',
-                          staff.inBoarding !== false
-                            ? 'bg-green-50 text-green-600'
-                            : 'bg-yellow-50 text-yellow-700'
-                        )}
-                      >
-                        {staff.inBoarding !== false ? 'Active' : 'Offboarded'}
-                      </Badge>
+                      {staff.inBoarding === false ? (
+                        <Badge className="rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-widest bg-yellow-50 text-yellow-700 border-none">Offboarded</Badge>
+                      ) : staff.isOnline ? (
+                        <Badge className="rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-widest bg-green-50 text-green-600 border-none">Online</Badge>
+                      ) : (
+                        <Badge className="rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border-none">Offline</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {staff.isOnline && staff.currentModule ? (
+                        <span className="text-xs font-bold text-primary bg-primary/5 px-2 py-1 rounded-md">
+                          {MODULE_LABELS[staff.currentModule] || staff.currentModule}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="pr-8">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(staff)}
-                          className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEditAccess(staff.id)}
-                          className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all"
-                        >
-                          <ShieldCheck className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOutboard(staff)}
-                          className="h-9 w-9 rounded-xl hover:bg-yellow-50 text-yellow-500 transition-all"
-                        >
-                          <LogOut className="w-4 h-4" />
-                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(staff)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all"><Pencil className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEditAccess(staff.id)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all"><ShieldCheck className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl hover:bg-yellow-50 text-yellow-500 transition-all"><LogOut className="w-4 h-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -720,7 +865,6 @@ export default function StaffManagement() {
                     else if (i === 4) pageNum = totalPages;
                     else if (i === 5) pageNum = totalPages - 1;
                     else pageNum = totalPages - 2;
-                    // Avoid duplicates
                     if (
                       i > 0 &&
                       pageNum ===
@@ -913,7 +1057,6 @@ export default function StaffManagement() {
 
       {/* ---------- Access Assignment Modal (for new staff) ---------- */}
       <DataModal
-        // ✅ No key prop – it's a static sibling
         open={accessModalOpen}
         onOpenChange={setAccessModalOpen}
         title="Assign Module Access"
@@ -954,7 +1097,6 @@ export default function StaffManagement() {
 
       {/* ---------- Edit Access Modal (for existing staff) ---------- */}
       <DataModal
-        // ✅ No key prop – it's a static sibling
         open={editAccessModalOpen}
         onOpenChange={setEditAccessModalOpen}
         title={isNewAccess ? 'Assign Module Access' : 'Edit Module Access'}
