@@ -1,12 +1,20 @@
 // app/(main)/service-tracking/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import PageContainer from "@/components/shared/page-container";
 import EmptyState from "@/components/shared/empty-state";
 import ConfirmationDialog from "@/components/shared/confimation-dialog";
 import ServiceTrackingSkeleton from "@/components/skeleton/service-tracking-skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import AppointmentCard from "@/components/appointments/appointment-card";
 import CustomerCard from "@/components/customers/customer-card";
 import VehicleCard from "@/components/customers/vehicle-card";
@@ -24,6 +32,9 @@ import {
   Search,
   ClipboardCheck,
   Timer,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentsApi } from "@/lib/appointments/appointments";
@@ -37,25 +48,32 @@ const FILTER_OPTIONS = [
   { value: "IN_PROGRESS", label: "In Progress", icon: Wrench },
 ];
 
-const formatTime12h = (time24: string) => {
-  if (!time24) return "";
-  const [hour, minute] = time24.split(":");
-  let h = parseInt(hour, 10);
-  const ampm = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return `${h}:${minute} ${ampm}`;
-};
+const SORT_OPTIONS = [
+  { value: "customerName", label: "Customer Name" },
+  { value: "vehiclePlate", label: "Vehicle Plate" },
+  { value: "appointmentDate", label: "Appointment Date" },
+  { value: "appointmentTime", label: "Appointment Time" },
+  { value: "trackingNumber", label: "Tracking Number" },
+];
+
+type SortField = "customerName" | "vehiclePlate" | "appointmentDate" | "appointmentTime" | "trackingNumber";
 
 export default function ServiceTracking() {
   const [appointments, setAppointments] = useState<any[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true);   // only true on first mount
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState("CONFIRMED");
+
+  // Search and sorting
+  const [search, setSearch] = useState("");
+  const [sortField, setSortField] = useState<SortField>("customerName");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // Confirmation dialog state
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingAppointment, setPendingAppointment] = useState<any>(null);
 
+  // Data loading
   const loadAppointments = useCallback(async () => {
     try {
       const res = await appointmentsApi.list({ status: activeFilter });
@@ -133,6 +151,57 @@ export default function ServiceTracking() {
     // No need to manually call loadAppointments – realtime will keep it updated
   };
 
+  // Client-side filtering and sorting
+  const filteredAppointments = useMemo(() => {
+    let data = [...appointments];
+
+    // Search
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      data = data.filter(
+        (appt) =>
+          (appt.customer?.fullname || "").toLowerCase().includes(term) ||
+          (appt.vehicle?.plateNumber || "").toLowerCase().includes(term) ||
+          (appt.vehicle?.model || "").toLowerCase().includes(term) ||
+          (appt.trackingNumber || "").toLowerCase().includes(term)
+      );
+    }
+
+    // Sort
+    data.sort((a, b) => {
+      let valA: any, valB: any;
+      switch (sortField) {
+        case "customerName":
+          valA = (a.customer?.fullname || "").toLowerCase();
+          valB = (b.customer?.fullname || "").toLowerCase();
+          break;
+        case "vehiclePlate":
+          valA = (a.vehicle?.plateNumber || "").toLowerCase();
+          valB = (b.vehicle?.plateNumber || "").toLowerCase();
+          break;
+        case "appointmentDate":
+          valA = a.appointmentDate || "";
+          valB = b.appointmentDate || "";
+          break;
+        case "appointmentTime":
+          valA = a.appointmentTime || "";
+          valB = b.appointmentTime || "";
+          break;
+        case "trackingNumber":
+          valA = a.trackingNumber || "";
+          valB = b.trackingNumber || "";
+          break;
+        default:
+          return 0;
+      }
+      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return data;
+  }, [appointments, search, sortField, sortDirection]);
+
   // Show skeleton only on initial page load
   if (initialLoading) {
     return (
@@ -160,41 +229,90 @@ export default function ServiceTracking() {
       title="Service Tracking"
       subtitle="Monitor and manage real‑time workshop operations"
     >
-      {/* Filter Bar */}
-      <div className="mb-8 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-        <div className="inline-flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl border border-slate-200/50">
-          {FILTER_OPTIONS.map((opt) => {
-            const Icon = opt.icon;
-            const isActive = activeFilter === opt.value;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => setActiveFilter(opt.value)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap",
-                  isActive
-                    ? "bg-white text-primary shadow-sm ring-1 ring-black/5 scale-100"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-white/50 scale-95"
-                )}
-              >
-                <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-slate-400")} />
-                {opt.label}
-              </button>
-            );
-          })}
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col md:flex-row gap-4 mb-8 items-start md:items-center justify-between">
+        <div className="overflow-x-auto no-scrollbar">
+          <div className="inline-flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl border border-slate-200/50">
+            {FILTER_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const isActive = activeFilter === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setActiveFilter(opt.value)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap",
+                    isActive
+                      ? "bg-white text-primary shadow-sm ring-1 ring-black/5 scale-100"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-white/50 scale-95"
+                  )}
+                >
+                  <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-slate-400")} />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              placeholder="Search customer, vehicle, tracking..."
+              className="pl-10 rounded-xl border-slate-200"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Select
+              value={sortField}
+              onValueChange={(val) => setSortField(val as SortField)}
+            >
+              <SelectTrigger className="w-[160px] h-9 rounded-xl border-slate-200">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-xl border-slate-200"
+              onClick={() =>
+                setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+              }
+            >
+              {sortDirection === "asc" ? (
+                <ArrowUp className="w-4 h-4" />
+              ) : (
+                <ArrowDown className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Appointments Grid */}
-      {appointments.length === 0 ? (
+      {filteredAppointments.length === 0 ? (
         <EmptyState
           icon={Car}
           title="No active jobs"
-          description={`No appointments marked as ${FILTER_OPTIONS.find(f => f.value === activeFilter)?.label.toLowerCase()}.`}
+          description={
+            search.trim()
+              ? "No appointments match your search criteria."
+              : `No appointments marked as ${FILTER_OPTIONS.find(f => f.value === activeFilter)?.label.toLowerCase()}.`
+          }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {appointments.map((appt) => (
+          {filteredAppointments.map((appt) => (
             <AppointmentCard
               key={appt.id}
               appointment={appt}                // pass full object
