@@ -120,6 +120,13 @@
       "when": 1783496814975,
       "tag": "0016_flashy_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783647843053,
+      "tag": "0017_typical_black_bird",
+      "breakpoints": true
     }
   ]
 }

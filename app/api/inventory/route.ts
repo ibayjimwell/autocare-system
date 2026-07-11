@@ -4,9 +4,6 @@ import { Inventory } from "@/database/models/inventory/inventory.model";
 import { validateInventoryData } from "@/utils/inventory";
 import { eq, sql } from "drizzle-orm";
 
-// ------------------------------------------------------------------
-// GET /api/inventory – List inventory (with search & pagination)
-// ------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search') || '';
@@ -25,10 +22,7 @@ export async function GET(req: NextRequest) {
       .from(Inventory)
       .where(query._where);
     const total = Number(countResult?.count || 0);
-    const items = await query
-      .orderBy(Inventory.name)
-      .limit(limit)
-      .offset(offset);
+    const items = await query.orderBy(Inventory.name).limit(limit).offset(offset);
 
     return NextResponse.json({
       error: false,
@@ -39,41 +33,22 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     console.error("[GET /api/inventory] Error:", e);
     return NextResponse.json({
-      error: true,
-      errorType: "dbe",
-      errorTitle: "Database error",
+      error: true, errorType: "dbe", errorTitle: "Database error",
       errorMessage: "Unable to fetch inventory.",
       errorLog: e instanceof Error ? e.message : String(e),
     }, { status: 500 });
   }
 }
 
-// ------------------------------------------------------------------
-// POST /api/inventory – Create inventory item
-// ------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   let body: any;
-  try {
-    body = await req.json();
-  } catch (e) {
-    return NextResponse.json({
-      error: true,
-      errorType: "fe",
-      errorTitle: "Invalid JSON",
-      errorMessage: "Request body must be valid JSON.",
-      errorLog: e instanceof Error ? e.message : String(e),
-    }, { status: 400 });
+  try { body = await req.json(); } catch (e) {
+    return NextResponse.json({ error: true, errorType: "fe", errorTitle: "Invalid JSON", errorMessage: "Request body must be valid JSON." }, { status: 400 });
   }
 
   const errors = validateInventoryData(body);
   if (errors.length > 0) {
-    return NextResponse.json({
-      error: true,
-      errorType: "fve",
-      errorTitle: "Validation failed",
-      errorMessage: errors.join(" "),
-      errorLog: errors,
-    }, { status: 422 });
+    return NextResponse.json({ error: true, errorType: "fve", errorTitle: "Validation failed", errorMessage: errors.join(" ") }, { status: 422 });
   }
 
   try {
@@ -82,23 +57,15 @@ export async function POST(req: NextRequest) {
       description: body.description?.trim() || null,
       quantity: body.quantity || 0,
       unit: body.unit.trim(),
-      price: body.price || '0',
+      costPrice: body.costPrice || '0',
+      sellingPrice: body.sellingPrice || '0',
       reorderLevel: body.reorderLevel || 0,
+      lowStockAlert: body.lowStockAlert !== undefined ? body.lowStockAlert : true,
       active: body.active !== undefined ? body.active : true,
     }).returning();
-    return NextResponse.json({
-      error: false,
-      message: "Inventory item created.",
-      data: newItem,
-    }, { status: 201 });
+    return NextResponse.json({ error: false, message: "Inventory item created.", data: newItem }, { status: 201 });
   } catch (e) {
     console.error("[POST /api/inventory] Error:", e);
-    return NextResponse.json({
-      error: true,
-      errorType: "dbe",
-      errorTitle: "Database insertion failed",
-      errorMessage: "Could not create inventory item.",
-      errorLog: e instanceof Error ? e.message : String(e),
-    }, { status: 500 });
+    return NextResponse.json({ error: true, errorType: "dbe", errorTitle: "Database insertion failed", errorMessage: "Could not create inventory item." }, { status: 500 });
   }
 }

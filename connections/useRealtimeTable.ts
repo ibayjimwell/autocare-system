@@ -1,7 +1,7 @@
 // connections/useRealtimeTable.ts
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
@@ -9,11 +9,14 @@ type ChangeCallback = (payload: RealtimePostgresChangesPayload<any>) => void;
 
 export function useRealtimeTable(
   table: string,
-  filter?: string,                         // now optional
+  filter?: string,
   onChange?: ChangeCallback
 ) {
+  // Generate a unique ID for this subscription instance
+  const uniqueId = useRef(Math.random().toString(36).substr(2, 9)).current;
+
   useEffect(() => {
-    const channelName = `${table}-${filter ?? 'all'}`;
+    const channelName = `${table}-${filter ?? 'all'}-${uniqueId}`;
 
     const channel = supabase
       .channel(channelName)
@@ -23,7 +26,7 @@ export function useRealtimeTable(
           event: '*',
           schema: 'public',
           table,
-          ...(filter ? { filter } : {}),   // include filter only if provided
+          ...(filter ? { filter } : {}),
         },
         (payload) => {
           console.log(`🔄 Realtime event on ${table}:`, payload.eventType);
@@ -44,5 +47,5 @@ export function useRealtimeTable(
       console.log(`🔌 Unsubscribing from ${table}`);
       supabase.removeChannel(channel);
     };
-  }, [table, filter]);
+  }, [table, filter, uniqueId]);   // onChange intentionally left out – stable via parent
 }

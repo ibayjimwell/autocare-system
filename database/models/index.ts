@@ -17,7 +17,6 @@ export * from "./appointments/appointments-status-history.model";
 export * from "./appointments/enum/appointments-status.enum";
 
 // Service Tracking
-export * from "./inventory/inventory.model";
 export * from "./service-tracking/inspection-tasks.model";
 export * from "./service-tracking/inspection-findings.model";
 export * from "./service-tracking/inspection-finding-parts.model";
@@ -38,3 +37,7 @@ export * from "./payments/final-bill-discounts.model";
 export * from "./payments/final-bill-work-tasks.model";
 
 export * from "./payments/receipts.model";
+
+// Inventory
+export * from "./inventory/inventory.model";
+export * from "./inventory/pos-transaction.model";
