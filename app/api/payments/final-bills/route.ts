@@ -5,11 +5,8 @@ import { FinalBillFindings } from "@/database/models/payments/final-bill-finding
 import { FinalBillFees } from "@/database/models/payments/final-bill-fees.model";
 import { FinalBillDiscounts } from "@/database/models/payments/final-bill-discounts.model";
 import { FinalBillWorkTasks } from "@/database/models/payments/final-bill-work-tasks.model";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
-// --------------------------------------------------------------
-// GET /api/payments/finall-bills?status=...&appointmentId=...
-// --------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
@@ -22,7 +19,6 @@ export async function GET(req: NextRequest) {
       query = query.where(eq(FinalBill.appointmentId, appointmentId));
     const bills = await query.orderBy(FinalBill.createdAt);
 
-    // Fetch associated items for each bill
     const billIds = bills.map((b) => b.id);
     let findingsMap: Record<string, any[]> = {};
     let feesMap: Record<string, any[]> = {};
@@ -30,38 +26,37 @@ export async function GET(req: NextRequest) {
     let workTasksMap: Record<string, any[]> = {};
 
     if (billIds.length > 0) {
-      // Findings
+      // Findings – use inArray
       const findings = await Database.select()
         .from(FinalBillFindings)
-        .where(sql`${FinalBillFindings.finalBillId} IN (${billIds.join(",")})`);
+        .where(inArray(FinalBillFindings.finalBillId, billIds));
       for (const f of findings) {
         if (!findingsMap[f.finalBillId]) findingsMap[f.finalBillId] = [];
         findingsMap[f.finalBillId].push(f);
       }
+
       // Fees
       const fees = await Database.select()
         .from(FinalBillFees)
-        .where(sql`${FinalBillFees.finalBillId} IN (${billIds.join(",")})`);
+        .where(inArray(FinalBillFees.finalBillId, billIds));
       for (const f of fees) {
         if (!feesMap[f.finalBillId]) feesMap[f.finalBillId] = [];
         feesMap[f.finalBillId].push(f);
       }
+
       // Discounts
       const discounts = await Database.select()
         .from(FinalBillDiscounts)
-        .where(
-          sql`${FinalBillDiscounts.finalBillId} IN (${billIds.join(",")})`,
-        );
+        .where(inArray(FinalBillDiscounts.finalBillId, billIds));
       for (const d of discounts) {
         if (!discountsMap[d.finalBillId]) discountsMap[d.finalBillId] = [];
         discountsMap[d.finalBillId].push(d);
       }
+
       // Work Tasks
       const tasks = await Database.select()
         .from(FinalBillWorkTasks)
-        .where(
-          sql`${FinalBillWorkTasks.finalBillId} IN (${billIds.join(",")})`,
-        );
+        .where(inArray(FinalBillWorkTasks.finalBillId, billIds));
       for (const t of tasks) {
         if (!workTasksMap[t.finalBillId]) workTasksMap[t.finalBillId] = [];
         workTasksMap[t.finalBillId].push(t);
@@ -77,15 +72,11 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json(
-      {
-        error: false,
-        message: "Final bills retrieved.",
-        data,
-      },
+      { error: false, message: "Final bills retrieved.", data },
       { status: 200 },
     );
   } catch (e) {
-    console.error("[GET /api/billing/final-bills] Error:", e);
+    console.error("[GET /api/payments/final-bills] Error:", e);
     return NextResponse.json(
       {
         error: true,

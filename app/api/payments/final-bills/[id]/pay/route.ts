@@ -19,6 +19,7 @@ import { WorkTasks } from '@/database/models/service-tracking/work-tasks.model';
 import { Receipts } from '@/database/models/payments/receipts.model';
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
+import { paymentsTriggers } from '@/triggers/payments';
 
 // Generate a unique reference number (e.g., RES-230904-XXXX)
 function generateReferenceNumber(): string {
@@ -183,6 +184,14 @@ export async function POST(
       });
       await tx.update(FinalBill).set({ status: 'PAID', updatedAt: new Date() }).where(eq(FinalBill.id, id));
     });
+
+    const trackingNumber = appointment.trackingNumber;
+    const customerName = customer?.fullname;
+    
+    paymentsTriggers.onPaymentCompleted({
+      trackingNumber,
+      customerName,
+    }).catch(console.error);
 
     return NextResponse.json({
       error: false,

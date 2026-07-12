@@ -4,6 +4,9 @@ import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { eq } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
+import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
+import { paymentsTriggers } from "@/triggers/payments";
+
 
 // --------------------------------------------------------------------
 // PATCH /api/payments/estimates/:id/send-for-approval
@@ -64,6 +67,12 @@ export async function PATCH(
     await Database.update(Appointments)
       .set({ status: "WAITING_FOR_APPROVAL", updatedAt: new Date() })
       .where(eq(Appointments.id, estimate.appointmentId));
+
+    const info = await getAppointmentInfo(estimate.appointmentId);
+    paymentsTriggers.onEstimateSentForApproval({
+      trackingNumber: info.trackingNumber,
+      customerName: info.customerName,
+    }).catch(console.error);
 
     return NextResponse.json(
       {

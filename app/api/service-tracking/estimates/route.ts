@@ -10,6 +10,8 @@ import { InspectionFindingParts } from "@/database/models/service-tracking/inspe
 import { eq, and, inArray } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 import { appointmentExists } from "@/utils/service-tracking";
+import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
+import { paymentsTriggers } from "@/triggers/payments";
 
 // --------------------------------------------------------------------------
 // POST /api/service-tracking/estimates
@@ -166,6 +168,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const info = await getAppointmentInfo(appointmentId);
+    paymentsTriggers.onEstimateGenerated({
+      trackingNumber: info.trackingNumber,
+      customerName: info.customerName,
+    }).catch(console.error);
+    
     return NextResponse.json(
       {
         error: false,

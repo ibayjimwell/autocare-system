@@ -6,6 +6,8 @@ import { Appointments } from "@/database/models/appointments/appointments.model"
 import { eq, and } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 import { generateFinalBill } from "@/utils/final-bill";
+import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
+import { paymentsTriggers } from "@/triggers/payments";
 
 export async function POST(req: NextRequest) {
   let body: any;
@@ -86,6 +88,12 @@ export async function POST(req: NextRequest) {
     await Database.update(Appointments)
       .set({ status: "COMPLETED", updatedAt: new Date() })
       .where(eq(Appointments.id, appointmentId));
+
+    const info = await getAppointmentInfo(appointmentId);
+    paymentsTriggers.onFinalBillGenerated({
+      trackingNumber: info.trackingNumber,
+      customerName: info.customerName,
+    }).catch(console.error);
 
     return NextResponse.json(
       {

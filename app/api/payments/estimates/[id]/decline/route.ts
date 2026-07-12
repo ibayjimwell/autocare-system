@@ -4,6 +4,8 @@ import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { eq } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
+import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
+import { paymentsTriggers } from "@/triggers/payments";
 
 // --------------------------------------------------------------------
 // PATCH /api/payments/estimates/:id/decline
@@ -102,6 +104,13 @@ export async function PATCH(
         updatedAt: new Date(),
       })
       .where(eq(Appointments.id, estimate.appointmentId));
+
+    const info = await getAppointmentInfo(estimate.appointmentId);
+    paymentsTriggers.onEstimateDeclined({
+      trackingNumber: info.trackingNumber,
+      customerName: info.customerName,
+      reason: reason.trim(),
+    }).catch(console.error);
 
     return NextResponse.json(
       {
