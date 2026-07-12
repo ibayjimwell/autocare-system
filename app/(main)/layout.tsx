@@ -7,6 +7,8 @@ import { Header, MobileHeader } from "@/components/shared/header";
 import { Toaster } from "@/components/ui/sonner";
 import { useStaffActivity } from "@/hooks/use-staff-activity";
 
+import { usePushNotifications } from '@/hooks/notifications/use-push-notifications';
+
 // ================================================================
 // MAIN LAYOUT – Used by the (main) route group
 // ================================================================
@@ -17,6 +19,7 @@ export default function MainLayout({
 }>) {
   const [mobileOpen, setMobileOpen] = useState(false);
   useStaffActivity();
+  usePushNotifications();
 
   return (
     <div className="flex min-h-screen bg-background">

@@ -41,3 +41,6 @@ export * from "./payments/receipts.model";
 // Inventory
 export * from "./inventory/inventory.model";
 export * from "./inventory/pos-transaction.model";
+
+// Notifications
+export * from "./notifications/push-subscription.model";

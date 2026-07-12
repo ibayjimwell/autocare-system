@@ -1,3 +1,4 @@
+// middleware.ts
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -17,21 +18,23 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    // Public routes – always allow
-    if (
-      pathname === "/login" ||
-      pathname === "/unauthorized" ||
-      pathname === "/api/staffs/login"   // <-- allow login API
-    ) {
+    // 1. Always allow API routes – they handle their own auth
+    if (pathname.startsWith("/api")) {
       return NextResponse.next();
     }
 
-    // For all other routes, require token and check permissions
+    // 2. Public frontend pages
+    if (pathname === "/login" || pathname === "/unauthorized") {
+      return NextResponse.next();
+    }
+
+    // 3. For all other pages, require token
     if (!token) {
       const loginUrl = new URL("/login", req.url);
       return NextResponse.redirect(loginUrl);
     }
 
+    // 4. Check module access permissions
     const matchedRoute = Object.keys(routeToPermission).find((route) =>
       pathname.startsWith(route)
     );
@@ -50,15 +53,17 @@ export default withAuth(
     callbacks: {
       authorized: ({ req, token }) => {
         const pathname = req.nextUrl.pathname;
-        // Allow public routes without token
+
+        // Allow API routes and public pages without a token
         if (
+          pathname.startsWith("/api") ||
           pathname === "/login" ||
-          pathname === "/unauthorized" ||
-          pathname === "/api/staffs/login"
+          pathname === "/unauthorized"
         ) {
           return true;
         }
-        // All other routes need a token
+
+        // All other pages need a valid token
         return !!token;
       },
     },
@@ -66,7 +71,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|public).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
 };
