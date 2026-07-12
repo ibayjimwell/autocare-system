@@ -7,6 +7,8 @@ import { eq, sql } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
 import { isValidUUID } from "@/utils/shared";
+import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
+import { serviceTrackingTriggers } from "@/triggers/service-tracking";
 
 // ------------------------------------------------------------------
 // GET /api/service-tracking/inspection-tasks?appointmentId=...
@@ -114,6 +116,12 @@ export async function POST(req: NextRequest) {
         durationMinutes: durationMinutes ?? null,   // new field
       })
       .returning();
+
+    const trackingNumber = await getTrackingNumber(appointmentId);
+    serviceTrackingTriggers.onInspectionTaskAdded({
+      taskTitle: newTask.title,
+      trackingNumber,
+    }).catch(console.error);
 
     // If this is the first task, update appointment status to UNDER_INSPECTION
     if (taskCount === 0) {

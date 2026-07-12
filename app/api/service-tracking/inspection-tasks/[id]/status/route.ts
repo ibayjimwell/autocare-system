@@ -5,6 +5,8 @@ import { validateTaskId } from "@/utils/service-tracking";
 import { eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
+import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
+import { serviceTrackingTriggers } from "@/triggers/service-tracking";
 
 // ------------------------------------------------------------------
 // PATCH /api/service-tracking/inspection-tasks/:id/status – Update task status
@@ -81,6 +83,15 @@ export async function PATCH(
       .set(updateData)
       .where(eq(InspectionTasks.id, id))
       .returning();
+
+    if (updated) {
+      const trackingNumber = await getTrackingNumber(updated.appointmentId);
+      if (status === 'IN_PROGRESS') {
+        serviceTrackingTriggers.onInspectionTaskStarted({ taskTitle: updated.title, trackingNumber }).catch(console.error);
+      } else if (status === 'DONE') {
+        serviceTrackingTriggers.onInspectionTaskDone({ taskTitle: updated.title, trackingNumber }).catch(console.error);
+      }
+    }
 
     return NextResponse.json({
       error: false,

@@ -3,6 +3,8 @@ import { Database } from "@/lib/drizzle";
 import { WorkTasks } from "@/database/models/service-tracking/work-tasks.model";
 import { eq } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
+import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
+import { serviceTrackingTriggers } from "@/triggers/service-tracking";
 
 // ------------------------------------------------------------------
 // PATCH /api/service-tracking/work-tasks/:id/status
@@ -75,6 +77,15 @@ export async function PATCH(
       .set(updateData)
       .where(eq(WorkTasks.id, id))
       .returning();
+
+    if (updated) {
+      const trackingNumber = await getTrackingNumber(updated.appointmentId);
+      if (status === 'IN_PROGRESS') {
+        serviceTrackingTriggers.onWorkTaskStarted({ taskTitle: updated.title, trackingNumber }).catch(console.error);
+      } else if (status === 'DONE') {
+        serviceTrackingTriggers.onWorkTaskDone({ taskTitle: updated.title, trackingNumber }).catch(console.error);
+      }
+    }
 
     return NextResponse.json({
       error: false,

@@ -5,6 +5,8 @@ import { Appointments } from "@/database/models/appointments/appointments.model"
 import { eq, sql } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 import { appointmentExists } from "@/utils/service-tracking";
+import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
+import { serviceTrackingTriggers } from "@/triggers/service-tracking";
 
 // ------------------------------------------------------------------
 // GET /api/service-tracking/work-tasks?appointmentId=...
@@ -111,6 +113,9 @@ export async function POST(req: NextRequest) {
         durationMinutes: durationMinutes ?? null,
       })
       .returning();
+
+    const trackingNumber = await getTrackingNumber(appointmentId);
+    serviceTrackingTriggers.onWorkTaskAdded({ taskTitle: newTask.title, trackingNumber }).catch(console.error);
 
     return NextResponse.json({
       error: false,
