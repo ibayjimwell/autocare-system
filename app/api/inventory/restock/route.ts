@@ -3,6 +3,7 @@ import { Database } from "@/lib/drizzle";
 import { Inventory } from "@/database/models/inventory/inventory.model";
 import { eq } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
+import { inventoryTriggers } from "@/triggers/inventory";
 
 export async function POST(req: NextRequest) {
   let body: any;
@@ -24,6 +25,12 @@ export async function POST(req: NextRequest) {
     }
     const newQuantity = item.quantity + quantity;
     await Database.update(Inventory).set({ quantity: newQuantity, updatedAt: new Date() }).where(eq(Inventory.id, itemId));
+
+    inventoryTriggers.onRestock({
+      itemName: item.name,
+      quantity: quantity,
+    }).catch(console.error);
+    
     return NextResponse.json({ error: false, message: "Stock added.", newQuantity }, { status: 200 });
   } catch (e) {
     console.error("[POST /api/inventory/restock] Error:", e);

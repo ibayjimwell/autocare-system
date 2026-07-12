@@ -3,6 +3,7 @@ import { Database } from "@/lib/drizzle";
 import { Inventory } from "@/database/models/inventory/inventory.model";
 import { validateInventoryData } from "@/utils/inventory";
 import { eq, sql } from "drizzle-orm";
+import { inventoryTriggers } from "@/triggers/inventory";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -63,6 +64,9 @@ export async function POST(req: NextRequest) {
       lowStockAlert: body.lowStockAlert !== undefined ? body.lowStockAlert : true,
       active: body.active !== undefined ? body.active : true,
     }).returning();
+
+    inventoryTriggers.onNewItem({ itemName: newItem.name }).catch(console.error);
+    
     return NextResponse.json({ error: false, message: "Inventory item created.", data: newItem }, { status: 201 });
   } catch (e) {
     console.error("[POST /api/inventory] Error:", e);

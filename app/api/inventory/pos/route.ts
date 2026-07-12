@@ -3,6 +3,7 @@ import { Database } from "@/lib/drizzle";
 import { Inventory } from "@/database/models/inventory/inventory.model";
 import { PosTransaction } from "@/database/models/inventory/pos-transaction.model";
 import { eq, inArray } from "drizzle-orm";
+import { inventoryTriggers } from "@/triggers/inventory";
 
 export async function POST(req: NextRequest) {
   let body: any;
@@ -64,7 +65,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: true, errorMessage: "Insufficient payment." }, { status: 400 });
   }
 
-  // Use a transaction to ensure atomicity
   try {
     const result = await Database.transaction(async (tx) => {
       // Deduct stock for each item
@@ -93,6 +93,13 @@ export async function POST(req: NextRequest) {
 
       return inserted;
     });
+
+    const totalFormatted = `₱${parseFloat(totalAmount.toFixed(2)).toLocaleString()}`;
+    inventoryTriggers.onPosSale({
+      itemName: `${processedItems.length} item(s)`,
+      transactionTotal: totalFormatted,
+      transactionId: result.id,
+    }).catch(console.error);
 
     return NextResponse.json(
       { error: false, message: "Sale completed.", data: result },
