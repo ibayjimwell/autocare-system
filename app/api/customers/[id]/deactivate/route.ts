@@ -3,6 +3,7 @@ import { Database } from "@/lib/drizzle";
 import { Customers } from "@/database/models/customers/customers.model";
 import { eq, sql } from "drizzle-orm";
 import { validateCustomerId } from "@/utils/customers";
+import { customersTriggers } from "@/triggers/customers";
 
 // ------------------------------------------------------------------
 // PUT /api/customers/[id]/deactivate – Deactivate a customer
@@ -34,6 +35,10 @@ export async function PUT(
         errorLog: null,
       }, { status: 404 });
     }
+
+    customersTriggers.onDeactivated({
+      fullname: updated.fullname,
+    }).catch(console.error);
 
     const { password, ...customer } = updated;
     return NextResponse.json({

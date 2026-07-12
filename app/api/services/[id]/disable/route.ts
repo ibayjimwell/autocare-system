@@ -3,6 +3,7 @@ import { Database } from "@/lib/drizzle";
 import { Services } from "@/database/models/services/services.model";
 import { eq } from "drizzle-orm";
 import { validateServiceId } from "@/utils/services";
+import { servicesTriggers } from "@/triggers/services";
 
 // ------------------------------------------------------------------
 // POST /api/services/[id]/disable – Disable a service (set active = false)
@@ -20,6 +21,7 @@ export async function POST(
       .set({ active: false, updatedAt: new Date() })
       .where(eq(Services.id, id))
       .returning();
+    
     if (!updated) {
       return NextResponse.json({
         error: true,
@@ -29,6 +31,11 @@ export async function POST(
         errorLog: null,
       }, { status: 404 });
     }
+
+    if (updated) {
+      servicesTriggers.onDisabled({ name: updated.name }).catch(console.error);
+    }
+    
     return NextResponse.json({
       error: false,
       message: "Service disabled successfully.",

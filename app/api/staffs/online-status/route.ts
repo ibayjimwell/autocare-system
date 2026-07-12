@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
+import { staffsTriggers } from '@/triggers/staffs';
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -36,6 +37,18 @@ export async function PATCH(req: NextRequest) {
     await Database.update(Staffs)
       .set(updateData)
       .where(eq(Staffs.id, staffId));
+
+    // Fire appropriate trigger
+    if (typeof isOnline === 'boolean' && isOnline) {
+      staffsTriggers.onOnline({
+        fullname: session.user.fullname, // from session (available if stored in token)
+      }).catch(console.error);
+    } else if (typeof isOnline === 'boolean' && !isOnline) {
+      staffsTriggers.onOffline({
+        fullname: session.user.fullname,
+      }).catch(console.error);
+    }
+    
     return NextResponse.json({ error: false, message: 'Status updated' }, { status: 200 });
   } catch (e) {
     console.error('[PATCH /api/staffs/online-status]', e);

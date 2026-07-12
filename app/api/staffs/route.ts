@@ -5,6 +5,7 @@ import { getFormDataEntries, hashPassword } from "@/utils/shared";
 import { validateStaffData } from "@/utils/staffs";
 import { generateTempPassword } from "@/utils/staffs";
 import { eq } from "drizzle-orm";
+import { staffsTriggers } from "@/triggers/staffs";
 
 // ------------------------------------------------------------------
 // POST /api/staffs – Create a new staff member
@@ -89,6 +90,12 @@ export async function POST(req: NextRequest) {
 
     const newStaff = inserted[0];
     const { password, ...staffWithoutPassword } = newStaff;
+
+    staffsTriggers.onNew({
+      fullname: staffWithoutPassword.fullname,
+      username: staffWithoutPassword.username,
+      role: staffWithoutPassword.role,
+    }).catch(console.error);
 
     // Return the plaintext temporary password to the frontend
     return NextResponse.json({

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFormDataEntries } from "@/utils/shared";
 import { validateServiceData } from "@/utils/services";
 import { eq } from "drizzle-orm";
+import { servicesTriggers } from "@/triggers/services";
 
 // ------------------------------------------------------------------
 // GET /api/services – Retrieve service types (filter by active)
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ------------------------------------------------------------------
-// POST /api/services – Create a new service type
+// POST /api/services – Create a new service
 // ------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   let rawData: any;
@@ -104,6 +105,12 @@ export async function POST(req: NextRequest) {
     const [newService] = await Database.insert(Services)
       .values(insertData)
       .returning();
+
+    servicesTriggers.onNew({
+      name: newService.name,
+      type: newService.type,
+    }).catch(console.error);
+    
     return NextResponse.json({
       error: false,
       message: "Service created successfully.",

@@ -7,6 +7,7 @@ import {
   staffExists,
   validateStaffData,
 } from "@/utils/staffs";
+import { staffsTriggers } from "@/triggers/staffs";
 
 // Helper to remove password from a staff object
 function stripPassword(staff: any) {
@@ -219,6 +220,12 @@ export async function PUT(
         },
         { status: 404 },
       );
+    }
+
+    if (updatedStaff) {
+      staffsTriggers.onUpdated({
+        fullname: updatedStaff.fullname,
+      }).catch(console.error);
     }
 
     return NextResponse.json(

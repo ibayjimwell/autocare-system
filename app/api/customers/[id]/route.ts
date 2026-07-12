@@ -4,6 +4,7 @@ import { Customers } from "@/database/models/customers/customers.model";
 import { eq, sql } from "drizzle-orm";
 import { validateCustomerId, validateCustomerUpdate } from "@/utils/customers";
 
+
 function stripPassword(customer: any) {
   const { password, ...rest } = customer;
   return rest;

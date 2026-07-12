@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFormDataEntries, hashPassword } from "@/utils/shared";
 import { validateCustomerData } from "@/utils/customers";
 import { eq } from "drizzle-orm";
+import { customersTriggers } from '@/triggers/customers';
 
 // ------------------------------------------------------------------
 // POST /api/customers – Create a new customer (Sign-up)
@@ -113,6 +114,11 @@ export async function POST(req: NextRequest) {
       .returning();
 
     const { password, ...customerWithoutPassword } = newCustomer;
+
+    customersTriggers.onNew({
+      fullname: customerWithoutPassword.fullname,
+      email: customerWithoutPassword.email,
+    }).catch(console.error);
 
     return NextResponse.json({
       error: false,
