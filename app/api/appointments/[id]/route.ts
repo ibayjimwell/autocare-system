@@ -204,6 +204,7 @@ export async function PUT(
         errorLog: null,
       }, { status: 404 });
     }
+    
     return NextResponse.json({
       error: false,
       message: "Appointment updated successfully.",

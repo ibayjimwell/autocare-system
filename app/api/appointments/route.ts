@@ -12,6 +12,7 @@ import {
   serviceExists,
 } from "@/utils/appointments";
 import { eq, inArray, and, sql, desc } from "drizzle-orm";
+import { appointmentsTriggers } from '@/triggers/appointments';
 
 // ------------------------------------------------------------------
 // GET /api/appointments – List appointments with filters
@@ -246,6 +247,15 @@ export async function POST(req: NextRequest) {
     const [newAppointment] = await Database.insert(Appointments)
       .values(insertData)
       .returning();
+
+    if (newAppointment) {
+      // Fire trigger (don't await so it doesn't block the response)
+      appointmentsTriggers.onNew({
+        trackingNumber: newAppointment.trackingNumber,
+        customerName: newAppointment.customer?.fullname || 'Customer',
+        appointmentDate: newAppointment.appointmentDate,
+      }).catch(console.error);
+    }
 
     return NextResponse.json({
       error: false,
