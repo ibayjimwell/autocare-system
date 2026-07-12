@@ -1,4 +1,3 @@
-// app/page.tsx
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
 import { redirect } from "next/navigation";
@@ -16,10 +15,10 @@ export default async function HomePage() {
 
   // Get the JWT token to check expiration
   const token = await getToken({ req: { headers: headers() } as any, secret: process.env.NEXTAUTH_SECRET });
-  const exp = token?.exp; // Unix timestamp (seconds)
+  const exp = token?.exp; // could be number | undefined
 
-  let timeRemaining = null;
-  if (exp) {
+  let timeRemaining: string | null = null;
+  if (typeof exp === 'number') {
     const now = Math.floor(Date.now() / 1000);
     const diff = exp - now;
     if (diff > 0) {
