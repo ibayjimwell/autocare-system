@@ -1,11 +1,9 @@
-// app/api/staffs/online-status/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { Staffs } from '@/database/models/staffs/staffs.model';
 import { eq } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
-import { isValidUUID } from '@/utils/shared';
 import { staffsTriggers } from '@/triggers/staffs';
 
 export async function PATCH(req: NextRequest) {
@@ -34,21 +32,36 @@ export async function PATCH(req: NextRequest) {
   }
 
   try {
+    // --- 1. Fetch current isOnline to detect actual change ---
+    const [currentStaff] = await Database
+      .select({ isOnline: Staffs.isOnline })
+      .from(Staffs)
+      .where(eq(Staffs.id, staffId))
+      .limit(1);
+
+    const previousOnline = currentStaff?.isOnline ?? false;
+
+    // --- 2. Perform the update ---
     await Database.update(Staffs)
       .set(updateData)
       .where(eq(Staffs.id, staffId));
 
-    // Fire appropriate trigger
-    if (typeof isOnline === 'boolean' && isOnline) {
-      staffsTriggers.onOnline({
-        fullname: session.user.fullname, // from session (available if stored in token)
-      }).catch(console.error);
-    } else if (typeof isOnline === 'boolean' && !isOnline) {
-      staffsTriggers.onOffline({
-        fullname: session.user.fullname,
-      }).catch(console.error);
+    // --- 3. Fire trigger only if isOnline actually changed ---
+    if (typeof isOnline === 'boolean') {
+      if (isOnline && !previousOnline) {
+        // Went from offline → online
+        staffsTriggers.onOnline({
+          fullname: session.user.fullname,
+        }).catch(console.error);
+      } else if (!isOnline && previousOnline) {
+        // Went from online → offline
+        staffsTriggers.onOffline({
+          fullname: session.user.fullname,
+        }).catch(console.error);
+      }
+      // If no change, no trigger
     }
-    
+
     return NextResponse.json({ error: false, message: 'Status updated' }, { status: 200 });
   } catch (e) {
     console.error('[PATCH /api/staffs/online-status]', e);
