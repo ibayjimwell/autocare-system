@@ -1,7 +1,7 @@
-// components/staffs/staff-list.tsx
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,9 @@ import { toast } from 'sonner';
 import { staffApi } from '@/lib/staffs/staffs';
 
 export default function StaffList() {
+  const { data: session } = useSession();
+  const currentStaffId = session?.user?.id;
+
   const { staffList, loading, loadStaff } = useStaffData();
 
   // Filter & Sort state
@@ -71,10 +74,11 @@ export default function StaffList() {
   // Temp password dialog state
   const [tempDialogOpen, setTempDialogOpen] = useState(false);
 
-  // Watch for new staff creation to show temp password dialog
+  // When a new staff is created, open the temp password dialog and remember the staff ID
   useEffect(() => {
     if (tempPassword) {
       setTempDialogOpen(true);
+      // Ensure we have the correct staff ID
       setSelectedStaffId(tempStaffId);
     }
   }, [tempPassword, tempStaffId]);
@@ -104,14 +108,20 @@ export default function StaffList() {
   const handleTempPasswordComplete = () => {
     setTempDialogOpen(false);
     setTempPassword(null);
-    if (selectedStaffId) {
+    // Use the staff ID we already stored in state
+    if (tempStaffId) {
+      setSelectedStaffId(tempStaffId);
       setAccessModalOpen(true);
+    } else {
+      toast.error('Could not determine staff ID. Please assign access manually.');
     }
   };
 
-  // Client-side filtering & sorting
+  // Client-side filtering & sorting (also exclude current staff)
   const filteredAndSortedStaff = useMemo(() => {
     let data = [...staffList];
+    if (currentStaffId) data = data.filter(s => s.id !== currentStaffId);
+
     if (search.trim()) {
       const term = search.toLowerCase();
       data = data.filter(s =>
@@ -141,7 +151,7 @@ export default function StaffList() {
       return 0;
     });
     return data;
-  }, [staffList, search, roleFilter, statusFilter, sortField, sortDirection]);
+  }, [staffList, search, roleFilter, statusFilter, sortField, sortDirection, currentStaffId]);
 
   const totalPages = Math.ceil(filteredAndSortedStaff.length / itemsPerPage);
   const paginatedStaff = filteredAndSortedStaff.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);

@@ -104,6 +104,7 @@ export function useStaffForm(onSuccess: () => void, onHighlight: (id: string) =>
           });
         } else {
           const newStaff = res.data;
+          // Ensure we update all three state values in the same synchronous scope
           setTempPassword(res.data.tempPasswordPlain);
           setTempStaffName(newStaff.fullname);
           setTempStaffId(newStaff.id);

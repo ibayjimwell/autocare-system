@@ -108,6 +108,7 @@ export const ALLOWED_ACCESS_FIELDS = [
   "staffs",
   "serviceTracking",
   "payments",
+  "inventory",  
 ] as const;
 
 export type AccessField = typeof ALLOWED_ACCESS_FIELDS[number];
