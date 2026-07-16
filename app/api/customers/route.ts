@@ -15,7 +15,9 @@ export async function POST(req: NextRequest) {
   // 1. Parse form data
   try {
     rawData = await getFormDataEntries(req);
+    console.log('[POST /api/customers] Parsed rawData:', JSON.stringify(rawData, null, 2));
   } catch (e) {
+    console.error('[POST /api/customers] Form data parse error:', e);
     return NextResponse.json({
       error: true,
       errorType: "fe",
@@ -28,6 +30,7 @@ export async function POST(req: NextRequest) {
   // 2. Validate input
   const validationErrors = validateCustomerData(rawData);
   if (validationErrors.length > 0) {
+    console.warn('[POST /api/customers] Validation errors:', validationErrors);
     return NextResponse.json({
       error: true,
       errorType: "fve",
@@ -38,21 +41,25 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Check email uniqueness
+  const emailToCheck = rawData.email.trim();
+  console.log('[POST /api/customers] Checking email uniqueness:', emailToCheck);
   try {
-    const existing = await Database.select()
+    const existingEmail = await Database.select()
       .from(Customers)
-      .where(eq(Customers.email, rawData.email.trim()))
+      .where(eq(Customers.email, emailToCheck))
       .limit(1);
-    if (existing.length > 0) {
+    console.log('[POST /api/customers] Email check result:', existingEmail.length ? 'DUPLICATE' : 'OK');
+    if (existingEmail.length > 0) {
       return NextResponse.json({
         error: true,
         errorType: "fve",
         errorTitle: "Duplicate email",
-        errorMessage: `Email "${rawData.email}" is already registered.`,
+        errorMessage: `Email "${emailToCheck}" is already registered.`,
         errorLog: null,
       }, { status: 409 });
     }
   } catch (e) {
+    console.error('[POST /api/customers] Email check error:', e);
     return NextResponse.json({
       error: true,
       errorType: "dbe",
@@ -63,21 +70,25 @@ export async function POST(req: NextRequest) {
   }
 
   // 4. Check phone uniqueness
+  const phoneToCheck = rawData.phone.trim();
+  console.log('[POST /api/customers] Checking phone uniqueness:', phoneToCheck);
   try {
-    const existing = await Database.select()
+    const existingPhone = await Database.select()
       .from(Customers)
-      .where(eq(Customers.phone, rawData.phone.trim()))
+      .where(eq(Customers.phone, phoneToCheck))
       .limit(1);
-    if (existing.length > 0) {
+    console.log('[POST /api/customers] Phone check result:', existingPhone.length ? 'DUPLICATE' : 'OK');
+    if (existingPhone.length > 0) {
       return NextResponse.json({
         error: true,
         errorType: "fve",
         errorTitle: "Duplicate phone",
-        errorMessage: `Phone "${rawData.phone}" is already registered.`,
+        errorMessage: `Phone "${phoneToCheck}" is already registered.`,
         errorLog: null,
       }, { status: 409 });
     }
   } catch (e) {
+    console.error('[POST /api/customers] Phone check error:', e);
     return NextResponse.json({
       error: true,
       errorType: "dbe",
@@ -92,6 +103,7 @@ export async function POST(req: NextRequest) {
   try {
     hashedPassword = await hashPassword(rawData.password);
   } catch (e) {
+    console.error('[POST /api/customers] Password hashing error:', e);
     return NextResponse.json({
       error: true,
       errorType: "se",
@@ -106,12 +118,14 @@ export async function POST(req: NextRequest) {
     const [newCustomer] = await Database.insert(Customers)
       .values({
         fullname: rawData.fullname.trim(),
-        email: rawData.email.trim(),
-        phone: rawData.phone.trim(),
+        email: emailToCheck,
+        phone: phoneToCheck,
         password: hashedPassword,
-        tempPassword: rawData.tempPassword ?? true
+        tempPassword: rawData.tempPassword ?? true,
       })
       .returning();
+
+    console.log('[POST /api/customers] Customer created:', newCustomer.id);
 
     const { password, ...customerWithoutPassword } = newCustomer;
 
@@ -126,6 +140,7 @@ export async function POST(req: NextRequest) {
       data: customerWithoutPassword,
     }, { status: 201 });
   } catch (e) {
+    console.error('[POST /api/customers] Insert error:', e);
     return NextResponse.json({
       error: true,
       errorType: "dbe",

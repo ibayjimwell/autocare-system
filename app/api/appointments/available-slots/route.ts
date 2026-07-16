@@ -7,6 +7,9 @@ import { eq, and, ne, inArray } from "drizzle-orm";
 
 export const dynamic = 'force-dynamic';
 
+// --------------------------------------------------------------
+// GET /api/appointments/available-slots – Get available appointment slots for a given date and service IDs
+// --------------------------------------------------------------
 export async function GET(req: NextRequest) {
   console.log("🚀 [available-slots] ROUTE EXECUTED");
 

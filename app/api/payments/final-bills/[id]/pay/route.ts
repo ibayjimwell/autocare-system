@@ -31,6 +31,9 @@ function generateReferenceNumber(): string {
   return `RES-${yy}${mm}${dd}-${random}`;
 }
 
+// --------------------------------------------------------------
+// POST /api/payments/final-bills/[id]/pay – Process payment for a final bill and generate receipt
+// --------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -1,21 +1,30 @@
+// app/api/payments/estimates/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { Customers } from "@/database/models/customers/customers.model";
 import { Vehicles } from "@/database/models/customers/vehicles.model";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 
-// ----------------------------------------------------------------------------
-// GET /api/payments/estimates
-// ----------------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get('status');
   const appointmentId = searchParams.get('appointmentId');
+  const customerId = searchParams.get('customerId');   // NEW
 
   try {
+    const conditions = [];
+
+    if (status) conditions.push(eq(EstimatedCosts.status, status.toUpperCase()));
+    if (appointmentId && isValidUUID(appointmentId)) {
+      conditions.push(eq(EstimatedCosts.appointmentId, appointmentId));
+    }
+    if (customerId && isValidUUID(customerId)) {
+      conditions.push(eq(Customers.id, customerId));
+    }
+
     let query = Database.select({
       id: EstimatedCosts.id,
       appointmentId: EstimatedCosts.appointmentId,
@@ -52,11 +61,8 @@ export async function GET(req: NextRequest) {
       .leftJoin(Customers, eq(Appointments.customerId, Customers.id))
       .leftJoin(Vehicles, eq(Appointments.vehicleId, Vehicles.id));
 
-    if (status) {
-      query = query.where(eq(EstimatedCosts.status, status.toUpperCase()));
-    }
-    if (appointmentId && isValidUUID(appointmentId)) {
-      query = query.where(eq(EstimatedCosts.appointmentId, appointmentId));
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
     }
 
     const estimates = await query.orderBy(EstimatedCosts.createdAt);
