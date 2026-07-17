@@ -9,6 +9,7 @@ import { isValidUUID } from "@/utils/shared";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
 import { appointmentsTriggers } from "@/triggers/appointments";
+import { mobileAppointmentsTriggers } from "@/app-triggers/appointments";
 
 // ------------------------------------------------------------------
 // PATCH /api/appointments/[id]/status – Change appointment status
@@ -145,17 +146,34 @@ export async function PATCH(
       .returning();
 
     if (updated.status === 'CONFIRMED') {
+
       appointmentsTriggers.onConfirmed({
         trackingNumber: updated.trackingNumber,
         customerName: updated.customer?.fullname || body.customer?.fullname || 'Customer',
         appointmentDate: updated.appointmentDate,
       }).catch(console.error);
+
+       mobileAppointmentsTriggers.onConfirmed({
+        customerId: updated.customerId,
+        trackingNumber: updated.trackingNumber,
+        appointmentDate: updated.appointmentDate,
+      }).catch(console.error);
+
+
     } else if (updated.status === 'CANCELLED') {
+
       appointmentsTriggers.onCancelled({
         trackingNumber: updated.trackingNumber,
         customerName: updated.customer?.fullname || body.customer?.fullname || 'Customer',
         reason: updated.notes || body.notes,
       }).catch(console.error);
+
+       mobileAppointmentsTriggers.onCancelled({
+        customerId: updated.customerId,
+        trackingNumber: updated.trackingNumber,
+        reason: updated.notes || body.notes,
+      }).catch(console.error);
+
     }
 
     await Database.insert(AppointmentStatusHistory).values({

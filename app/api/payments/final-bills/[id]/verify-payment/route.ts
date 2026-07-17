@@ -9,6 +9,8 @@ import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 import { getPaymentLinkStatus } from '@/lib/paymongo';
 import { paymentsTriggers } from '@/triggers/payments';
+import { sendPushToCustomer } from '@/lib/push/customer-push';
+
 
 function generateReferenceNumber(): string {
   const date = new Date();
@@ -113,6 +115,24 @@ export async function POST(
     trackingNumber: appointment.trackingNumber,
     customerName: customer?.fullname,
   }).catch(console.error);
+
+  const [appointment] = await Database
+    .select()
+    .from(Appointments)
+    .where(eq(Appointments.id, bill.appointmentId))
+    .limit(1);
+  if (appointment) {
+    const [customer] = await Database
+      .select()
+      .from(Customers)
+      .where(eq(Customers.id, appointment.customerId))
+      .limit(1);
+    if (customer) {
+      sendPushToCustomer(customer.id, '💰 Payment Successful', 'Your payment has been processed. A receipt has been generated.', {
+        url: `/invoice/${billId}`,
+      }).catch(console.error);
+    }
+  }
 
   return NextResponse.json({
     error: false,

@@ -11,8 +11,9 @@ import {
   generateTrackingNumber,
   serviceExists,
 } from "@/utils/appointments";
-import { eq, inArray, and, sql, desc } from "drizzle-orm";
+import { eq, inArray, sql, desc } from "drizzle-orm";
 import { appointmentsTriggers } from '@/triggers/appointments';
+import { mobileAppointmentsTriggers } from "@/app-triggers/appointments";
 
 // ------------------------------------------------------------------
 // GET /api/appointments – List appointments with filters
@@ -58,7 +59,6 @@ export async function GET(req: NextRequest) {
       .leftJoin(Customers, eq(Appointments.customerId, Customers.id))
       .leftJoin(Vehicles, eq(Appointments.vehicleId, Vehicles.id));
 
-    // ✅ Apply filters
     if (status) {
       query = query.where(eq(Appointments.status, status.toUpperCase()));
     }
@@ -81,43 +81,39 @@ export async function GET(req: NextRequest) {
       .limit(limit)
       .offset(offset);
 
-    // ---- Fetch service details without ANY join ----
-    const appointmentIds = appointments.map(a => a.id);
+    // Fetch service details
     let serviceMap: Record<string, any[]> = {};
-    if (appointmentIds.length > 0) {
-      // Collect all unique service IDs from all appointments
-      const allServiceIds = new Set<string>();
-      for (const appt of appointments) {
-        if (appt.services && Array.isArray(appt.services)) {
-          for (const sid of appt.services) {
-            allServiceIds.add(sid);
-          }
+    const allServiceIds = new Set<string>();
+    for (const appt of appointments) {
+      if (appt.services && Array.isArray(appt.services)) {
+        for (const sid of appt.services) {
+          allServiceIds.add(sid);
         }
       }
-      if (allServiceIds.size > 0) {
-        const serviceList = await Database.select({
-          id: Services.id,
-          name: Services.name,
-          description: Services.description,
-          basePrice: Services.basePrice,
-          estimatedDuration: Services.estimatedDuration,
-        })
-          .from(Services)
-          .where(inArray(Services.id, Array.from(allServiceIds)));
+    }
+    if (allServiceIds.size > 0) {
+      const serviceList = await Database.select({
+        id: Services.id,
+        name: Services.name,
+        description: Services.description,
+        basePrice: Services.basePrice,
+        estimatedDuration: Services.estimatedDuration,
+      })
+        .from(Services)
+        .where(inArray(Services.id, Array.from(allServiceIds)));
 
-        const serviceObjMap = serviceList.reduce((acc, s) => {
-          acc[s.id] = s;
-          return acc;
-        }, {} as Record<string, any>);
+      const serviceObjMap = serviceList.reduce((acc, s) => {
+        acc[s.id] = s;
+        return acc;
+      }, {} as Record<string, any>);
 
-        for (const appt of appointments) {
-          if (appt.services && Array.isArray(appt.services)) {
-            serviceMap[appt.id] = appt.services
-              .map(sid => serviceObjMap[sid])
-              .filter(Boolean);
-          } else {
-            serviceMap[appt.id] = [];
-          }
+      for (const appt of appointments) {
+        if (appt.services && Array.isArray(appt.services)) {
+          serviceMap[appt.id] = appt.services
+            .map(sid => serviceObjMap[sid])
+            .filter(Boolean);
+        } else {
+          serviceMap[appt.id] = [];
         }
       }
     }
@@ -162,7 +158,6 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  // 1. Validate basic fields (excluding services)
   const errors = validateAppointmentData(rawData);
   if (errors.length > 0) {
     return NextResponse.json({
@@ -174,7 +169,6 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
-  // 2. Parse and validate services
   let serviceIds: string[] = [];
   if (!rawData.services) {
     return NextResponse.json({
@@ -208,7 +202,6 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
-  // Validate each service ID and existence
   for (const id of serviceIds) {
     if (!isValidUUID(id)) {
       return NextResponse.json({
@@ -231,7 +224,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 3. Insert appointment
   const insertData = {
     customerId: rawData.customerId,
     vehicleId: rawData.vehicleId,
@@ -249,10 +241,15 @@ export async function POST(req: NextRequest) {
       .returning();
 
     if (newAppointment) {
-      // Fire trigger (don't await so it doesn't block the response)
       appointmentsTriggers.onNew({
         trackingNumber: newAppointment.trackingNumber,
         customerName: newAppointment.customer?.fullname || 'Customer',
+        appointmentDate: newAppointment.appointmentDate,
+      }).catch(console.error);
+
+      mobileAppointmentsTriggers.onNew({
+        customerId: newAppointment.customerId,
+        trackingNumber: newAppointment.trackingNumber,
         appointmentDate: newAppointment.appointmentDate,
       }).catch(console.error);
     }
