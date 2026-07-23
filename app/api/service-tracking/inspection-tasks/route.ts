@@ -9,6 +9,7 @@ import { authOptions } from "@/lib/auth/staffs/auth";
 import { isValidUUID } from "@/utils/shared";
 import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
 import { serviceTrackingTriggers } from "@/triggers/service-tracking";
+import { mobileInspectionTaskTriggers } from "@/app-triggers/inspection-task";
 
 // ------------------------------------------------------------------
 // GET /api/service-tracking/inspection-tasks?appointmentId=...
@@ -117,10 +118,17 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
+     // Staff trigger
     const trackingNumber = await getTrackingNumber(appointmentId);
     serviceTrackingTriggers.onInspectionTaskAdded({
       taskTitle: newTask.title,
       trackingNumber,
+    }).catch(console.error);
+
+    // Mobile customer trigger 
+    mobileInspectionTaskTriggers.onTaskAdded({
+      appointmentId,
+      taskTitle: newTask.title,
     }).catch(console.error);
 
     // If this is the first task, update appointment status to UNDER_INSPECTION

@@ -11,9 +11,6 @@ import { authOptions } from "@/lib/auth/staffs/auth";
 import { appointmentsTriggers } from "@/triggers/appointments";
 import { mobileAppointmentsTriggers } from "@/app-triggers/appointments";
 
-// ------------------------------------------------------------------
-// PATCH /api/appointments/[id]/status – Change appointment status
-// ------------------------------------------------------------------
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -22,7 +19,6 @@ export async function PATCH(
   const validationError = await validateAppointmentId(id);
   if (validationError) return validationError;
 
-  // Get the logged‑in staff ID from the session
   const session = await getServerSession(authOptions);
   let staffId: string | null = null;
   if (session?.user?.id) {
@@ -55,7 +51,6 @@ export async function PATCH(
   }
 
   const newStatus = status.toUpperCase();
-
   const validStatuses = [
     'PENDING', 'CONFIRMED', 'UNDER_INSPECTION',
     'WAITING_FOR_APPROVAL', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'
@@ -80,7 +75,6 @@ export async function PATCH(
     }, { status: 422 });
   }
 
-  // Determine the staff ID: use provided `changedBy` if valid, else session ID
   let finalChangedBy: string | null = null;
   if (changedBy && isValidUUID(changedBy)) {
     finalChangedBy = changedBy;
@@ -145,37 +139,54 @@ export async function PATCH(
       .where(eq(Appointments.id, id))
       .returning();
 
+    // --- Staff‑side triggers (unchanged) ---
     if (updated.status === 'CONFIRMED') {
-
       appointmentsTriggers.onConfirmed({
         trackingNumber: updated.trackingNumber,
         customerName: updated.customer?.fullname || body.customer?.fullname || 'Customer',
         appointmentDate: updated.appointmentDate,
       }).catch(console.error);
-
-       mobileAppointmentsTriggers.onConfirmed({
-        customerId: updated.customerId,
-        trackingNumber: updated.trackingNumber,
-        appointmentDate: updated.appointmentDate,
-      }).catch(console.error);
-
-
     } else if (updated.status === 'CANCELLED') {
-
       appointmentsTriggers.onCancelled({
         trackingNumber: updated.trackingNumber,
         customerName: updated.customer?.fullname || body.customer?.fullname || 'Customer',
         reason: updated.notes || body.notes,
       }).catch(console.error);
-
-       mobileAppointmentsTriggers.onCancelled({
-        customerId: updated.customerId,
-        trackingNumber: updated.trackingNumber,
-        reason: updated.notes || body.notes,
-      }).catch(console.error);
-
     }
 
+    // --- Mobile customer‑specific triggers (ALL statuses) ---
+    const mobilePayload = {
+      customerId: updated.customerId,
+      trackingNumber: updated.trackingNumber,
+      appointmentDate: updated.appointmentDate,
+      reason: updated.notes || body.notes,
+    };
+
+    switch (updated.status) {
+      case 'CONFIRMED':
+        mobileAppointmentsTriggers.onConfirmed(mobilePayload).catch(console.error);
+        break;
+      case 'UNDER_INSPECTION':
+        mobileAppointmentsTriggers.onUnderInspection(mobilePayload).catch(console.error);
+        break;
+      case 'WAITING_FOR_APPROVAL':
+        mobileAppointmentsTriggers.onWaitingForApproval(mobilePayload).catch(console.error);
+        break;
+      case 'IN_PROGRESS':
+        mobileAppointmentsTriggers.onInProgress(mobilePayload).catch(console.error);
+        break;
+      case 'COMPLETED':
+        mobileAppointmentsTriggers.onCompleted(mobilePayload).catch(console.error);
+        break;
+      case 'CANCELLED':
+        mobileAppointmentsTriggers.onCancelled(mobilePayload).catch(console.error);
+        break;
+      // PENDING is the initial status, no notification needed
+      default:
+        break;
+    }
+
+    // Record the transition
     await Database.insert(AppointmentStatusHistory).values({
       appointmentId: id,
       fromStatus: current.status,

@@ -7,6 +7,7 @@ import { isValidUUID } from "@/utils/shared";
 import { appointmentExists } from "@/utils/service-tracking";
 import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
 import { serviceTrackingTriggers } from "@/triggers/service-tracking";
+import { mobileWorkTaskTriggers } from "@/app-triggers/work-task";
 
 // ------------------------------------------------------------------
 // GET /api/service-tracking/work-tasks?appointmentId=...
@@ -114,8 +115,15 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
+    // Staff trigger
     const trackingNumber = await getTrackingNumber(appointmentId);
     serviceTrackingTriggers.onWorkTaskAdded({ taskTitle: newTask.title, trackingNumber }).catch(console.error);
+
+    // Mobile customer trigger
+    mobileWorkTaskTriggers.onTaskAdded({
+      appointmentId,
+      taskTitle: newTask.title,
+    }).catch(console.error);
 
     return NextResponse.json({
       error: false,

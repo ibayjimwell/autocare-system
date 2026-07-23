@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
 import { serviceTrackingTriggers } from "@/triggers/service-tracking";
+import { mobileWorkTaskTriggers } from "@/app-triggers/work-task";
 
 // ------------------------------------------------------------------
 // PATCH /api/service-tracking/work-tasks/:id/status
@@ -78,12 +79,26 @@ export async function PATCH(
       .where(eq(WorkTasks.id, id))
       .returning();
 
-    if (updated) {
+     if (updated) {
+      // Staff triggers
       const trackingNumber = await getTrackingNumber(updated.appointmentId);
       if (status === 'IN_PROGRESS') {
         serviceTrackingTriggers.onWorkTaskStarted({ taskTitle: updated.title, trackingNumber }).catch(console.error);
       } else if (status === 'DONE') {
         serviceTrackingTriggers.onWorkTaskDone({ taskTitle: updated.title, trackingNumber }).catch(console.error);
+      }
+
+      // Mobile customer triggers (NEW)
+      if (status === 'IN_PROGRESS') {
+        mobileWorkTaskTriggers.onTaskStarted({
+          appointmentId: updated.appointmentId,
+          taskTitle: updated.title,
+        }).catch(console.error);
+      } else if (status === 'DONE') {
+        mobileWorkTaskTriggers.onTaskDone({
+          appointmentId: updated.appointmentId,
+          taskTitle: updated.title,
+        }).catch(console.error);
       }
     }
 

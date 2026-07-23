@@ -7,6 +7,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
 import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
 import { serviceTrackingTriggers } from "@/triggers/service-tracking";
+import { mobileInspectionTaskTriggers } from "@/app-triggers/inspection-task";
 
 // ------------------------------------------------------------------
 // PATCH /api/service-tracking/inspection-tasks/:id/status – Update task status
@@ -84,12 +85,26 @@ export async function PATCH(
       .where(eq(InspectionTasks.id, id))
       .returning();
 
-    if (updated) {
+     if (updated) {
+      // Staff triggers
       const trackingNumber = await getTrackingNumber(updated.appointmentId);
       if (status === 'IN_PROGRESS') {
         serviceTrackingTriggers.onInspectionTaskStarted({ taskTitle: updated.title, trackingNumber }).catch(console.error);
       } else if (status === 'DONE') {
         serviceTrackingTriggers.onInspectionTaskDone({ taskTitle: updated.title, trackingNumber }).catch(console.error);
+      }
+
+      // Mobile customer triggers (NEW)
+      if (status === 'IN_PROGRESS') {
+        mobileInspectionTaskTriggers.onTaskStarted({
+          appointmentId: updated.appointmentId,
+          taskTitle: updated.title,
+        }).catch(console.error);
+      } else if (status === 'DONE') {
+        mobileInspectionTaskTriggers.onTaskDone({
+          appointmentId: updated.appointmentId,
+          taskTitle: updated.title,
+        }).catch(console.error);
       }
     }
 
