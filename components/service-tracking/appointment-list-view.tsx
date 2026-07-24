@@ -1,3 +1,4 @@
+// components/service-tracking/AppointmentListView.tsx
 'use client';
 
 import React from 'react';
@@ -17,6 +18,7 @@ import ServiceCard from '@/components/services/service-card';
 import StaffCards from '@/components/staffs/staff-cards';
 import EmptyState from '@/components/shared/empty-state';
 import ConfirmationDialog from '@/components/shared/confimation-dialog';
+import FutureAppointmentsDrawer from '@/components/service-tracking/FutureAppointmentsDrawer';
 import {
   Eye,
   Play,
@@ -25,6 +27,7 @@ import {
   ArrowUp,
   ArrowDown,
   Car,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FILTER_OPTIONS, SORT_OPTIONS, SortField } from '@/app-utils/service-tracking/constants';
@@ -44,6 +47,11 @@ interface AppointmentListViewProps {
   setConfirmDialogOpen: (open: boolean) => void;
   pendingAppointment: any;
   handleConfirmStartInspection: () => void;
+  // New props for future appointments
+  futureAppointments: any[];
+  loadFutureAppointments: () => void;
+  futureDrawerOpen: boolean;
+  setFutureDrawerOpen: (open: boolean) => void;
 }
 
 export default function AppointmentListView({
@@ -61,33 +69,54 @@ export default function AppointmentListView({
   setConfirmDialogOpen,
   pendingAppointment,
   handleConfirmStartInspection,
+  futureAppointments,
+  loadFutureAppointments,
+  futureDrawerOpen,
+  setFutureDrawerOpen,
 }: AppointmentListViewProps) {
   return (
     <>
       {/* Filter & Search Bar */}
       <div className="flex flex-col md:flex-row gap-4 mb-8 items-start md:items-center justify-between">
-        <div className="overflow-x-auto no-scrollbar">
-          <div className="inline-flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl border border-slate-200/50">
-            {FILTER_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const isActive = activeFilter === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  onClick={() => setActiveFilter(opt.value)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap",
-                    isActive
-                      ? "bg-white text-primary shadow-sm ring-1 ring-black/5 scale-100"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-white/50 scale-95"
-                  )}
-                >
-                  <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-slate-400")} />
-                  {opt.label}
-                </button>
-              );
-            })}
+        <div className="flex items-center gap-3">
+          <div className="overflow-x-auto no-scrollbar">
+            <div className="inline-flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl border border-slate-200/50">
+              {FILTER_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                const isActive = activeFilter === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setActiveFilter(opt.value)}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap",
+                      isActive
+                        ? "bg-white text-primary shadow-sm ring-1 ring-black/5 scale-100"
+                        : "text-slate-500 hover:text-slate-700 hover:bg-white/50 scale-95"
+                    )}
+                  >
+                    <Icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-slate-400")} />
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Future Appointments Button – only on CONFIRMED tab */}
+          {activeFilter === 'CONFIRMED' && (
+            <Button
+              variant="outline"
+              className="rounded-2xl border-dashed border-primary/50 text-primary hover:bg-primary/5 h-10"
+              onClick={() => {
+                loadFutureAppointments();
+                setFutureDrawerOpen(true);
+              }}
+            >
+              <CalendarDays className="w-4 h-4 mr-2" />
+              Future Appointments
+            </Button>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -142,7 +171,11 @@ export default function AppointmentListView({
           description={
             search.trim()
               ? "No appointments match your search criteria."
-              : `No appointments marked as ${FILTER_OPTIONS.find(f => f.value === activeFilter)?.label.toLowerCase()}.`
+              : `No ${
+                  activeFilter === 'CONFIRMED'
+                    ? "today's confirmed"
+                    : FILTER_OPTIONS.find((f) => f.value === activeFilter)?.label.toLowerCase()
+                } appointments.`
           }
         />
       ) : (
@@ -195,7 +228,7 @@ export default function AppointmentListView({
         </div>
       )}
 
-      {/* Confirmation Dialog for Starting Inspection */}
+      {/* Confirmation Dialog */}
       <ConfirmationDialog
         open={confirmDialogOpen}
         onOpenChange={setConfirmDialogOpen}
@@ -203,6 +236,14 @@ export default function AppointmentListView({
         description={`Begin inspection for ${pendingAppointment?.vehicle?.make || "Unknown"} ${pendingAppointment?.vehicle?.model || ""} (${pendingAppointment?.vehicle?.plateNumber || "N/A"})?`}
         onConfirm={handleConfirmStartInspection}
         confirmText="Confirm & Start"
+      />
+
+      {/* Future Appointments Drawer */}
+      <FutureAppointmentsDrawer
+        open={futureDrawerOpen}
+        onOpenChange={setFutureDrawerOpen}
+        appointments={futureAppointments}
+        onInspect={handleInspect}
       />
     </>
   );

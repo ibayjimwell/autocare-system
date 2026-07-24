@@ -10,6 +10,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/staffs/auth";
 import { appointmentsTriggers } from "@/triggers/appointments";
 import { mobileAppointmentsTriggers } from "@/app-triggers/appointments";
+import { addToQueue, removeFromQueue } from "@/utils/queue/queue-utils";
 
 export async function PATCH(
   req: NextRequest,
@@ -139,6 +140,13 @@ export async function PATCH(
       .where(eq(Appointments.id, id))
       .returning();
 
+    // ----- Queue maintenance: add / remove based on CONFIRMED status -----
+    if (updated.status === 'CONFIRMED' && current.status !== 'CONFIRMED') {
+      addToQueue(id).catch(console.error);
+    } else if (current.status === 'CONFIRMED' && updated.status !== 'CONFIRMED') {
+      removeFromQueue(id).catch(console.error);
+    }
+
     // --- Staff‑side triggers (unchanged) ---
     if (updated.status === 'CONFIRMED') {
       appointmentsTriggers.onConfirmed({
@@ -181,7 +189,6 @@ export async function PATCH(
       case 'CANCELLED':
         mobileAppointmentsTriggers.onCancelled(mobilePayload).catch(console.error);
         break;
-      // PENDING is the initial status, no notification needed
       default:
         break;
     }

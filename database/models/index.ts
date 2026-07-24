@@ -45,3 +45,6 @@ export * from "./inventory/pos-transaction.model";
 // Notifications
 export * from "./notifications/push-subscription.model";
 export * from "./notifications/customer-push-subscription.model";
+
+// Queue
+export * from "./queue/service-queue.model";
