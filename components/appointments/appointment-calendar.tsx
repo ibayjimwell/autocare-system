@@ -1,11 +1,4 @@
-
-// =============================================================================
-// /components/appointments/AppointmentCalendar.jsx
-//
-// Reusable calendar component that visualises appointment density.
-// It is purely presentational – all appointment data and date selection
-// are passed via props. No API calls are required.
-// =============================================================================
+// components/appointments/appointment-calendar.tsx
 
 import React from "react";
 import {
@@ -16,15 +9,18 @@ import {
   isSameMonth,
   isSameDay,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Info } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar as CalendarIcon,
+  Info,
+  Settings,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/**
- * Utility to determine the badge style based on the number of appointments
- * and whether the day is selected.
- */
-const getCountBadgeClass = (count, isSelected) => {
+const getCountBadgeClass = (count: number, isSelected: boolean): string => {
   if (count === 0) return "hidden";
   if (isSelected) return "bg-white text-primary shadow-sm";
   if (count <= 2) return "bg-slate-100 text-slate-600 border border-slate-200";
@@ -32,20 +28,31 @@ const getCountBadgeClass = (count, isSelected) => {
   return "bg-red-100 text-red-600 border border-red-200 animate-pulse-subtle";
 };
 
+interface AppointmentCalendarProps {
+  currentMonth: Date;
+  onMonthChange: (direction: number) => void;
+  appointments: any[];
+  selectedDate: Date | null;
+  onDateClick: (date: Date) => void;
+  onConfigureDate?: () => void;
+  closedDates?: string[]; // YYYY-MM-DD strings
+}
+
 export default function AppointmentCalendar({
   currentMonth,
   onMonthChange,
   appointments,
   selectedDate,
   onDateClick,
-}) {
+  onConfigureDate,
+  closedDates = [],
+}: AppointmentCalendarProps) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const startOffset = monthStart.getDay(); // 0 = Sunday
+  const startOffset = monthStart.getDay();
 
-  // Build a count map of non-cancelled appointments per date
-  const countMap = {};
+  const countMap: Record<string, number> = {};
   appointments.forEach((apt) => {
     if (apt.status !== "CANCELLED") {
       const dateKey = apt.appointmentDate;
@@ -57,7 +64,7 @@ export default function AppointmentCalendar({
 
   return (
     <div className="bg-white rounded-[2rem] p-5 md:p-8 w-full transition-all duration-300">
-      {/* ---------- Header ---------- */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -73,27 +80,40 @@ export default function AppointmentCalendar({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onMonthChange(-1)}
-            className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-500 active:scale-90 transition-all"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onMonthChange(1)}
-            className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-500 active:scale-90 transition-all"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </Button>
+        <div className="flex items-center gap-2">
+          {onConfigureDate && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onConfigureDate}
+              className="h-9 w-9 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-all"
+              title="Configure selected date"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+          )}
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onMonthChange(-1)}
+              className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-500 active:scale-90 transition-all"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onMonthChange(1)}
+              className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-500 active:scale-90 transition-all"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* ---------- Weekday Labels ---------- */}
+      {/* Weekday Labels */}
       <div className="grid grid-cols-7 gap-2 mb-4">
         {weekdays.map((day) => (
           <div
@@ -105,9 +125,8 @@ export default function AppointmentCalendar({
         ))}
       </div>
 
-      {/* ---------- Date Grid ---------- */}
+      {/* Date Grid */}
       <div className="grid grid-cols-7 gap-2 md:gap-3">
-        {/* Empty cells for alignment */}
         {Array.from({ length: startOffset }).map((_, i) => (
           <div
             key={`empty-${i}`}
@@ -121,6 +140,7 @@ export default function AppointmentCalendar({
           const isSelected = selectedDate && isSameDay(day, selectedDate);
           const isCurrentMonth = isSameMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
+          const isClosed = closedDates.includes(dateKey);
 
           return (
             <button
@@ -131,40 +151,45 @@ export default function AppointmentCalendar({
                 "flex flex-col items-center justify-center border-2",
                 "active:scale-95",
                 !isCurrentMonth && "opacity-20",
+                isClosed && "bg-slate-100 border-slate-200 opacity-70", // visual closure
                 isSelected
                   ? "bg-primary border-primary text-white shadow-xl shadow-primary/30 z-10 scale-105"
                   : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-100"
               )}
             >
-              {/* Today indicator */}
-              {isToday && !isSelected && (
+              {isToday && !isSelected && !isClosed && (
                 <span className="absolute top-2 w-1 h-1 bg-primary rounded-full" />
               )}
 
               <span
                 className={cn(
                   "text-sm md:text-lg font-black tracking-tighter transition-colors",
-                  isSelected ? "text-white" : "text-slate-800"
+                  isSelected ? "text-white" : isClosed ? "text-slate-400" : "text-slate-800"
                 )}
               >
                 {format(day, "d")}
               </span>
 
-              {/* Appointment count badge */}
-              <div
-                className={cn(
-                  "absolute -bottom-1 -right-1 text-[9px] w-5 h-5 rounded-lg flex items-center justify-center font-black",
-                  getCountBadgeClass(count, isSelected)
-                )}
-              >
-                {count}
-              </div>
+              {isClosed ? (
+                <div className="absolute -bottom-1 -right-1 text-[9px] w-5 h-5 rounded-lg flex items-center justify-center bg-red-100 text-red-600 border border-red-200 font-black">
+                  <XCircle className="w-3 h-3" />
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    "absolute -bottom-1 -right-1 text-[9px] w-5 h-5 rounded-lg flex items-center justify-center font-black",
+                    getCountBadgeClass(count, isSelected)
+                  )}
+                >
+                  {count}
+                </div>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* ---------- Legend ---------- */}
+      {/* Legend */}
       <div className="flex flex-wrap items-center justify-between gap-4 mt-10 pt-6 border-t border-slate-100">
         <div className="flex items-center gap-2 text-slate-400">
           <Info className="w-3.5 h-3.5" />
@@ -190,6 +215,12 @@ export default function AppointmentCalendar({
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <span className="text-[10px] font-bold text-slate-500 uppercase">
               Peak
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-slate-300 border border-slate-400" />
+            <span className="text-[10px] font-bold text-slate-500 uppercase">
+              Closed
             </span>
           </div>
         </div>

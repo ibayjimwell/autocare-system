@@ -48,3 +48,7 @@ export * from "./notifications/customer-push-subscription.model";
 
 // Queue
 export * from "./queue/service-queue.model";
+
+// Configurations
+export * from "./configurations/configurations.model";
+export * from "./configurations/configurations-logs.model";

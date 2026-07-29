@@ -80,7 +80,7 @@ export default function BookingFormCard({
   const onSubmit = form.handleSubmit(submitHandler);
 
   return (
-    <Card className="border-none shadow-lg bg-slate-50/50 rounded-3xl border border-slate-100">
+    <Card className="border-none shadow-lg bg-white rounded-3xl border border-slate-100">
       <CardHeader>
         <CardTitle className="text-lg font-black uppercase flex items-center gap-2">
           <PlusCircle className="w-5 h-5 text-primary" />

@@ -1,4 +1,3 @@
-// app/api/appointments/route.ts
 import { Database } from "@/lib/drizzle";
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { Customers } from "@/database/models/customers/customers.model";
@@ -14,6 +13,7 @@ import {
 import { eq, inArray, sql, desc } from "drizzle-orm";
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from "@/app-triggers/appointments";
+import { getAppointmentConfig, getEffectiveConfigForDate } from '@/utils/configurations';
 
 // ------------------------------------------------------------------
 // GET /api/appointments – List appointments with filters
@@ -167,6 +167,30 @@ export async function POST(req: NextRequest) {
       errorMessage: errors.join(" "),
       errorLog: errors,
     }, { status: 422 });
+  }
+
+  // ----- Check if date is closed -----
+  try {
+    const { merged } = await getAppointmentConfig();
+    const effective = getEffectiveConfigForDate(merged, rawData.appointmentDate);
+    if (!effective.isOpen) {
+      return NextResponse.json({
+        error: true,
+        errorType: "fve",
+        errorTitle: "Shop closed",
+        errorMessage: `The shop is closed on ${rawData.appointmentDate}${effective.reason ? ': ' + effective.reason : ''}. Please choose another date.`,
+        errorLog: null,
+      }, { status: 422 });
+    }
+  } catch (configErr) {
+    console.error("[POST /api/appointments] Config check error:", configErr);
+    return NextResponse.json({
+      error: true,
+      errorType: "dbe",
+      errorTitle: "Configuration error",
+      errorMessage: "Unable to verify shop availability.",
+      errorLog: String(configErr),
+    }, { status: 500 });
   }
 
   let serviceIds: string[] = [];

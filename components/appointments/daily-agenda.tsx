@@ -66,8 +66,8 @@ export default function DailyAgenda({
 
   return (
     <>
-      <Card className="flex flex-col h-[calc(100vh-12rem)] shadow-xl border-none rounded-3xl overflow-hidden bg-white">
-        <CardHeader className="bg-slate-900 text-white pb-6">
+      <Card className="flex flex-col h-full shadow-xl border-none rounded-3xl bg-white">
+        <CardHeader className="bg-slate-900 text-white py-6">
           <div className="flex justify-between items-center mb-4">
             <CardTitle className="text-sm font-bold uppercase tracking-widest flex items-center gap-2">
               <Clock className="w-4 h-4 text-primary" /> Daily Agenda
