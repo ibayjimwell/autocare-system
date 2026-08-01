@@ -1,4 +1,3 @@
-// components/service-detail/service-detail-panel.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -206,20 +205,11 @@ export default function ServiceDetailPanel({
     setFindingModalOpen(true);
   };
 
+  // --- FIX: findings saved → only refresh, DO NOT generate estimate ---
   const handleFindingsSaved = async () => {
     setFindingModalOpen(false);
-    await loadData(true); // show skeleton
-    try {
-      const genRes = await estimatesApi.create(appointment.id);
-      if (genRes.error) {
-        toast.error(genRes.errorMessage || "Failed to generate estimate.");
-      } else {
-        setEstimate(genRes.data);
-        toast.success("Estimate generated. You can now submit to billing.");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Error generating estimate.");
-    }
+    await loadData(true); // refresh findings list
+    toast.success("Findings saved. You can now generate estimate by clicking 'Submit to Billing'.");
   };
 
   const handleWorkDone = async () => {
