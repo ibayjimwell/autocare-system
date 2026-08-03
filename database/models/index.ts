@@ -21,6 +21,8 @@ export * from "./service-tracking/inspection-tasks.model";
 export * from "./service-tracking/inspection-findings.model";
 export * from "./service-tracking/inspection-finding-parts.model";
 export * from "./service-tracking/work-tasks.model";
+export * from "./service-tracking/default-task-groups.model";
+export * from "./service-tracking/default-tasks.model";
 
 // Billing
 export * from "./payments/estimated-costs.model";
@@ -52,3 +54,4 @@ export * from "./queue/service-queue.model";
 // Configurations
 export * from "./configurations/configurations.model";
 export * from "./configurations/configurations-logs.model";
+

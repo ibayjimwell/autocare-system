@@ -15,6 +15,8 @@ import TaskCardSkeleton from "@/components/skeleton/task-card-skeleton";
 import FindingModal from "./finding-modal";
 import FindingsList from "./findings-list";
 import OverallProgressBar from "./overall-progress-bar";
+import DefaultGroupManagerModal from "./default-group-manager-modal";
+import DefaultTaskPickerModal from "./default-task-picker-modal";
 import { useRealtimeTask } from "@/connections/useRealtimeTask";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
@@ -33,6 +35,8 @@ import {
   Receipt,
   FileText,
   AlertCircle,
+  Layers,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -78,6 +82,11 @@ export default function ServiceDetailPanel({
   const [findingModalOpen, setFindingModalOpen] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
+
+  // New states for default groups
+  const [groupManagerOpen, setGroupManagerOpen] = useState(false);
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  const [isAddingTemplateTasks, setIsAddingTemplateTasks] = useState(false);
 
   const isInspection = appointment.status === "UNDER_INSPECTION";
   const isInProgress = appointment.status === "IN_PROGRESS";
@@ -153,6 +162,23 @@ export default function ServiceDetailPanel({
     }
   };
 
+  // Handle adding multiple tasks from template
+  const handleAddTasksFromTemplate = async (tasks: Array<{ title: string; durationMinutes?: number }>) => {
+    setIsAddingTemplateTasks(true);
+    try {
+      // We add tasks one by one to trigger individual notifications
+      for (const task of tasks) {
+        await handleAddTask(task.title, task.durationMinutes);
+      }
+      toast.success(`${tasks.length} task(s) added from template.`);
+      setTaskPickerOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Error adding tasks from template.");
+    } finally {
+      setIsAddingTemplateTasks(false);
+    }
+  };
+
   const handleTaskUpdate = async (taskId: string, status: string) => {
     try {
       const res = isInspection
@@ -205,10 +231,9 @@ export default function ServiceDetailPanel({
     setFindingModalOpen(true);
   };
 
-  // --- FIX: findings saved → only refresh, DO NOT generate estimate ---
   const handleFindingsSaved = async () => {
     setFindingModalOpen(false);
-    await loadData(true); // refresh findings list
+    await loadData(true);
     toast.success("Findings saved. You can now generate estimate by clicking 'Submit to Billing'.");
   };
 
@@ -234,7 +259,6 @@ export default function ServiceDetailPanel({
 
   const currentStatusIdx = TRACKING_STATUSES.indexOf(appointment.status);
 
-  // Show full-page spinner only on very first load
   if (initialLoading) return <LoadingSpinner />;
 
   const servicePrice = appointment.services?.reduce(
@@ -295,6 +319,18 @@ export default function ServiceDetailPanel({
               )}
             </div>
           </div>
+        </div>
+
+        {/* New buttons for default groups */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setGroupManagerOpen(true)}
+            className="rounded-full"
+          >
+            <Settings className="w-4 h-4 mr-1" /> Manage Default Tasks
+          </Button>
         </div>
       </div>
 
@@ -363,13 +399,23 @@ export default function ServiceDetailPanel({
                   </p>
                 </div>
               </div>
-              <Button
-                size="sm"
-                onClick={() => setAddTaskModalOpen(true)}
-                className="rounded-full shadow-sm shrink-0"
-              >
-                <Plus className="w-4 h-4 mr-2" /> New Task
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setTaskPickerOpen(true)}
+                  className="rounded-full"
+                >
+                  <Layers className="w-4 h-4 mr-2" /> Default tasks
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setAddTaskModalOpen(true)}
+                  className="rounded-full shadow-sm shrink-0"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> New Task
+                </Button>
+              </div>
             </div>
 
             {/* Overall Progress Bar */}
@@ -381,14 +427,12 @@ export default function ServiceDetailPanel({
 
             {/* Task List or Skeletons */}
             {tasksLoading && currentTasks.length === 0 ? (
-              // Initial load with no tasks → show a few skeletons
               <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <TaskCardSkeleton key={i} />
                 ))}
               </div>
             ) : tasksLoading && currentTasks.length > 0 ? (
-              // Refresh while tasks exist: show skeleton cards matching previous count
               <div className="space-y-4">
                 {currentTasks.map((_, i) => (
                   <TaskCardSkeleton key={i} />
@@ -411,6 +455,7 @@ export default function ServiceDetailPanel({
                     task={task}
                     onUpdate={handleTaskUpdate}
                     onDelete={handleTaskDelete}
+                    onEdit={() => {}}
                     appointmentId={appointment.id}
                     isInProgress={isInProgress}
                   />
@@ -538,6 +583,19 @@ export default function ServiceDetailPanel({
         onClose={() => setFindingModalOpen(false)}
         appointmentId={appointment.id}
         onSaved={handleFindingsSaved}
+      />
+
+      <DefaultGroupManagerModal
+        open={groupManagerOpen}
+        onOpenChange={setGroupManagerOpen}
+        onSaved={() => {}}
+      />
+
+      <DefaultTaskPickerModal
+        open={taskPickerOpen}
+        onOpenChange={setTaskPickerOpen}
+        onAddTasks={handleAddTasksFromTemplate}
+        isAdding={isAddingTemplateTasks}
       />
 
       <ConfirmationDialog

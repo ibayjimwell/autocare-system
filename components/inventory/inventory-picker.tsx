@@ -97,7 +97,7 @@ export default function InventoryPicker({ onSelect, children, className }: Inven
                 <button
                   key={item.id}
                   onClick={() => handleSelect(item)}
-                  className="w-full text-left px-3 py-2 rounded-md hover:bg-accent transition-colors flex items-center justify-between group"
+                  className="w-full text-left px-3 py-2 rounded-md hover:bg-primary/20 transition-colors flex items-center justify-between group"
                 >
                   <div>
                     <div className="text-sm font-medium">{item.name}</div>
