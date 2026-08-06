@@ -17,6 +17,7 @@ import FindingsList from "./findings-list";
 import OverallProgressBar from "./overall-progress-bar";
 import DefaultGroupManagerModal from "./default-group-manager-modal";
 import DefaultTaskPickerModal from "./default-task-picker-modal";
+import HistoryTaskPickerModal from "./history-task-picker-modal";
 import { useRealtimeTask } from "@/connections/useRealtimeTask";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
@@ -24,6 +25,7 @@ import { workTasksApi } from "@/lib/service-tracking/work-tasks";
 import { findingsApi } from "@/lib/service-tracking/findings";
 import { estimatesApi } from "@/lib/service-tracking/estimates";
 import { finalBillsApi } from "@/lib/payments/final-bills";
+import { taskHistoryApi } from "@/lib/service-tracking/task-history";
 import {
   ArrowLeft,
   User,
@@ -37,6 +39,7 @@ import {
   AlertCircle,
   Layers,
   Settings,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -83,10 +86,14 @@ export default function ServiceDetailPanel({
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
 
-  // New states for default groups
+  // Default groups states
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [isAddingTemplateTasks, setIsAddingTemplateTasks] = useState(false);
+
+  // History tasks states
+  const [historyPickerOpen, setHistoryPickerOpen] = useState(false);
+  const [isAddingHistoryTasks, setIsAddingHistoryTasks] = useState(false);
 
   const isInspection = appointment.status === "UNDER_INSPECTION";
   const isInProgress = appointment.status === "IN_PROGRESS";
@@ -137,6 +144,29 @@ export default function ServiceDetailPanel({
     onDataChanged: () => loadData(true),
   });
 
+  // Helper: record completed tasks to history
+  const recordTasksToHistory = useCallback(async (phase: 'INSPECTION' | 'WORK', tasks: any[]) => {
+    const doneTasks = tasks.filter(t => t.status === 'DONE');
+    if (doneTasks.length === 0) return;
+    try {
+      const payload = {
+        appointmentId: appointment.id,
+        phase,
+        tasks: doneTasks.map(t => ({
+          title: t.title,
+          durationMinutes: t.durationMinutes,
+        })),
+      };
+      const res = await taskHistoryApi.createMany(payload);
+      if (res.error) {
+        console.error('Failed to record task history:', res.errorMessage);
+        // Don't block the flow, just log
+      }
+    } catch (err) {
+      console.error('Failed to record task history:', err);
+    }
+  }, [appointment.id]);
+
   // Handlers – API calls fire-and-forget, realtime refreshes the list
   const handleAddTask = async (title: string, durationMinutes?: number) => {
     try {
@@ -162,11 +192,10 @@ export default function ServiceDetailPanel({
     }
   };
 
-  // Handle adding multiple tasks from template
+  // Handle adding multiple tasks from default template
   const handleAddTasksFromTemplate = async (tasks: Array<{ title: string; durationMinutes?: number }>) => {
     setIsAddingTemplateTasks(true);
     try {
-      // We add tasks one by one to trigger individual notifications
       for (const task of tasks) {
         await handleAddTask(task.title, task.durationMinutes);
       }
@@ -176,6 +205,22 @@ export default function ServiceDetailPanel({
       toast.error(err.message || "Error adding tasks from template.");
     } finally {
       setIsAddingTemplateTasks(false);
+    }
+  };
+
+  // Handle adding multiple tasks from history
+  const handleAddTasksFromHistory = async (tasks: Array<{ title: string; durationMinutes?: number }>) => {
+    setIsAddingHistoryTasks(true);
+    try {
+      for (const task of tasks) {
+        await handleAddTask(task.title, task.durationMinutes);
+      }
+      toast.success(`${tasks.length} task(s) added from history.`);
+      setHistoryPickerOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Error adding tasks from history.");
+    } finally {
+      setIsAddingHistoryTasks(false);
     }
   };
 
@@ -216,6 +261,8 @@ export default function ServiceDetailPanel({
         toast.error(sendRes.errorMessage || "Failed to submit estimate.");
       } else {
         toast.success("Estimate submitted to billing.");
+        // Record inspection tasks to history
+        await recordTasksToHistory('INSPECTION', inspectionTasks);
         onStatusChanged();
         onBack();
       }
@@ -245,6 +292,8 @@ export default function ServiceDetailPanel({
         toast.error(billRes.errorMessage || "Failed to generate final bill.");
       } else {
         toast.success("Job completed! Final bill generated.");
+        // Record work tasks to history
+        await recordTasksToHistory('WORK', workTasks);
         await appointmentsApi.updateStatus(appointment.id, "COMPLETED");
         onStatusChanged();
         onBack();
@@ -399,14 +448,22 @@ export default function ServiceDetailPanel({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setHistoryPickerOpen(true)}
+                  className="rounded-full"
+                >
+                  <History className="w-4 h-4 mr-2" /> History Tasks
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setTaskPickerOpen(true)}
                   className="rounded-full"
                 >
-                  <Layers className="w-4 h-4 mr-2" /> Default tasks
+                  <Layers className="w-4 h-4 mr-2" /> Default Tasks
                 </Button>
                 <Button
                   size="sm"
@@ -596,6 +653,14 @@ export default function ServiceDetailPanel({
         onOpenChange={setTaskPickerOpen}
         onAddTasks={handleAddTasksFromTemplate}
         isAdding={isAddingTemplateTasks}
+      />
+
+      <HistoryTaskPickerModal
+        open={historyPickerOpen}
+        onOpenChange={setHistoryPickerOpen}
+        onAddTasks={handleAddTasksFromHistory}
+        isAdding={isAddingHistoryTasks}
+        phase={isInspection ? 'INSPECTION' : 'WORK'}
       />
 
       <ConfirmationDialog

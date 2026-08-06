@@ -162,6 +162,13 @@
       "when": 1785723042323,
       "tag": "0022_misty_silk_fever",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785731501079,
+      "tag": "0023_furry_pete_wisdom",
+      "breakpoints": true
     }
   ]
 }

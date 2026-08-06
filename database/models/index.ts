@@ -23,6 +23,7 @@ export * from "./service-tracking/inspection-finding-parts.model";
 export * from "./service-tracking/work-tasks.model";
 export * from "./service-tracking/default-task-groups.model";
 export * from "./service-tracking/default-tasks.model";
+export * from "./service-tracking/task-history.model"
 
 // Billing
 export * from "./payments/estimated-costs.model";
