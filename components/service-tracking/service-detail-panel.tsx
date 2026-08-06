@@ -18,6 +18,7 @@ import OverallProgressBar from "./overall-progress-bar";
 import DefaultGroupManagerModal from "./default-group-manager-modal";
 import DefaultTaskPickerModal from "./default-task-picker-modal";
 import HistoryTaskPickerModal from "./history-task-picker-modal";
+import DefaultFindingManagerModal from "./default-finding-manager-modal";
 import { useRealtimeTask } from "@/connections/useRealtimeTask";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
@@ -26,6 +27,7 @@ import { findingsApi } from "@/lib/service-tracking/findings";
 import { estimatesApi } from "@/lib/service-tracking/estimates";
 import { finalBillsApi } from "@/lib/payments/final-bills";
 import { taskHistoryApi } from "@/lib/service-tracking/task-history";
+import { historyFindingsApi } from "@/lib/service-tracking/history-findings";
 import {
   ArrowLeft,
   User,
@@ -94,6 +96,9 @@ export default function ServiceDetailPanel({
   // History tasks states
   const [historyPickerOpen, setHistoryPickerOpen] = useState(false);
   const [isAddingHistoryTasks, setIsAddingHistoryTasks] = useState(false);
+
+  // Default findings manager
+  const [defaultFindingManagerOpen, setDefaultFindingManagerOpen] = useState(false);
 
   const isInspection = appointment.status === "UNDER_INSPECTION";
   const isInProgress = appointment.status === "IN_PROGRESS";
@@ -282,6 +287,31 @@ export default function ServiceDetailPanel({
     setFindingModalOpen(false);
     await loadData(true);
     toast.success("Findings saved. You can now generate estimate by clicking 'Submit to Billing'.");
+
+    // Record findings to history
+    try {
+      if (findings.length > 0) {
+        const payload = {
+          appointmentId: appointment.id,
+          phase: 'INSPECTION',
+          findings: findings.map(f => ({
+            description: f.description,
+            parts: f.parts.map(p => ({
+              partName: p.partName,
+              quantity: p.quantity,
+              priceAtTime: p.priceAtTime,
+              isPms: p.isPms,
+            })),
+          })),
+        };
+        const res = await historyFindingsApi.createMany(payload);
+        if (res.error) {
+          console.error('Failed to record findings history:', res.errorMessage);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to record findings history:', err);
+    }
   };
 
   const handleWorkDone = async () => {
@@ -370,8 +400,8 @@ export default function ServiceDetailPanel({
           </div>
         </div>
 
-        {/* New buttons for default groups */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Management buttons: Default Tasks & Default Findings */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <Button
             variant="outline"
             size="sm"
@@ -379,6 +409,14 @@ export default function ServiceDetailPanel({
             className="rounded-full"
           >
             <Settings className="w-4 h-4 mr-1" /> Manage Default Tasks
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDefaultFindingManagerOpen(true)}
+            className="rounded-full"
+          >
+            <Settings className="w-4 h-4 mr-1" /> Manage Default Findings
           </Button>
         </div>
       </div>
@@ -661,6 +699,12 @@ export default function ServiceDetailPanel({
         onAddTasks={handleAddTasksFromHistory}
         isAdding={isAddingHistoryTasks}
         phase={isInspection ? 'INSPECTION' : 'WORK'}
+      />
+
+      <DefaultFindingManagerModal
+        open={defaultFindingManagerOpen}
+        onOpenChange={setDefaultFindingManagerOpen}
+        onSaved={() => {}}
       />
 
       <ConfirmationDialog

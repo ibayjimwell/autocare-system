@@ -24,6 +24,10 @@ export * from "./service-tracking/work-tasks.model";
 export * from "./service-tracking/default-task-groups.model";
 export * from "./service-tracking/default-tasks.model";
 export * from "./service-tracking/task-history.model"
+export * from "./service-tracking/default-findings.model"
+export * from "./service-tracking/default-finding-parts.model"
+export * from "./service-tracking/history-findings.model"
+export * from "./service-tracking/history-finding-parts.model"
 
 // Billing
 export * from "./payments/estimated-costs.model";

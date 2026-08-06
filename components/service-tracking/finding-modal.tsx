@@ -14,10 +14,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, X, Package } from "lucide-react";
+import { Plus, Trash2, X, Package, Layers, History } from "lucide-react";
 import { findingsApi } from "@/lib/service-tracking/findings";
 import { toast } from "sonner";
 import InventoryPicker from "@/components/inventory/inventory-picker";
+import DefaultFindingPickerModal from "./default-finding-picker-modal";
+import HistoryFindingPickerModal from "./history-finding-picker-modal";
 
 interface FindingPart {
   id: string;
@@ -45,6 +47,11 @@ export default function FindingModal({ open, onClose, appointmentId, onSaved }: 
     { id: Date.now().toString(), description: "", parts: [] },
   ]);
   const [saving, setSaving] = useState(false);
+
+  // Picker modals state
+  const [defaultPickerOpen, setDefaultPickerOpen] = useState(false);
+  const [historyPickerOpen, setHistoryPickerOpen] = useState(false);
+  const [isAddingFromPicker, setIsAddingFromPicker] = useState(false);
 
   const addFinding = () => {
     setFindings([...findings, { id: Date.now().toString(), description: "", parts: [] }]);
@@ -125,6 +132,52 @@ export default function FindingModal({ open, onClose, appointmentId, onSaved }: 
     }));
   };
 
+  // Handler to add a finding from a picker (default or history)
+  const handleAddFindingFromPicker = (findingData: { description: string; parts: Array<{ partName: string; quantity: number; priceAtTime: number; isPms: boolean }> }) => {
+    const newFinding: Finding = {
+      id: Date.now().toString(),
+      description: findingData.description,
+      parts: findingData.parts.map(p => ({
+        id: Date.now().toString(),
+        partName: p.partName || '',
+        quantity: p.quantity || 1,
+        priceAtTime: p.priceAtTime || 0,
+        isPms: p.isPms || false,
+      })),
+    };
+    setFindings([...findings, newFinding]);
+  };
+
+  // Default picker selection (single finding)
+  const handleDefaultFindingSelect = (finding: any) => {
+    handleAddFindingFromPicker({
+      description: finding.title,
+      parts: finding.parts.map((p: any) => ({
+        partName: p.partName,
+        quantity: p.quantity,
+        priceAtTime: parseFloat(p.priceAtTime) || 0,
+        isPms: p.isPms,
+      })),
+    });
+    setDefaultPickerOpen(false);
+  };
+
+  // History picker selection (multiple findings)
+  const handleHistoryFindingsSelect = async (selectedFindings: Array<{ description: string; parts: Array<{ partName: string; quantity: number; priceAtTime: number; isPms: boolean }> }>) => {
+    setIsAddingFromPicker(true);
+    try {
+      for (const f of selectedFindings) {
+        handleAddFindingFromPicker(f);
+      }
+      toast.success(`${selectedFindings.length} finding(s) added from history.`);
+      setHistoryPickerOpen(false);
+    } catch (err) {
+      toast.error('Error adding findings from history.');
+    } finally {
+      setIsAddingFromPicker(false);
+    }
+  };
+
   const handleSave = async () => {
     const invalid = findings.some(f => !f.description.trim());
     if (invalid) {
@@ -170,6 +223,26 @@ export default function FindingModal({ open, onClose, appointmentId, onSaved }: 
         {/* Scrollable content with overflow-y-auto */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6">
           <div className="space-y-6">
+            {/* Toolbar: buttons to add from default/history */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDefaultPickerOpen(true)}
+                className="rounded-full"
+              >
+                <Layers className="w-4 h-4 mr-1" /> Default Findings
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHistoryPickerOpen(true)}
+                className="rounded-full"
+              >
+                <History className="w-4 h-4 mr-1" /> History Findings
+              </Button>
+            </div>
+
             {findings.map((finding, idx) => (
               <div key={finding.id} className="space-y-4 border rounded-xl p-4 relative">
                 <div className="flex items-center justify-between">
@@ -289,6 +362,20 @@ export default function FindingModal({ open, onClose, appointmentId, onSaved }: 
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Picker Modals */}
+      <DefaultFindingPickerModal
+        open={defaultPickerOpen}
+        onOpenChange={setDefaultPickerOpen}
+        onSelect={handleDefaultFindingSelect}
+      />
+      <HistoryFindingPickerModal
+        open={historyPickerOpen}
+        onOpenChange={setHistoryPickerOpen}
+        onAddFindings={handleHistoryFindingsSelect}
+        isAdding={isAddingFromPicker}
+        phase="INSPECTION"
+      />
     </Dialog>
   );
 }
