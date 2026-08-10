@@ -1,4 +1,3 @@
-// app/service-tracking/page.tsx
 'use client';
 
 import React from 'react';
@@ -33,6 +32,7 @@ import {
 import { SORT_OPTIONS, SortField } from '@/app-utils/service-tracking/constants';
 import ConfirmationDialog from '@/components/shared/confimation-dialog';
 import FutureAppointmentsDrawer from '@/components/service-tracking/FutureAppointmentsDrawer';
+import { format } from 'date-fns';
 
 export default function ServiceTrackingPage() {
   const {
@@ -58,6 +58,7 @@ export default function ServiceTrackingPage() {
     loadFutureAppointments,
     futureDrawerOpen,
     setFutureDrawerOpen,
+    todayDate, // ✅ get today's date
   } = useAppointmentList();
 
   // Enable the queue hook only when on the "Confirmed" tab (today's appointments)
@@ -71,7 +72,6 @@ export default function ServiceTrackingPage() {
         toast.error(res.errorMessage || 'Failed to start inspection.');
       } else {
         toast.success('Inspection started!');
-        // Real-time will refresh the queue automatically; we still refresh the appointment list
         loadAppointments();
       }
     } catch (err: any) {
@@ -196,6 +196,14 @@ export default function ServiceTrackingPage() {
           </div>
         )}
       </div>
+
+      {/* ---------- Display the date being used for confirmed appointments ---------- */}
+      {isToday && (
+        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <CalendarDays className="w-4 h-4" />
+          <span>Today: {format(new Date(todayDate + 'T00:00:00Z'), 'MMMM d, yyyy')}</span>
+        </div>
+      )}
 
       {/* ---------- Content ---------- */}
       {isToday ? (

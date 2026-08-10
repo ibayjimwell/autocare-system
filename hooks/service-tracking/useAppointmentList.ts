@@ -1,4 +1,3 @@
-// hooks/service-tracking/useAppointmentList.ts
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -7,9 +6,10 @@ import { toast } from 'sonner';
 import { useRealtimeAppointment } from '@/connections/useRealtimeAppointment';
 import type { SortField } from '@/app-utils/service-tracking/constants';
 
-function todayString() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+// ✅ Use UTC date to avoid timezone mismatches
+function todayUTCString() {
+  const now = new Date();
+  return now.toISOString().slice(0, 10); // e.g. "2026-08-10"
 }
 
 export function useAppointmentList() {
@@ -27,13 +27,16 @@ export function useAppointmentList() {
   const [pendingAppointment, setPendingAppointment] = useState<any>(null);
   const [futureDrawerOpen, setFutureDrawerOpen] = useState(false);
 
+  // ✅ today's date (UTC) used for API calls
+  const todayDate = todayUTCString();
+
   // Main list load – for statuses other than CONFIRMED, fetch all. For CONFIRMED, fetch today's only.
   const loadAppointments = useCallback(async () => {
     try {
       let params: any = { status: activeFilter };
       if (activeFilter === 'CONFIRMED') {
-        params.from = todayString();
-        params.to = todayString();
+        params.from = todayDate;
+        params.to = todayDate;
       }
       const res = await appointmentsApi.list(params);
       if (res.error) {
@@ -46,13 +49,13 @@ export function useAppointmentList() {
       toast.error(err.message || 'Error loading appointments.');
       setAppointments([]);
     }
-  }, [activeFilter]);
+  }, [activeFilter, todayDate]);
 
   // Load future confirmed appointments (date > today)
   const loadFutureAppointments = useCallback(async () => {
     try {
       const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); // use UTC
       const from = tomorrow.toISOString().slice(0, 10);
       const res = await appointmentsApi.list({ status: 'CONFIRMED', from });
       if (res.error) {
@@ -200,5 +203,7 @@ export function useAppointmentList() {
     loadFutureAppointments,
     futureDrawerOpen,
     setFutureDrawerOpen,
+    // ✅ expose today's date for display
+    todayDate,
   };
 }
