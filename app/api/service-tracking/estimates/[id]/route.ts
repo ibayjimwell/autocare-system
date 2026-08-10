@@ -11,14 +11,27 @@ import { InspectionFindingParts } from "@/database/models/service-tracking/inspe
 import { InspectionTasks } from "@/database/models/service-tracking/inspection-tasks.model";
 import { eq, inArray, and } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
-import { appointmentExists } from "@/utils/service-tracking";
-import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
-import { paymentsTriggers } from "@/triggers/payments";
 
 // --------------------------------------------------------------------------
-// POST /api/service-tracking/estimates
+// PUT /api/service-tracking/estimates/[id] – Refresh estimate with latest data
 // --------------------------------------------------------------------------
-export async function POST(req: NextRequest) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: estimateId } = await params;
+  if (!isValidUUID(estimateId)) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: "fve",
+        errorTitle: "Invalid ID",
+        errorMessage: "Estimate ID must be a valid UUID.",
+      },
+      { status: 422 }
+    );
+  }
+
   let body: any;
   try {
     body = await req.json();
@@ -29,7 +42,6 @@ export async function POST(req: NextRequest) {
         errorType: "fe",
         errorTitle: "Invalid JSON",
         errorMessage: "Request body must be valid JSON.",
-        errorLog: e instanceof Error ? e.message : String(e),
       },
       { status: 400 }
     );
@@ -43,52 +55,60 @@ export async function POST(req: NextRequest) {
         errorType: "fve",
         errorTitle: "Invalid appointment",
         errorMessage: "appointmentId is required and must be a valid UUID.",
-        errorLog: null,
       },
       { status: 422 }
     );
   }
 
-  const exists = await appointmentExists(appointmentId);
-  if (!exists) {
-    return NextResponse.json(
-      {
-        error: true,
-        errorType: "auth",
-        errorTitle: "Appointment not found",
-        errorMessage: "Appointment does not exist.",
-        errorLog: null,
-      },
-      { status: 404 }
-    );
-  }
-
   try {
-    // 1. Fetch appointment services
+    const [existingEstimate] = await Database.select()
+      .from(EstimatedCosts)
+      .where(eq(EstimatedCosts.id, estimateId));
+    if (!existingEstimate) {
+      return NextResponse.json(
+        {
+          error: true,
+          errorType: "auth",
+          errorTitle: "Estimate not found",
+          errorMessage: "Estimate does not exist.",
+        },
+        { status: 404 }
+      );
+    }
+    if (existingEstimate.appointmentId !== appointmentId) {
+      return NextResponse.json(
+        {
+          error: true,
+          errorType: "auth",
+          errorTitle: "Mismatch",
+          errorMessage: "Estimate does not belong to this appointment.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 1. Fetch latest services
     const [appt] = await Database.select()
       .from(Appointments)
       .where(eq(Appointments.id, appointmentId));
     const serviceIds = appt.services || [];
     let serviceSubtotal = 0;
-    let serviceDetails: any[] = [];
     if (serviceIds.length > 0) {
       const svcs = await Database.select()
         .from(Services)
         .where(inArray(Services.id, serviceIds));
-      serviceDetails = svcs;
       serviceSubtotal = svcs.reduce(
         (sum, s) => sum + (parseFloat(s.basePrice) || 0),
         0
       );
     }
 
-    // 2. Fetch inspection findings and their parts
+    // 2. Fetch latest findings with parts
     const findings = await Database.select()
       .from(InspectionFindings)
       .where(eq(InspectionFindings.appointmentId, appointmentId));
     let findingsSubtotal = 0;
     const estimateFindingsData = [];
-
     for (const f of findings) {
       const parts = await Database.select()
         .from(InspectionFindingParts)
@@ -115,7 +135,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Fetch completed inspection tasks (status = 'DONE')
+    // 3. Fetch completed inspection tasks
     const completedTasks = await Database.select()
       .from(InspectionTasks)
       .where(
@@ -125,24 +145,28 @@ export async function POST(req: NextRequest) {
         )
       );
 
-    // 4. Create estimate
-    const [newEstimate] = await Database.insert(EstimatedCosts)
-      .values({
-        appointmentId,
-        status: "PENDING",
-        serviceSubtotal: serviceSubtotal.toString(),
-        findingsSubtotal: findingsSubtotal.toString(),
-        feesTotal: "0",
-        discountTotal: "0",
-        grandTotal: (serviceSubtotal + findingsSubtotal).toString(),
-      })
-      .returning();
+    // 4. Delete existing estimate details (findings, parts, tasks)
+    const existingEstFindings = await Database.select()
+      .from(EstimateFindings)
+      .where(eq(EstimateFindings.estimateId, estimateId));
+    if (existingEstFindings.length > 0) {
+      const estFindingIds = existingEstFindings.map((ef) => ef.id);
+      await Database.delete(EstimateFindingParts).where(
+        inArray(EstimateFindingParts.estimateFindingId, estFindingIds)
+      );
+      await Database.delete(EstimateFindings).where(
+        eq(EstimateFindings.estimateId, estimateId)
+      );
+    }
+    await Database.delete(EstimateTasks).where(
+      eq(EstimateTasks.estimateId, estimateId)
+    );
 
-    // 5. Create estimate findings and parts
+    // 5. Re-insert findings, parts, tasks
     for (const ef of estimateFindingsData) {
       const [newEstFinding] = await Database.insert(EstimateFindings)
         .values({
-          estimateId: newEstimate.id,
+          estimateId: estimateId,
           findingId: ef.findingId,
           description: ef.description,
           included: ef.included,
@@ -161,11 +185,9 @@ export async function POST(req: NextRequest) {
         });
       }
     }
-
-    // 6. Create estimate tasks (completed inspection tasks)
     for (const task of completedTasks) {
       await Database.insert(EstimateTasks).values({
-        estimateId: newEstimate.id,
+        estimateId: estimateId,
         taskId: task.id,
         title: task.title,
         durationMinutes: task.durationMinutes,
@@ -173,28 +195,37 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const info = await getAppointmentInfo(appointmentId);
-    paymentsTriggers.onEstimateGenerated({
-      trackingNumber: info.trackingNumber,
-      customerName: info.customerName,
-    }).catch(console.error);
+    // 6. Update estimate totals (preserve fees/discounts if they exist)
+    const grandTotal = serviceSubtotal + findingsSubtotal +
+      parseFloat(existingEstimate.feesTotal || '0') -
+      parseFloat(existingEstimate.discountTotal || '0');
 
-    return NextResponse.json(
-      {
-        error: false,
-        message: "Estimate generated with services, findings, and completed tasks.",
-        data: newEstimate,
-      },
-      { status: 201 }
-    );
+    await Database.update(EstimatedCosts)
+      .set({
+        serviceSubtotal: serviceSubtotal.toString(),
+        findingsSubtotal: findingsSubtotal.toString(),
+        grandTotal: grandTotal.toString(),
+        updatedAt: new Date(),
+      })
+      .where(eq(EstimatedCosts.id, estimateId));
+
+    const [updatedEstimate] = await Database.select()
+      .from(EstimatedCosts)
+      .where(eq(EstimatedCosts.id, estimateId));
+
+    return NextResponse.json({
+      error: false,
+      message: "Estimate refreshed with latest data.",
+      data: updatedEstimate,
+    });
   } catch (e) {
-    console.error("[POST /api/service-tracking/estimates] Error:", e);
+    console.error("[PUT /api/service-tracking/estimates/[id]] Error:", e);
     return NextResponse.json(
       {
         error: true,
         errorType: "dbe",
         errorTitle: "Database error",
-        errorMessage: "Could not generate estimate.",
+        errorMessage: "Could not refresh estimate.",
         errorLog: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

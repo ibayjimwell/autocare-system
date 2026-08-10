@@ -33,6 +33,7 @@ export * from "./service-tracking/history-finding-parts.model"
 export * from "./payments/estimated-costs.model";
 export * from "./payments/estimate-findings.model";
 export * from "./payments/estimate-finding-parts.model";
+export * from "./payments/estimate-tasks.model";
 export * from "./payments/estimate-fees.model";
 export * from "./payments/estimate-discounts.model";
 

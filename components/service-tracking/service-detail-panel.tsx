@@ -260,12 +260,6 @@ export default function ServiceDetailPanel({
         }
         est = genRes.data;
         setEstimate(est);
-      }
-      const sendRes = await estimatesApi.sendForApproval(est.id);
-      if (sendRes.error) {
-        toast.error(sendRes.errorMessage || "Failed to submit estimate.");
-      } else {
-        toast.success("Estimate submitted to billing.");
         // Record inspection tasks to history
         await recordTasksToHistory('INSPECTION', inspectionTasks);
         onStatusChanged();

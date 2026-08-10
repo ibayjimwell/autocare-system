@@ -176,6 +176,13 @@
       "when": 1786011330167,
       "tag": "0024_greedy_rhodey",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786347290655,
+      "tag": "0025_sloppy_lilandra",
+      "breakpoints": true
     }
   ]
 }

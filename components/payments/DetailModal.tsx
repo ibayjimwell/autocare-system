@@ -1,4 +1,3 @@
-// components/payments/DetailModal.tsx
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -11,7 +10,7 @@ import ServiceCard from '@/components/services/service-card';
 import { FileText, PlusCircle, Percent, Wrench, CheckCircle, Pencil, Plus, Eye, Tag } from 'lucide-react';
 import { useState } from 'react';
 
-// We'll import specific adjustment modals separately, but for brevity they are defined in the same file or can be referenced as children.
+// Import adjustment modals
 import FeeModal from './FeeModal';
 import DiscountModal from './DiscountModal';
 import EditPartModal from './EditPartModal';
@@ -132,6 +131,25 @@ export default function DetailModal({
                     ))}
                   </div>
                   <div className="flex justify-end mt-2 text-sm font-bold">Findings Subtotal: ₱{formatCurrency(selectedItem.findingsSubtotal)}</div>
+                  <Separator className="my-3" />
+                </>
+              )}
+
+              {/* Completed Inspection Tasks (Estimate only) */}
+              {detailType === 'estimate' && selectedItem.tasks && selectedItem.tasks.length > 0 && (
+                <>
+                  <h4 className="font-bold flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> Completed Inspection Tasks</h4>
+                  <div className="space-y-2">
+                    {selectedItem.tasks.map((task: any) => (
+                      <div key={task.id} className="flex items-center gap-2 p-2 bg-muted/20 rounded-lg">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-sm font-medium">{task.title}</span>
+                        {task.durationMinutes && (
+                          <span className="text-xs text-muted-foreground ml-auto">{task.durationMinutes} min</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                   <Separator className="my-3" />
                 </>
               )}

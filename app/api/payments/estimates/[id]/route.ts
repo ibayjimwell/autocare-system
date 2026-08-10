@@ -5,10 +5,11 @@ import { EstimateFindings } from "@/database/models/payments/estimate-findings.m
 import { EstimateFindingParts } from "@/database/models/payments/estimate-finding-parts.model";
 import { EstimateFees } from "@/database/models/payments/estimate-fees.model";
 import { EstimateDiscounts } from "@/database/models/payments/estimate-discounts.model";
+import { EstimateTasks } from "@/database/models/payments/estimate-tasks.model";
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { Customers } from "@/database/models/customers/customers.model";
 import { Vehicles } from "@/database/models/customers/vehicles.model";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 
 export async function GET(
@@ -78,12 +79,16 @@ export async function GET(
     const findings = await Database.select()
       .from(EstimateFindings)
       .where(eq(EstimateFindings.estimateId, id));
+
     const findingIds = findings.map(f => f.id);
     let partsMap: Record<string, any[]> = {};
+
     if (findingIds.length > 0) {
+      // ✅ Use inArray instead of raw SQL to avoid UUID parsing errors
       const parts = await Database.select()
         .from(EstimateFindingParts)
-        .where(sql`${EstimateFindingParts.estimateFindingId} IN (${findingIds.join(',')})`);
+        .where(inArray(EstimateFindingParts.estimateFindingId, findingIds));
+
       for (const p of parts) {
         if (!partsMap[p.estimateFindingId]) partsMap[p.estimateFindingId] = [];
         partsMap[p.estimateFindingId].push(p);
@@ -99,9 +104,15 @@ export async function GET(
     const fees = await Database.select()
       .from(EstimateFees)
       .where(eq(EstimateFees.estimateId, id));
+
     const discounts = await Database.select()
       .from(EstimateDiscounts)
       .where(eq(EstimateDiscounts.estimateId, id));
+
+    // Fetch tasks
+    const tasks = await Database.select()
+      .from(EstimateTasks)
+      .where(eq(EstimateTasks.estimateId, id));
 
     return NextResponse.json({
       error: false,
@@ -111,6 +122,7 @@ export async function GET(
         findings: findingsWithParts,
         fees,
         discounts,
+        tasks,
       },
     }, { status: 200 });
   } catch (e) {

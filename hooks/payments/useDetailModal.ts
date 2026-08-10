@@ -1,4 +1,3 @@
-// hooks/payments/useDetailModal.ts
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -53,8 +52,13 @@ export function useDetailModal(onSuccess?: () => void) {
         if (!estRes.error) {
           const data = estRes.data;
           if (!apptRes.error && apptRes.data) {
-            data.appointment.services = apptRes.data.services || [];
+            data.appointment = {
+              ...data.appointment,
+              services: apptRes.data.services || [],
+            };
           }
+          // Ensure tasks array exists (even if empty)
+          data.tasks = data.tasks || [];
           setSelectedItem(data);
         }
       } catch (err) {

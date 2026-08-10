@@ -11,6 +11,16 @@ export const estimatesApi = {
     return res.json();
   },
 
+  // Refresh existing estimate with latest data
+    refresh: async (estimateId: string, appointmentId: string) => {
+      const res = await fetch(`/api/service-tracking/estimates/${estimateId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId }),
+      });
+      return res.json();
+    },
+
   // SEND estimate for approval (change status to WAITING_FOR_APPROVAL)
   sendForApproval: async (estimateId: string) => {
     const res = await fetch(`/api/billing/estimates/${estimateId}/send-for-approval`, {
