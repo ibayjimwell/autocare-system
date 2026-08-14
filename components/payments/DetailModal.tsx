@@ -8,9 +8,8 @@ import StatusBadge from '@/components/shared/status-badge';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import ServiceCard from '@/components/services/service-card';
 import { FileText, PlusCircle, Percent, Wrench, CheckCircle, Pencil, Plus, Eye, Tag } from 'lucide-react';
-import { useState } from 'react';
 
-// Import adjustment modals
+// Import adjustment modals (they are used as children in the parent)
 import FeeModal from './FeeModal';
 import DiscountModal from './DiscountModal';
 import EditPartModal from './EditPartModal';
@@ -53,6 +52,9 @@ export default function DetailModal({
   submittingAdjustment, onSaveFee, onSaveDiscount, onSavePart,
 }: DetailModalProps) {
   if (!selectedItem && !detailLoading) return null;
+
+  // Determine if editing is allowed (only for PENDING final bills)
+  const isEditable = detailType === 'estimate' || (detailType === 'final-bill' && selectedItem?.status === 'PENDING');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,7 +119,8 @@ export default function DetailModal({
                                 </span>
                                 <div className="flex items-center gap-1">
                                   <span className="text-[11px] font-bold">₱{formatCurrency(part.totalPrice)}</span>
-                                  {selectedItem.status === 'PENDING' && detailType === 'final-bill' && (
+                                  {/* Only show edit button for PENDING final bills */}
+                                  {detailType === 'final-bill' && selectedItem?.status === 'PENDING' && (
                                     <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-primary" onClick={() => onEditPart(part, finding.id, selectedItem.id)}>
                                       <Pencil className="w-3 h-3" />
                                     </Button>
@@ -175,8 +178,11 @@ export default function DetailModal({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-bold flex items-center gap-2"><PlusCircle className="w-4 h-4 text-primary" /> Fees</h4>
-                  {detailType === 'estimate' && (
-                    <Button size="sm" variant="outline" onClick={() => setFeeModalOpen(true)} className="h-8 text-xs font-bold"><Plus className="w-3 h-3 mr-1" /> Add Fee</Button>
+                  {/* Show Add Fee button for estimates OR for PENDING final bills */}
+                  {(detailType === 'estimate' || (detailType === 'final-bill' && selectedItem?.status === 'PENDING')) && (
+                    <Button size="sm" variant="outline" onClick={() => setFeeModalOpen(true)} className="h-8 text-xs font-bold">
+                      <Plus className="w-3 h-3 mr-1" /> Add Fee
+                    </Button>
                   )}
                 </div>
                 {selectedItem.fees && selectedItem.fees.length > 0 ? (
@@ -197,8 +203,11 @@ export default function DetailModal({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-bold flex items-center gap-2"><Percent className="w-4 h-4 text-primary" /> Discounts</h4>
-                  {detailType === 'estimate' && (
-                    <Button size="sm" variant="outline" onClick={() => setDiscountModalOpen(true)} className="h-8 text-xs font-bold"><Plus className="w-3 h-3 mr-1" /> Add Discount</Button>
+                  {/* Show Add Discount button for estimates OR for PENDING final bills */}
+                  {(detailType === 'estimate' || (detailType === 'final-bill' && selectedItem?.status === 'PENDING')) && (
+                    <Button size="sm" variant="outline" onClick={() => setDiscountModalOpen(true)} className="h-8 text-xs font-bold">
+                      <Plus className="w-3 h-3 mr-1" /> Add Discount
+                    </Button>
                   )}
                 </div>
                 {selectedItem.discounts && selectedItem.discounts.length > 0 ? (

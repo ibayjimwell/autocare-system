@@ -1,4 +1,3 @@
-// hooks/payments/useFinalBillActions.ts
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -10,6 +9,7 @@ export function useFinalBillActions(onSuccess: () => void) {
   const [selectedBillForPayment, setSelectedBillForPayment] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const handleOpenCashier = useCallback((bill: any) => {
     setSelectedBillForPayment(bill);
@@ -43,6 +43,23 @@ export function useFinalBillActions(onSuccess: () => void) {
     }
   }, [deleteTargetId, onSuccess]);
 
+  const updateStatus = useCallback(async (billId: string, newStatus: string) => {
+    setActionLoading(true);
+    try {
+      const res = await finalBillsApi.updateStatus(billId, newStatus);
+      if (res.error) {
+        toast.error(res.errorMessage || `Failed to update status to ${newStatus}.`);
+      } else {
+        toast.success(`Bill status updated to ${newStatus}.`);
+        onSuccess();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error updating status.');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [onSuccess]);
+
   return {
     cashierModalOpen,
     setCashierModalOpen,
@@ -52,5 +69,7 @@ export function useFinalBillActions(onSuccess: () => void) {
     setDeleteDialogOpen,
     confirmDelete,
     handleDelete,
+    updateStatus,
+    actionLoading,
   };
 }

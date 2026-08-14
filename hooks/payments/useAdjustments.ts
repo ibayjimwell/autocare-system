@@ -31,32 +31,41 @@ export function useAdjustments({ selectedItem, detailType, refreshDetail, reload
   const [editPartForm, setEditPartForm] = useState({ quantity: 1, priceAtTime: 0 });
 
   const handleAddFee = useCallback(async () => {
-    if (!feeForm.title.trim() || !feeForm.amount || parseFloat(feeForm.amount) <= 0) {
-      toast.error('Please enter a title and a valid amount.');
-      return;
-    }
-    setSubmittingAdjustment(true);
-    try {
-      const res = await estimateAdjustmentsApi.addFee(selectedItem.id, {
-        title: feeForm.title.trim(),
-        amount: parseFloat(feeForm.amount),
-        findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
-      });
-      if (res.error) {
-        toast.error(res.errorMessage || 'Failed to add fee.');
-      } else {
-        toast.success('Fee added.');
-        setFeeModalOpen(false);
-        setFeeForm({ title: '', amount: '', findingId: 'none' });
-        await refreshDetail();
-        reloadList();
+      if (!feeForm.title.trim() || !feeForm.amount || parseFloat(feeForm.amount) <= 0) {
+        toast.error('Please enter a title and a valid amount.');
+        return;
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Error adding fee.');
-    } finally {
-      setSubmittingAdjustment(false);
-    }
-  }, [feeForm, selectedItem, refreshDetail, reloadList]);
+      setSubmittingAdjustment(true);
+      try {
+        let res;
+        if (detailType === 'estimate') {
+          res = await estimateAdjustmentsApi.addFee(selectedItem.id, {
+            title: feeForm.title.trim(),
+            amount: parseFloat(feeForm.amount),
+            findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
+          });
+        } else {
+          res = await finalBillsApi.addFee(selectedItem.id, {
+            title: feeForm.title.trim(),
+            amount: parseFloat(feeForm.amount),
+            findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
+          });
+        }
+        if (res.error) {
+          toast.error(res.errorMessage || 'Failed to add fee.');
+        } else {
+          toast.success('Fee added.');
+          setFeeModalOpen(false);
+          setFeeForm({ title: '', amount: '', findingId: 'none' });
+          await refreshDetail();
+          reloadList();
+        }
+      } catch (err: any) {
+        toast.error(err.message || 'Error adding fee.');
+      } finally {
+        setSubmittingAdjustment(false);
+      }
+    }, [feeForm, selectedItem, detailType, refreshDetail, reloadList]);
 
   const handleAddDiscount = useCallback(async () => {
     if (!discountForm.title.trim() || !discountForm.value || parseFloat(discountForm.value) <= 0) {

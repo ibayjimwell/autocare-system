@@ -62,6 +62,10 @@ export default function PaymentsPage() {
   // QR Scanner
   const [qrScannerOpen, setQrScannerOpen] = useState(false);
 
+  const handleHold = (id: string) => billActions.updateStatus(id, 'HOLD');
+  const handleMakeOfficial = (id: string) => billActions.updateStatus(id, 'OFFICIAL');
+  const handleBackToPending = (id: string) => billActions.updateStatus(id, 'PENDING');
+
   const handleTransactionSave = (form: any) => {
     setSaving(true);
     setTimeout(() => {
@@ -144,6 +148,10 @@ export default function PaymentsPage() {
             onPay={billActions.handleOpenCashier}
             onOpenDetail={(item) => detail.openDetail(item, 'final-bill')}
             onDelete={billActions.confirmDelete}
+            onHold={handleHold}
+            onMakeOfficial={handleMakeOfficial}
+            onBackToPending={handleBackToPending}
+            actionLoading={billActions.actionLoading}
           />
         )}
       </div>
