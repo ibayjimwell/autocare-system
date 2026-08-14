@@ -108,6 +108,19 @@ export async function POST(req: NextRequest) {
     }, { status: 401 });
   }
 
+  if (!customer.isPhoneVerified) {
+    // Don't generate token; send back a special response
+    return NextResponse.json({
+      error: false,
+      message: 'Phone verification required.',
+      data: {
+        requiresVerification: true,
+        customerId: customer.id,
+        phone: customer.phone,
+      },
+    }, { status: 200 });
+  }
+
   // 5. Generate JWT
   const token = await signJWT({ id: customer.id, email: customer.email }, '7d');
 

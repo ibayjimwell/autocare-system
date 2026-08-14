@@ -183,6 +183,13 @@
       "when": 1786347290655,
       "tag": "0025_sloppy_lilandra",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786693923393,
+      "tag": "0026_conscious_rogue",
+      "breakpoints": true
     }
   ]
 }

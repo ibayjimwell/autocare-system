@@ -7,6 +7,8 @@ export * from "./staffs/staff-access.model";
 // Customers
 export * from "./customers/customers.model";
 export * from "./customers/vehicles.model";
+export * from "./customers/password-reset-otps.model"
+export * from "./customers/phone-verification-otps.model"
 
 // Services
 export * from "./services/services.model";

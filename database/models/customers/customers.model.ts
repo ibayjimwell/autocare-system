@@ -8,7 +8,8 @@ export const Customers = pgTable('customers', {
   phone: varchar('phone', { length: 20 }).unique().notNull(),
   password: varchar('password', { length: 255 }).notNull(),
   deactivated: boolean('deactivated').default(false).notNull(),
-  tempPassword: boolean('temp_password').default(true).notNull(),   
+  tempPassword: boolean('temp_password').default(true).notNull(),
+  isPhoneVerified: boolean('is_phone_verified').default(false).notNull(),   
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
