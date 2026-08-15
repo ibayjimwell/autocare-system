@@ -1,12 +1,51 @@
-// hooks/payments/usePaymentsData.ts
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { estimatesApi } from '@/lib/payments/estimates';
 import { finalBillsApi } from '@/lib/payments/final-bills';
+import { useRealtimeTable } from '@/connections/useRealtimeTable';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
-export interface Estimate { /* same as before */ }
-export interface FinalBill { /* same as before */ }
+export interface Estimate {
+  id: string;
+  appointmentId: string;
+  status: string;
+  serviceSubtotal: string;
+  findingsSubtotal: string;
+  feesTotal: string;
+  discountTotal: string;
+  grandTotal: string;
+  reason?: string;
+  createdAt: string;
+  updatedAt: string;
+  appointment?: any;
+  findings?: any[];
+  fees?: any[];
+  discounts?: any[];
+  tasks?: any[];
+}
+
+export interface FinalBill {
+  id: string;
+  appointmentId: string;
+  estimateId?: string;
+  status: string;
+  serviceSubtotal: string;
+  findingsSubtotal: string;
+  workTasksSubtotal: string;
+  feesTotal: string;
+  discountTotal: string;
+  grandTotal: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  appointment?: any;
+  estimate?: any;
+  findings?: any[];
+  fees?: any[];
+  discounts?: any[];
+  workTasks?: any[];
+}
 
 export function usePaymentsData(statusFilter: string) {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
@@ -54,9 +93,34 @@ export function usePaymentsData(statusFilter: string) {
     }
   }, [statusFilter]);
 
+  // Initial load
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // ---- Real‑time subscriptions ----
+
+  // 1. Estimates table
+  useRealtimeTable(
+    'estimated_costs',
+    undefined, // no filter – we'll reload all (the status filter is client‑side)
+    useCallback((payload: RealtimePostgresChangesPayload<any>) => {
+      console.log('📊 Estimate change detected, reloading payments data...');
+      loadData();
+    }, [loadData])
+  );
+
+  // 2. Final bills table
+  useRealtimeTable(
+    'final_bills',
+    undefined,
+    useCallback((payload: RealtimePostgresChangesPayload<any>) => {
+      console.log('🧾 Final bill change detected, reloading payments data...');
+      loadData();
+    }, [loadData])
+  );
+
+  // ---- End real‑time ----
 
   return { estimates, finalBills, loading, error, reload: loadData };
 }

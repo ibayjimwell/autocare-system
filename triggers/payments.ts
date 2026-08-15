@@ -4,6 +4,7 @@ interface PaymentPayload {
   trackingNumber: string;
   customerName?: string;
   reason?: string;
+  newStatus?: string;
 }
 
 export const paymentsTriggers = {
@@ -48,7 +49,44 @@ export const paymentsTriggers = {
     await triggerPush('payments', 'final-bill-generated', title, body, '/payments');
   },
 
+  async onFinalBillStatusChanged(payload: PaymentPayload) {
+    const statusMap: Record<string, { title: string; body: string }> = {
+      HOLD: {
+        title: '⏸️ Final Bill on Hold',
+        body: payload.customerName
+          ? `Final bill for #${payload.trackingNumber} (${payload.customerName}) has been put on hold.`
+          : `Final bill for #${payload.trackingNumber} has been put on hold.`,
+      },
+      OFFICIAL: {
+        title: '📋 Final Bill Made Official',
+        body: payload.customerName
+          ? `Final bill for #${payload.trackingNumber} (${payload.customerName}) is now official.`
+          : `Final bill for #${payload.trackingNumber} is now official.`,
+      },
+      PAID: {
+        title: '💰 Final Bill Paid',
+        body: payload.customerName
+          ? `Payment for #${payload.trackingNumber} (${payload.customerName}) has been completed.`
+          : `Payment for #${payload.trackingNumber} has been completed.`,
+      },
+      PENDING: {
+        title: '🔄 Final Bill Back to Pending',
+        body: payload.customerName
+          ? `Final bill for #${payload.trackingNumber} (${payload.customerName}) is back to pending.`
+          : `Final bill for #${payload.trackingNumber} is back to pending.`,
+      },
+    };
+
+    const newStatus = payload.newStatus || 'PENDING';
+    const config = statusMap[newStatus];
+    if (!config) return;
+
+    await triggerPush('payments', `final-bill-${newStatus.toLowerCase()}`, config.title, config.body, '/payments');
+  },
+
   async onPaymentCompleted(payload: PaymentPayload) {
+    // Already covered by onFinalBillStatusChanged(PAID)
+    // Keep for backward compatibility
     const title = '💰 Payment Received';
     const body = payload.customerName
       ? `Payment for #${payload.trackingNumber} (${payload.customerName}) has been completed.`

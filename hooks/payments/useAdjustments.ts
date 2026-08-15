@@ -1,4 +1,3 @@
-// hooks/payments/useAdjustments.ts
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -14,16 +13,13 @@ interface AdjustmentProps {
 }
 
 export function useAdjustments({ selectedItem, detailType, refreshDetail, reloadList }: AdjustmentProps) {
-  // Fee
   const [feeModalOpen, setFeeModalOpen] = useState(false);
   const [feeForm, setFeeForm] = useState({ title: '', amount: '', findingId: 'none' });
   const [submittingAdjustment, setSubmittingAdjustment] = useState(false);
 
-  // Discount
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
   const [discountForm, setDiscountForm] = useState({ title: '', type: 'fixed', value: '' });
 
-  // Part edit
   const [editPartModalOpen, setEditPartModalOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<any>(null);
   const [editingFindingId, setEditingFindingId] = useState<string | null>(null);
@@ -31,41 +27,41 @@ export function useAdjustments({ selectedItem, detailType, refreshDetail, reload
   const [editPartForm, setEditPartForm] = useState({ quantity: 1, priceAtTime: 0 });
 
   const handleAddFee = useCallback(async () => {
-      if (!feeForm.title.trim() || !feeForm.amount || parseFloat(feeForm.amount) <= 0) {
-        toast.error('Please enter a title and a valid amount.');
-        return;
+    if (!feeForm.title.trim() || !feeForm.amount || parseFloat(feeForm.amount) <= 0) {
+      toast.error('Please enter a title and a valid amount.');
+      return;
+    }
+    setSubmittingAdjustment(true);
+    try {
+      let res;
+      if (detailType === 'estimate') {
+        res = await estimateAdjustmentsApi.addFee(selectedItem.id, {
+          title: feeForm.title.trim(),
+          amount: parseFloat(feeForm.amount),
+          findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
+        });
+      } else {
+        res = await finalBillsApi.addFee(selectedItem.id, {
+          title: feeForm.title.trim(),
+          amount: parseFloat(feeForm.amount),
+          findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
+        });
       }
-      setSubmittingAdjustment(true);
-      try {
-        let res;
-        if (detailType === 'estimate') {
-          res = await estimateAdjustmentsApi.addFee(selectedItem.id, {
-            title: feeForm.title.trim(),
-            amount: parseFloat(feeForm.amount),
-            findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
-          });
-        } else {
-          res = await finalBillsApi.addFee(selectedItem.id, {
-            title: feeForm.title.trim(),
-            amount: parseFloat(feeForm.amount),
-            findingId: feeForm.findingId === 'none' ? undefined : feeForm.findingId,
-          });
-        }
-        if (res.error) {
-          toast.error(res.errorMessage || 'Failed to add fee.');
-        } else {
-          toast.success('Fee added.');
-          setFeeModalOpen(false);
-          setFeeForm({ title: '', amount: '', findingId: 'none' });
-          await refreshDetail();
-          reloadList();
-        }
-      } catch (err: any) {
-        toast.error(err.message || 'Error adding fee.');
-      } finally {
-        setSubmittingAdjustment(false);
+      if (res.error) {
+        toast.error(res.errorMessage || 'Failed to add fee.');
+      } else {
+        toast.success('Fee added.');
+        setFeeModalOpen(false);
+        setFeeForm({ title: '', amount: '', findingId: 'none' });
+        await refreshDetail();
+        reloadList();
       }
-    }, [feeForm, selectedItem, detailType, refreshDetail, reloadList]);
+    } catch (err: any) {
+      toast.error(err.message || 'Error adding fee.');
+    } finally {
+      setSubmittingAdjustment(false);
+    }
+  }, [feeForm, selectedItem, detailType, refreshDetail, reloadList]);
 
   const handleAddDiscount = useCallback(async () => {
     if (!discountForm.title.trim() || !discountForm.value || parseFloat(discountForm.value) <= 0) {

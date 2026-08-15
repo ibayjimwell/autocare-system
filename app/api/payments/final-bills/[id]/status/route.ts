@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { FinalBill } from '@/database/models/payments/final-bill.model';
+import { Appointments } from '@/database/models/appointments/appointments.model';
+import { Customers } from '@/database/models/customers/customers.model';
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
+import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
+import { paymentsTriggers } from '@/triggers/payments';
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['HOLD', 'OFFICIAL'],
@@ -83,12 +87,26 @@ export async function PATCH(
       );
     }
 
-    // Special case: if moving to PAID, we could trigger payment completion logic, but we keep it simple.
+    // Update status
     await Database.update(FinalBill)
       .set({ status: upperStatus, updatedAt: new Date() })
       .where(eq(FinalBill.id, id));
 
-    // If status becomes OFFICIAL, we might want to send a notification, but not required now.
+    // ---- Trigger push notification ----
+    const info = await getAppointmentInfo(bill.appointmentId);
+    paymentsTriggers.onFinalBillStatusChanged({
+      trackingNumber: info.trackingNumber,
+      customerName: info.customerName,
+      newStatus: upperStatus,
+    }).catch(console.error);
+
+    // If status is PAID, also trigger payment completion (if needed)
+    if (upperStatus === 'PAID') {
+      paymentsTriggers.onPaymentCompleted({
+        trackingNumber: info.trackingNumber,
+        customerName: info.customerName,
+      }).catch(console.error);
+    }
 
     return NextResponse.json(
       {
