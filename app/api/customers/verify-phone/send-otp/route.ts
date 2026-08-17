@@ -5,6 +5,7 @@ import { PhoneVerificationOtps } from '@/database/models/customers/phone-verific
 import { eq } from 'drizzle-orm';
 import { generateOTP } from '@/utils/otp';
 import { sendSMS } from '@/utils/sms';
+import { isValidUUID } from '@/utils/shared';
 
 export async function POST(req: NextRequest) {
   let body;
@@ -15,23 +16,20 @@ export async function POST(req: NextRequest) {
   }
 
   const { customerId, newPhone } = body;
-  if (!customerId) {
+
+  // ✅ Validate customerId is present and valid UUID
+  if (!customerId || !isValidUUID(customerId)) {
     return NextResponse.json(
-      { error: true, errorMessage: 'Customer ID is required.' },
+      { error: true, errorMessage: 'Valid customer ID is required.' },
       { status: 422 }
     );
   }
 
-  // Determine the phone number to send OTP to
-  let phoneToUse = newPhone;
-  let customer;
-
   // Fetch customer
-  const [found] = await Database.select()
+  const [customer] = await Database.select()
     .from(Customers)
     .where(eq(Customers.id, customerId))
     .limit(1);
-  customer = found;
 
   if (!customer) {
     return NextResponse.json(
@@ -40,7 +38,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // If no newPhone provided, use existing phone
+  // Determine the phone number to send OTP to
+  let phoneToUse = newPhone;
   if (!phoneToUse) {
     phoneToUse = customer.phone;
   } else {
@@ -61,10 +60,12 @@ export async function POST(req: NextRequest) {
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  // Store OTP (invalidate previous unused OTPs for this customer? We'll just insert new one and mark old ones as used if needed)
+  // Store OTP (delete any existing unused OTPs for this customer)
+  await Database.delete(PhoneVerificationOtps)
+    .where(eq(PhoneVerificationOtps.customerId, customerId));
+
   await Database.insert(PhoneVerificationOtps).values({
     customerId: customer.id,
-    phone: phoneToUse,
     otp,
     expiresAt,
     used: false,
