@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { customerId, otp, newPhone } = body;
+  
   if (!customerId || !isValidUUID(customerId)) {
     return NextResponse.json(
       { error: true, errorMessage: 'Valid customer ID is required.' },
@@ -31,7 +32,8 @@ export async function POST(req: NextRequest) {
   // Fetch customer
   const [customer] = await Database.select()
     .from(Customers)
-    .where(eq(Customers.id, customerId));
+    .where(eq(Customers.id, customerId))
+    .limit(1);
 
   if (!customer) {
     return NextResponse.json(
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
   // Remove password
   const { password, ...customerWithoutPassword } = updatedCustomer;
 
-  // Generate a new token (since the user is now verified)
+  // Generate a new token
   const token = await signJWT({ id: customerWithoutPassword.id, email: customerWithoutPassword.email }, '7d');
 
   return NextResponse.json({

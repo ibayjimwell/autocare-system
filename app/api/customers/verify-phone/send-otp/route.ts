@@ -60,12 +60,14 @@ export async function POST(req: NextRequest) {
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  // Store OTP (delete any existing unused OTPs for this customer)
+  // Delete any existing unused OTPs for this customer
   await Database.delete(PhoneVerificationOtps)
     .where(eq(PhoneVerificationOtps.customerId, customerId));
 
+  // ✅ Insert OTP with phone value (explicitly set all fields)
   await Database.insert(PhoneVerificationOtps).values({
     customerId: customer.id,
+    phone: phoneToUse, // ✅ Include phone explicitly
     otp,
     expiresAt,
     used: false,
