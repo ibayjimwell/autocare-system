@@ -22,4 +22,4 @@ export const MODULE_LABELS: Record<string, string> = {
 
 export const PREDEFINED_ROLES = ['Admin', 'Mechanic', 'Assistant', 'Cashier'];
 
-export type SortField = 'fullname' | 'username' | 'role' | 'status' | 'accessCount' | 'currentModule';
+export type SortField = 'fullname' | 'username' | 'role' | 'status' | 'accessCount' | 'currentModule' | 'createdAt';

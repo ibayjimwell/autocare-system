@@ -19,6 +19,7 @@ import {
 import {
   Plus, UserCog, Pencil, Search, UserCircle2, ChevronLeft, ChevronRight,
   Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LogOut, Key, ShieldCheck,
+  UserPlus, ArrowUpFromLine,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStaffData } from '@/hooks/staffs/useStaffData';
@@ -33,6 +34,14 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import { toast } from 'sonner';
 import { staffApi } from '@/lib/staffs/staffs';
 
+// Status tabs
+const STATUS_TABS = [
+  { value: 'ALL', label: 'All' },
+  { value: 'online', label: 'Online' },
+  { value: 'offline', label: 'Offline' },
+  { value: 'offboarded', label: 'Offboarded' },
+];
+
 export default function StaffList() {
   const { data: session } = useSession();
   const currentStaffId = session?.user?.id;
@@ -42,9 +51,9 @@ export default function StaffList() {
   // Filter & Sort state
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [sortField, setSortField] = useState<SortField>('fullname');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [statusTab, setStatusTab] = useState<string>('ALL'); // NEW: tab for status
+  const [sortField, setSortField] = useState<SortField>('createdAt'); // Default: newest first
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc'); // Descending = newest first
   const [filterOpen, setFilterOpen] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,12 +87,28 @@ export default function StaffList() {
   useEffect(() => {
     if (tempPassword) {
       setTempDialogOpen(true);
-      // Ensure we have the correct staff ID
       setSelectedStaffId(tempStaffId);
     }
   }, [tempPassword, tempStaffId]);
 
-  // Outboard handler
+  // ----- Onboard handler (for offboarded staff) -----
+  const handleOnboard = async (staff: any) => {
+    if (!window.confirm(`Are you sure you want to onboard ${staff.fullname}?`)) return;
+    try {
+      const res = await staffApi.update(staff.id, { inBoarding: true });
+      if (res.error) {
+        toast.error(res.errorMessage || 'Failed to onboard staff.');
+      } else {
+        toast.success(`${staff.fullname} has been onboarded.`);
+        await loadStaff();
+        triggerHighlight(staff.id);
+      }
+    } catch (err) {
+      toast.error('Failed to onboard staff.');
+    }
+  };
+
+  // ----- Outboard handler (for onboarded staff) -----
   const handleOutboard = async (staff: any) => {
     if (!window.confirm(`Are you sure you want to outboard ${staff.fullname}?`)) return;
     try {
@@ -108,7 +133,6 @@ export default function StaffList() {
   const handleTempPasswordComplete = () => {
     setTempDialogOpen(false);
     setTempPassword(null);
-    // Use the staff ID we already stored in state
     if (tempStaffId) {
       setSelectedStaffId(tempStaffId);
       setAccessModalOpen(true);
@@ -122,6 +146,7 @@ export default function StaffList() {
     let data = [...staffList];
     if (currentStaffId) data = data.filter(s => s.id !== currentStaffId);
 
+    // Search
     if (search.trim()) {
       const term = search.toLowerCase();
       data = data.filter(s =>
@@ -130,11 +155,16 @@ export default function StaffList() {
         s.role?.toLowerCase().includes(term)
       );
     }
-    if (roleFilter !== 'ALL') data = data.filter(s => s.role === roleFilter);
-    if (statusFilter === 'online') data = data.filter(s => s.isOnline === true);
-    else if (statusFilter === 'offline') data = data.filter(s => s.isOnline !== true && s.inBoarding !== false);
-    else if (statusFilter === 'offboarded') data = data.filter(s => s.inBoarding === false);
 
+    // Role filter
+    if (roleFilter !== 'ALL') data = data.filter(s => s.role === roleFilter);
+
+    // Status tab filter
+    if (statusTab === 'online') data = data.filter(s => s.isOnline === true && s.inBoarding !== false);
+    else if (statusTab === 'offline') data = data.filter(s => s.isOnline !== true && s.inBoarding !== false);
+    else if (statusTab === 'offboarded') data = data.filter(s => s.inBoarding === false);
+
+    // Sorting
     data.sort((a, b) => {
       let valA: any, valB: any;
       switch (sortField) {
@@ -144,6 +174,7 @@ export default function StaffList() {
         case 'status': valA = a.inBoarding === false ? 2 : (a.isOnline ? 0 : 1); valB = b.inBoarding === false ? 2 : (b.isOnline ? 0 : 1); break;
         case 'accessCount': valA = a.accessCount || 0; valB = b.accessCount || 0; break;
         case 'currentModule': valA = (a.currentModule || '').toLowerCase(); valB = (b.currentModule || '').toLowerCase(); break;
+        case 'createdAt': valA = new Date(a.createdAt).getTime(); valB = new Date(b.createdAt).getTime(); break;
         default: return 0;
       }
       if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
@@ -151,21 +182,23 @@ export default function StaffList() {
       return 0;
     });
     return data;
-  }, [staffList, search, roleFilter, statusFilter, sortField, sortDirection, currentStaffId]);
+  }, [staffList, search, roleFilter, statusTab, sortField, sortDirection, currentStaffId]);
 
   const totalPages = Math.ceil(filteredAndSortedStaff.length / itemsPerPage);
   const paginatedStaff = filteredAndSortedStaff.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  useEffect(() => { setCurrentPage(1); }, [search, roleFilter, statusFilter, sortField, sortDirection]);
+  useEffect(() => { setCurrentPage(1); }, [search, roleFilter, statusTab, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDirection('asc'); }
   };
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="w-4 h-4 text-slate-400" />;
     return sortDirection === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />;
   };
-  const resetFilters = () => { setRoleFilter('ALL'); setStatusFilter('ALL'); };
+
+  const resetFilters = () => { setRoleFilter('ALL'); setStatusTab('ALL'); };
 
   if (loading && staffList.length === 0) return <LoadingSpinner />;
 
@@ -182,12 +215,45 @@ export default function StaffList() {
         </Button>
       </div>
 
+      {/* Status Tabs */}
+      <div className="flex items-center gap-1 p-1 bg-slate-100/80 rounded-2xl mb-6 w-fit border border-slate-200/50">
+        {STATUS_TABS.map((tab) => {
+          const isActive = statusTab === tab.value;
+          const count = tab.value === 'ALL'
+            ? (currentStaffId ? staffList.filter(s => s.id !== currentStaffId).length : staffList.length)
+            : (() => {
+                if (tab.value === 'online') return staffList.filter(s => s.isOnline === true && s.inBoarding !== false).length;
+                if (tab.value === 'offline') return staffList.filter(s => s.isOnline !== true && s.inBoarding !== false).length;
+                if (tab.value === 'offboarded') return staffList.filter(s => s.inBoarding === false).length;
+                return 0;
+              })();
+          return (
+            <button
+              key={tab.value}
+              onClick={() => setStatusTab(tab.value)}
+              className={cn(
+                'px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap',
+                isActive
+                  ? 'bg-white text-primary shadow-sm ring-1 ring-black/5 scale-100'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 scale-95'
+              )}
+            >
+              {tab.label} <span className="text-xs font-normal text-slate-400">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Search & Filter Bar */}
       <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
         <div className="relative w-full md:max-w-md group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-          <Input placeholder="Search by name, role, or username..." className="pl-10 rounded-2xl border-slate-200 focus:ring-primary/20 transition-all bg-white"
-            value={search} onChange={e => setSearch(e.target.value)} />
+          <Input
+            placeholder="Search by name, role, or username..."
+            className="pl-10 rounded-2xl border-slate-200 focus:ring-primary/20 transition-all bg-white"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
@@ -198,7 +264,7 @@ export default function StaffList() {
             <PopoverTrigger asChild>
               <Button variant="outline" className="border-slate-200">
                 <Filter className="w-4 h-4 mr-2" /> Filters
-                {(roleFilter !== 'ALL' || statusFilter !== 'ALL') && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
+                {(roleFilter !== 'ALL' || statusTab !== 'ALL') && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-60 p-4 rounded-2xl shadow-lg border-slate-200">
@@ -219,18 +285,6 @@ export default function StaffList() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-500">Status</Label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-9 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All</SelectItem>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                      <SelectItem value="offboarded">Offboarded</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setFilterOpen(false)}>Apply Filters</Button>
               </div>
             </PopoverContent>
@@ -241,7 +295,7 @@ export default function StaffList() {
       {/* Empty State */}
       {filteredAndSortedStaff.length === 0 ? (
         <EmptyState icon={UserCog} title="No staff members found"
-          description={search || roleFilter !== 'ALL' || statusFilter !== 'ALL' ? 'Try adjusting your search or filters.' : 'Your team directory is currently empty.'} />
+          description={search || roleFilter !== 'ALL' || statusTab !== 'ALL' ? 'Try adjusting your search or filters.' : 'Your team directory is currently empty.'} />
       ) : (
         <div className="space-y-6">
           {/* Mobile Cards */}
@@ -277,7 +331,15 @@ export default function StaffList() {
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(staff)} className="h-9 w-9 rounded-xl text-slate-400"><Pencil className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => handleEditAccess(staff.id)} className="h-9 w-9 rounded-xl text-slate-400"><Key className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl text-yellow-500"><LogOut className="w-4 h-4" /></Button>
+                      {staff.inBoarding === false ? (
+                        <Button variant="ghost" size="icon" onClick={() => handleOnboard(staff)} className="h-9 w-9 rounded-xl text-emerald-500 hover:bg-emerald-50">
+                          <ArrowUpFromLine className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl text-yellow-500 hover:bg-yellow-50">
+                          <LogOut className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -290,11 +352,21 @@ export default function StaffList() {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow className="border-slate-100 hover:bg-transparent">
-                  <TableHead className="pl-8 text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('fullname')}><div className="flex items-center gap-2">Team Member <SortIcon field="fullname" /></div></TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('username')}><div className="flex items-center gap-2">Username <SortIcon field="username" /></div></TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('role')}><div className="flex items-center gap-2">Role & Access <SortIcon field="role" /></div></TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('status')}><div className="flex items-center gap-2">Status <SortIcon field="status" /></div></TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('currentModule')}><div className="flex items-center gap-2">Current Module <SortIcon field="currentModule" /></div></TableHead>
+                  <TableHead className="pl-8 text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('fullname')}>
+                    <div className="flex items-center gap-2">Team Member <SortIcon field="fullname" /></div>
+                  </TableHead>
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('username')}>
+                    <div className="flex items-center gap-2">Username <SortIcon field="username" /></div>
+                  </TableHead>
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('role')}>
+                    <div className="flex items-center gap-2">Role & Access <SortIcon field="role" /></div>
+                  </TableHead>
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('status')}>
+                    <div className="flex items-center gap-2">Status <SortIcon field="status" /></div>
+                  </TableHead>
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('currentModule')}>
+                    <div className="flex items-center gap-2">Current Module <SortIcon field="currentModule" /></div>
+                  </TableHead>
                   <TableHead className="pr-8 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -338,9 +410,21 @@ export default function StaffList() {
                     </TableCell>
                     <TableCell className="pr-8">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(staff)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all"><Pencil className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditAccess(staff.id)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all"><ShieldCheck className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl hover:bg-yellow-50 text-yellow-500 transition-all"><LogOut className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(staff)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditAccess(staff.id)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all">
+                          <ShieldCheck className="w-4 h-4" />
+                        </Button>
+                        {staff.inBoarding === false ? (
+                          <Button variant="ghost" size="icon" onClick={() => handleOnboard(staff)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 text-emerald-500 transition-all" title="Onboard">
+                            <ArrowUpFromLine className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl hover:bg-yellow-50 text-yellow-500 transition-all" title="Outboard">
+                            <LogOut className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -353,7 +437,9 @@ export default function StaffList() {
           <div className="flex items-center justify-between px-2">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Page {currentPage} of {totalPages || 1}</p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="h-8 rounded-xl border-slate-200 text-slate-600 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></Button>
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="h-8 rounded-xl border-slate-200 text-slate-600 disabled:opacity-30">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
               <div className="flex gap-1">
                 {Array.from({ length: Math.min(totalPages, 7) }).map((_, i) => {
                   let pageNum = i + 1;
@@ -367,10 +453,20 @@ export default function StaffList() {
                     else pageNum = totalPages - 2;
                     if (i > 0 && pageNum === (i === 1 ? 1 : i === 2 ? Math.max(2, currentPage - 1) : 0)) pageNum = Math.min(totalPages, pageNum + 1);
                   }
-                  return <button key={i} onClick={() => setCurrentPage(pageNum)} className={cn('w-8 h-8 rounded-xl text-[10px] font-black transition-all', currentPage === pageNum ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-100')}>{pageNum}</button>;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={cn('w-8 h-8 rounded-xl text-[10px] font-black transition-all', currentPage === pageNum ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-100')}
+                    >
+                      {pageNum}
+                    </button>
+                  );
                 })}
               </div>
-              <Button variant="outline" size="sm" disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="h-8 rounded-xl border-slate-200 text-slate-600 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></Button>
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="h-8 rounded-xl border-slate-200 text-slate-600 disabled:opacity-30">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </div>

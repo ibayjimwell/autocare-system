@@ -66,7 +66,7 @@ export default function TempPasswordDialog({
           <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
           <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
             Account created successfully. Provide these credentials to the staff member.
-            A password reset will be forced upon first login for security compliance.
+            A password reset will be forced upon first login.
           </p>
         </div>
 
