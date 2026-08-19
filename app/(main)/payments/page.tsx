@@ -1,10 +1,9 @@
-// app/payments/page.tsx (full updated page)
 'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus, QrCode } from 'lucide-react';
+import { QrCode } from 'lucide-react';
 import PageContainer from '@/components/shared/page-container';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 import ErrorHandler from '@/components/shared/error-handler';
@@ -22,7 +21,6 @@ import FilterBar from '@/components/payments/FilterBar';
 import PaymentsTabs from '@/components/payments/PaymentsTabs';
 import EstimatesList from '@/components/payments/EstimatesList';
 import FinalBillsList from '@/components/payments/FinalBillsList';
-import TransactionModal from '@/components/payments/TransactionModal';
 import DetailModal from '@/components/payments/DetailModal';
 import FeeModal from '@/components/payments/FeeModal';
 import DiscountModal from '@/components/payments/DiscountModal';
@@ -30,7 +28,7 @@ import EditPartModal from '@/components/payments/EditPartModal';
 import DeleteConfirmationModal from '@/components/payments/DeleteConfirmationModal';
 import CashierModal from '@/components/payments/cashier-modal';
 import QRScannerModal from '@/components/payments/QRScannerModal';
-import ReceiptModal from '@/components/payments/cashier-modal'; // adjust if separate
+import ReceiptModal from '@/components/payments/cashier-modal';
 
 import { finalBillsApi } from '@/lib/payments/final-bills';
 
@@ -38,8 +36,9 @@ export default function PaymentsPage() {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [activeTab, setActiveTab] = useState<'estimates' | 'final-bills'>('estimates');
+  const [search, setSearch] = useState('');
 
-  const { estimates, finalBills, loading, error, reload } = usePaymentsData(statusFilter);
+  const { estimates, finalBills, loading, error, reload } = usePaymentsData(statusFilter, search);
   const estimateActions = useEstimateActions(reload);
   const billActions = useFinalBillActions(reload);
   const detail = useDetailModal(reload);
@@ -49,10 +48,6 @@ export default function PaymentsPage() {
     refreshDetail: detail.refreshDetail,
     reloadList: reload,
   });
-
-  const [transactionModalOpen, setTransactionModalOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<any>(null);
-  const [saving, setSaving] = useState(false);
 
   // Cashier & Receipt
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
@@ -66,22 +61,12 @@ export default function PaymentsPage() {
   const handleMakeOfficial = (id: string) => billActions.updateStatus(id, 'OFFICIAL');
   const handleBackToPending = (id: string) => billActions.updateStatus(id, 'PENDING');
 
-  const handleTransactionSave = (form: any) => {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      setTransactionModalOpen(false);
-      toast.success('Invoice created (demo)');
-    }, 1000);
-  };
-
   const handlePaymentSuccess = (referenceNumber: string) => {
     toast.success(`Payment processed! Receipt ${referenceNumber} generated.`);
     reload();
   };
 
   const handleQrScan = async (billId: string) => {
-    // Fetch the bill to pass to cashier modal
     try {
       const res = await finalBillsApi.get(billId);
       if (res.error || !res.data) {
@@ -101,24 +86,12 @@ export default function PaymentsPage() {
       title="Payments & Billing"
       subtitle="Manage estimates, approvals, and final billing"
       actions={
-        <div className="flex gap-2">
-          <Button
-            onClick={() => setQrScannerOpen(true)}
-            variant="outline"
-            className="border-primary text-primary hover:bg-primary/10 shadow-md active:scale-95 transition-all"
-          >
-            <QrCode className="w-5 h-5 mr-2" /> Scan QR
-          </Button>
-          <Button
-            onClick={() => {
-              setEditingTransaction(null);
-              setTransactionModalOpen(true);
-            }}
-            className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 px-6 active:scale-95 transition-all"
-          >
-            <Plus className="w-5 h-5 mr-2" /> New Transaction
-          </Button>
-        </div>
+        <Button
+          onClick={() => setQrScannerOpen(true)}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 px-6 active:scale-95 transition-all"
+        >
+          <QrCode className="w-5 h-5 mr-2" /> Scan QR
+        </Button>
       }
     >
       {error && (
@@ -127,7 +100,13 @@ export default function PaymentsPage() {
         </div>
       )}
 
-      <FilterBar statusFilter={statusFilter} onStatusChange={setStatusFilter} />
+      <FilterBar
+        activeTab={activeTab}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        search={search}
+        onSearchChange={setSearch}
+      />
 
       <PaymentsTabs activeTab={activeTab} onTabChange={(v) => setActiveTab(v as 'estimates' | 'final-bills')} />
 
@@ -155,15 +134,6 @@ export default function PaymentsPage() {
           />
         )}
       </div>
-
-      <TransactionModal
-        open={transactionModalOpen}
-        onOpenChange={setTransactionModalOpen}
-        editing={editingTransaction}
-        setEditing={setEditingTransaction}
-        onSave={handleTransactionSave}
-        saving={saving}
-      />
 
       <DetailModal
         open={detail.detailModalOpen}

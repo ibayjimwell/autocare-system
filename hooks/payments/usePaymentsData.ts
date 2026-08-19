@@ -47,7 +47,7 @@ export interface FinalBill {
   workTasks?: any[];
 }
 
-export function usePaymentsData(statusFilter: string) {
+export function usePaymentsData(statusFilter: string, search: string) {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [finalBills, setFinalBills] = useState<FinalBill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,24 +93,48 @@ export function usePaymentsData(statusFilter: string) {
     }
   }, [statusFilter]);
 
+  // Client-side search filtering
+  const filteredEstimates = estimates.filter((est) => {
+    if (!search.trim()) return true;
+    const term = search.trim().toLowerCase();
+    const customer = est.appointment?.customer?.fullname || '';
+    const plate = est.appointment?.vehicle?.plateNumber || '';
+    const tracking = est.appointment?.trackingNumber || '';
+    return (
+      customer.toLowerCase().includes(term) ||
+      plate.toLowerCase().includes(term) ||
+      tracking.toLowerCase().includes(term)
+    );
+  });
+
+  const filteredFinalBills = finalBills.filter((bill) => {
+    if (!search.trim()) return true;
+    const term = search.trim().toLowerCase();
+    const customer = bill.appointment?.customer?.fullname || '';
+    const plate = bill.appointment?.vehicle?.plateNumber || '';
+    const tracking = bill.appointment?.trackingNumber || '';
+    return (
+      customer.toLowerCase().includes(term) ||
+      plate.toLowerCase().includes(term) ||
+      tracking.toLowerCase().includes(term)
+    );
+  });
+
   // Initial load
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // ---- Real‑time subscriptions ----
-
-  // 1. Estimates table
+  // Real‑time subscriptions
   useRealtimeTable(
     'estimated_costs',
-    undefined, // no filter – we'll reload all (the status filter is client‑side)
+    undefined,
     useCallback((payload: RealtimePostgresChangesPayload<any>) => {
       console.log('📊 Estimate change detected, reloading payments data...');
       loadData();
     }, [loadData])
   );
 
-  // 2. Final bills table
   useRealtimeTable(
     'final_bills',
     undefined,
@@ -120,7 +144,11 @@ export function usePaymentsData(statusFilter: string) {
     }, [loadData])
   );
 
-  // ---- End real‑time ----
-
-  return { estimates, finalBills, loading, error, reload: loadData };
+  return {
+    estimates: filteredEstimates,
+    finalBills: filteredFinalBills,
+    loading,
+    error,
+    reload: loadData,
+  };
 }
