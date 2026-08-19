@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { FinalBill } from '@/database/models/payments/final-bill.model';
+import { FinalBillFees } from '@/database/models/payments/final-bill-fees.model';
 import { Appointments } from '@/database/models/appointments/appointments.model';
 import { Customers } from '@/database/models/customers/customers.model';
 import { eq } from 'drizzle-orm';
@@ -87,12 +88,123 @@ export async function PATCH(
       );
     }
 
-    // Update status
+    // ---- Handle HOLD ----
+    if (upperStatus === 'HOLD') {
+      const { parkingFeeRate, parkingFeeUnit } = body;
+      if (!parkingFeeRate || !parkingFeeUnit) {
+        return NextResponse.json(
+          { error: true, errorMessage: 'Parking fee rate and unit are required for HOLD.' },
+          { status: 422 }
+        );
+      }
+      if (!['minute', 'hour', 'day'].includes(parkingFeeUnit)) {
+        return NextResponse.json(
+          { error: true, errorMessage: 'parkingFeeUnit must be minute, hour, or day.' },
+          { status: 422 }
+        );
+      }
+      await Database.update(FinalBill)
+        .set({
+          status: upperStatus,
+          updatedAt: new Date(),
+          holdStartedAt: new Date(),
+          parkingFeeRate: parseFloat(parkingFeeRate).toString(),
+          parkingFeeUnit,
+        })
+        .where(eq(FinalBill.id, id));
+
+      const info = await getAppointmentInfo(bill.appointmentId);
+      paymentsTriggers.onFinalBillStatusChanged({
+        trackingNumber: info.trackingNumber,
+        customerName: info.customerName,
+        newStatus: upperStatus,
+      }).catch(console.error);
+
+      return NextResponse.json({
+        error: false,
+        message: `Final bill status updated to ${upperStatus}.`,
+        data: { id, status: upperStatus },
+      }, { status: 200 });
+    }
+
+    // ---- Handle un-hold (PENDING or OFFICIAL) ----
+    if (upperStatus === 'PENDING' || upperStatus === 'OFFICIAL') {
+      let parkingFee = 0;
+      let parkingFeeData = null;
+
+      // If currently on HOLD, calculate parking fee
+      if (currentStatus === 'HOLD' && bill.holdStartedAt) {
+        const now = new Date();
+        const diffMs = now.getTime() - new Date(bill.holdStartedAt).getTime();
+        const rate = parseFloat(bill.parkingFeeRate);
+        const unit = bill.parkingFeeUnit;
+        if (unit === 'minute') {
+          parkingFee = (diffMs / 60000) * rate;
+        } else if (unit === 'hour') {
+          parkingFee = (diffMs / 3600000) * rate;
+        } else if (unit === 'day') {
+          parkingFee = (diffMs / 86400000) * rate;
+        }
+        parkingFee = Math.round(parkingFee * 100) / 100;
+
+        // Add as a fee
+        if (parkingFee > 0) {
+          await Database.insert(FinalBillFees).values({
+            finalBillId: id,
+            title: `Parking Fee (${unit})`,
+            amount: parkingFee.toFixed(2),
+          });
+        }
+
+        // Update totals
+        const feesTotal = parseFloat(bill.feesTotal) + parkingFee;
+        const grandTotal = parseFloat(bill.grandTotal) + parkingFee;
+        await Database.update(FinalBill)
+          .set({
+            status: upperStatus,
+            updatedAt: new Date(),
+            holdStartedAt: null,
+            parkingFeeRate: null,
+            parkingFeeUnit: null,
+            feesTotal: feesTotal.toFixed(2),
+            grandTotal: grandTotal.toFixed(2),
+          })
+          .where(eq(FinalBill.id, id));
+
+        parkingFeeData = { fee: parkingFee, rate, unit };
+      } else {
+        // Just update status
+        await Database.update(FinalBill)
+          .set({ status: upperStatus, updatedAt: new Date() })
+          .where(eq(FinalBill.id, id));
+      }
+
+      const info = await getAppointmentInfo(bill.appointmentId);
+      paymentsTriggers.onFinalBillStatusChanged({
+        trackingNumber: info.trackingNumber,
+        customerName: info.customerName,
+        newStatus: upperStatus,
+      }).catch(console.error);
+
+      if (upperStatus === 'PAID') {
+        paymentsTriggers.onPaymentCompleted({
+          trackingNumber: info.trackingNumber,
+          customerName: info.customerName,
+        }).catch(console.error);
+      }
+
+      return NextResponse.json({
+        error: false,
+        message: `Final bill status updated to ${upperStatus}.`,
+        data: { id, status: upperStatus, parkingFee: parkingFeeData },
+      }, { status: 200 });
+    }
+
+    // ---- Other transitions (e.g., PAID) ----
     await Database.update(FinalBill)
       .set({ status: upperStatus, updatedAt: new Date() })
       .where(eq(FinalBill.id, id));
 
-    // ---- Trigger push notification ----
     const info = await getAppointmentInfo(bill.appointmentId);
     paymentsTriggers.onFinalBillStatusChanged({
       trackingNumber: info.trackingNumber,
@@ -100,7 +212,6 @@ export async function PATCH(
       newStatus: upperStatus,
     }).catch(console.error);
 
-    // If status is PAID, also trigger payment completion (if needed)
     if (upperStatus === 'PAID') {
       paymentsTriggers.onPaymentCompleted({
         trackingNumber: info.trackingNumber,
@@ -108,14 +219,11 @@ export async function PATCH(
       }).catch(console.error);
     }
 
-    return NextResponse.json(
-      {
-        error: false,
-        message: `Final bill status updated to ${upperStatus}.`,
-        data: { id, status: upperStatus },
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      error: false,
+      message: `Final bill status updated to ${upperStatus}.`,
+      data: { id, status: upperStatus },
+    }, { status: 200 });
   } catch (e) {
     console.error('[PATCH /api/payments/final-bills/[id]/status] Error:', e);
     return NextResponse.json(

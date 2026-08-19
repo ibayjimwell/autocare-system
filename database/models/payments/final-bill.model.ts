@@ -19,7 +19,7 @@ export const FinalBill = pgTable(
     estimateId: uuid("estimate_id").references(() => EstimatedCosts.id, {
       onDelete: "set null",
     }),
-    status: text("status").default("PENDING").notNull(), // PENDING, PAID, CANCELLED
+    status: text("status").default("PENDING").notNull(),
     serviceSubtotal: decimal("service_subtotal", { precision: 10, scale: 2 })
       .default("0")
       .notNull(),
@@ -42,6 +42,10 @@ export const FinalBill = pgTable(
       .default("0")
       .notNull(),
     notes: text("notes"),
+    // NEW: parking fee columns
+    holdStartedAt: timestamp("hold_started_at"),
+    parkingFeeRate: decimal("parking_fee_rate", { precision: 10, scale: 2 }),
+    parkingFeeUnit: text("parking_fee_unit"), // 'minute', 'hour', 'day'
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

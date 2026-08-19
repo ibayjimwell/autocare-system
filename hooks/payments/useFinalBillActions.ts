@@ -43,10 +43,10 @@ export function useFinalBillActions(onSuccess: () => void) {
     }
   }, [deleteTargetId, onSuccess]);
 
-  const updateStatus = useCallback(async (billId: string, newStatus: string) => {
+  const updateStatus = useCallback(async (billId: string, newStatus: string, parkingFeeRate?: number, parkingFeeUnit?: string) => {
     setActionLoading(true);
     try {
-      const res = await finalBillsApi.updateStatus(billId, newStatus);
+      const res = await finalBillsApi.updateStatus(billId, newStatus, parkingFeeRate, parkingFeeUnit);
       if (res.error) {
         toast.error(res.errorMessage || `Failed to update status to ${newStatus}.`);
       } else {

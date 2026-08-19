@@ -69,31 +69,41 @@ export const finalBillsApi = {
     return res.json();
   },
 
-  updateStatus: async (billId: string, status: string) => {
-     const res = await fetch(`/api/payments/final-bills/${billId}/status`, {
-       method: 'PATCH',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ status }),
-     });
-     return res.json();
+  updateStatus: async (billId: string, status: string, parkingFeeRate?: number, parkingFeeUnit?: string) => {
+    const body: any = { status };
+    if (parkingFeeRate !== undefined && parkingFeeUnit) {
+      body.parkingFeeRate = parkingFeeRate;
+      body.parkingFeeUnit = parkingFeeUnit;
+    }
+    const res = await fetch(`/api/payments/final-bills/${billId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
   },
 
   addFee: async (billId: string, data: { title: string; amount: number; findingId?: string }) => {
-     const res = await fetch(`/api/payments/final-bills/${billId}/fees`, {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify(data),
-     });
-     return res.json();
-   },
- 
-   addDiscount: async (billId: string, data: { title: string; type: 'fixed' | 'percentage'; value: number }) => {
-     const res = await fetch(`/api/payments/final-bills/${billId}/discounts`, {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify(data),
-     });
-     return res.json();
-   },
-  
+    const res = await fetch(`/api/payments/final-bills/${billId}/fees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+
+  addDiscount: async (billId: string, data: { title: string; type: 'fixed' | 'percentage'; value: number }) => {
+    const res = await fetch(`/api/payments/final-bills/${billId}/discounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+
+  // Get parking fee for a HOLD bill
+  getParkingFee: async (billId: string) => {
+    const res = await fetch(`/api/payments/final-bills/${billId}/parking-fee`);
+    return res.json();
+  },
 };
