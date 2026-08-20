@@ -7,7 +7,7 @@ import EmptyState from '@/components/shared/empty-state';
 import { formatCurrency } from '@/app-utils/payments/payments';
 import { format } from 'date-fns';
 import { DollarSign, Eye, Trash2, PauseCircle, Send, Undo2, Clock } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { finalBillsApi } from '@/lib/payments/final-bills';
 import HoldConfigModal from './HoldConfigModal';
 import UnholdConfirmModal from './UnholdConfirmModal';
@@ -18,7 +18,7 @@ interface FinalBillsListProps {
   onPay: (bill: FinalBill) => void;
   onOpenDetail: (item: FinalBill, type: 'final-bill') => void;
   onDelete: (id: string) => void;
-  onHold: (id: string) => void;
+  onHold: (id: string, rate: number, unit: string) => void; // ✅ accept rate and unit
   onMakeOfficial: (id: string) => void;
   onBackToPending: (id: string) => void;
   actionLoading: boolean;
@@ -63,7 +63,8 @@ export default function FinalBillsList({
     if (!selectedBillId) return;
     setHoldLoading(true);
     try {
-      await onHold(selectedBillId); // This will call the updateStatus with rate/unit
+      // ✅ pass rate and unit to the parent handler
+      await onHold(selectedBillId, rate, unit);
       setHoldConfigOpen(false);
     } finally {
       setHoldLoading(false);
@@ -177,7 +178,6 @@ export default function FinalBillsList({
     }
   };
 
-  // Helper to render parking fee for HOLD bills
   const renderParkingFee = (bill: FinalBill) => {
     if (bill.status !== 'HOLD') return null;
     return (

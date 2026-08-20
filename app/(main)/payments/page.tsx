@@ -57,13 +57,16 @@ export default function PaymentsPage() {
   // QR Scanner
   const [qrScannerOpen, setQrScannerOpen] = useState(false);
 
+  // ✅ Corrected: handleHold now expects rate and unit
   const handleHold = (id: string, rate: number, unit: string) => {
     billActions.updateStatus(id, 'HOLD', rate, unit);
   };
+
   const handleMakeOfficial = (id: string) => billActions.updateStatus(id, 'OFFICIAL');
   const handleBackToPending = (id: string) => {
     billActions.updateStatus(id, 'PENDING');
   };
+
   const handlePaymentSuccess = (referenceNumber: string) => {
     toast.success(`Payment processed! Receipt ${referenceNumber} generated.`);
     reload();
