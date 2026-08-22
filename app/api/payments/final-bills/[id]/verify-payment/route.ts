@@ -9,6 +9,7 @@ import { isValidUUID } from '@/utils/shared';
 import { getPaymentLinkStatus } from '@/lib/paymongo';
 import { generatePaymentReceipt } from '@/utils/payments/generate-payment-receipt';
 import { sendPushToCustomer } from '@/lib/push/customer-push';
+import { mobilePaymentsTriggers } from '@/app-triggers/payments';
 
 export async function POST(
   req: NextRequest,
@@ -80,9 +81,12 @@ export async function POST(
         .where(eq(Customers.id, appointment.customerId))
         .limit(1);
       if (customer) {
-        sendPushToCustomer(customer.id, '💰 Payment Successful', 'Your payment has been processed. A receipt has been generated.', {
-          url: `/invoice/${billId}`,
-        }).catch(console.error);
+          mobilePaymentsTriggers.onFinalBillPaid({
+            customerId: customer.id,
+            trackingNumber: appointment.trackingNumber,
+            appointmentId: bill.appointmentId,
+            billId: billId,
+          }).catch(console.error);
       }
     }
 

@@ -8,6 +8,7 @@ import { isValidUUID } from "@/utils/shared";
 import { generateFinalBill } from "@/utils/final-bill";
 import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
 import { paymentsTriggers } from "@/triggers/payments";
+import { mobilePaymentsTriggers } from "@/app-triggers/payments";
 
 export async function POST(req: NextRequest) {
   let body: any;
@@ -90,6 +91,13 @@ export async function POST(req: NextRequest) {
       .where(eq(Appointments.id, appointmentId));
 
     const info = await getAppointmentInfo(appointmentId);
+    mobilePaymentsTriggers.onFinalBillGenerated({
+      customerId: info.customerId,
+      trackingNumber: info.trackingNumber,
+      appointmentId,
+      billId: finalBill.id,
+    }).catch(console.error);
+    
     paymentsTriggers.onFinalBillGenerated({
       trackingNumber: info.trackingNumber,
       customerName: info.customerName,

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isValidUUID } from '@/utils/shared';
 import { generatePaymentReceipt } from '@/utils/payments/generate-payment-receipt';
+import { mobilePaymentsTriggers } from '@/app-triggers/payments';
 
 export async function POST(
   req: NextRequest,
@@ -14,6 +15,7 @@ export async function POST(
 
   try {
     const result = await generatePaymentReceipt(id);
+    
     return NextResponse.json({
       error: false,
       message: 'Payment processed and receipt generated.',

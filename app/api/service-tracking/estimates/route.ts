@@ -14,6 +14,7 @@ import { isValidUUID } from "@/utils/shared";
 import { appointmentExists } from "@/utils/service-tracking";
 import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
 import { paymentsTriggers } from "@/triggers/payments";
+import { mobilePaymentsTriggers } from "@/app-triggers/payments";
 
 // --------------------------------------------------------------------------
 // POST /api/service-tracking/estimates
@@ -174,6 +175,12 @@ export async function POST(req: NextRequest) {
     }
 
     const info = await getAppointmentInfo(appointmentId);
+    mobilePaymentsTriggers.onEstimateGenerated({
+      customerId: info.customerId,
+      trackingNumber: info.trackingNumber,
+      appointmentId,
+    }).catch(console.error);
+
     paymentsTriggers.onEstimateGenerated({
       trackingNumber: info.trackingNumber,
       customerName: info.customerName,

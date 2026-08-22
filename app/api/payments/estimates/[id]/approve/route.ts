@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
 import { paymentsTriggers } from "@/triggers/payments";
+import { mobilePaymentsTriggers } from "@/app-triggers/payments";
 
 // --------------------------------------------------------------------
 // PATCH /api/payments/estimates/:id/approve
@@ -68,10 +69,18 @@ export async function PATCH(
       .where(eq(Appointments.id, estimate.appointmentId));
 
     const info = await getAppointmentInfo(estimate.appointmentId);
+    mobilePaymentsTriggers.onEstimateApproved({
+      customerId: info.customerId,
+      trackingNumber: info.trackingNumber,
+      appointmentId: estimate.appointmentId,
+      estimateId: id,
+    }).catch(console.error);
+
     paymentsTriggers.onEstimateApproved({
       trackingNumber: info.trackingNumber,
       customerName: info.customerName,
     }).catch(console.error);
+    
 
     return NextResponse.json(
       {

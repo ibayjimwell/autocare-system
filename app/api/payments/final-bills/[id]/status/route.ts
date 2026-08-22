@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
 import { paymentsTriggers } from '@/triggers/payments';
+import { mobilePaymentsTriggers } from '@/app-triggers/payments';
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['HOLD', 'OFFICIAL'],
@@ -113,7 +114,48 @@ export async function PATCH(
         })
         .where(eq(FinalBill.id, id));
 
+      // Inside the PATCH handler, after updating status:
+      
       const info = await getAppointmentInfo(bill.appointmentId);
+      
+      switch (upperStatus) {
+        case 'HOLD':
+          mobilePaymentsTriggers.onFinalBillHold({
+            customerId: info.customerId,
+            trackingNumber: info.trackingNumber,
+            appointmentId: bill.appointmentId,
+            billId: id,
+          }).catch(console.error);
+          break;
+        case 'PENDING':
+          // If coming from HOLD (unhold)
+          if (currentStatus === 'HOLD') {
+            mobilePaymentsTriggers.onFinalBillBackToPending({
+              customerId: info.customerId,
+              trackingNumber: info.trackingNumber,
+              appointmentId: bill.appointmentId,
+              billId: id,
+            }).catch(console.error);
+          }
+          break;
+        case 'OFFICIAL':
+          mobilePaymentsTriggers.onFinalBillOfficial({
+            customerId: info.customerId,
+            trackingNumber: info.trackingNumber,
+            appointmentId: bill.appointmentId,
+            billId: id,
+          }).catch(console.error);
+          break;
+        case 'PAID':
+          mobilePaymentsTriggers.onFinalBillPaid({
+            customerId: info.customerId,
+            trackingNumber: info.trackingNumber,
+            appointmentId: bill.appointmentId,
+            billId: id,
+          }).catch(console.error);
+          break;
+      }
+
       paymentsTriggers.onFinalBillStatusChanged({
         trackingNumber: info.trackingNumber,
         customerName: info.customerName,
