@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { addMonths, format } from 'date-fns';
+import { addMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { Settings, XCircle } from 'lucide-react';
 import PageContainer from '@/components/shared/page-container';
@@ -19,6 +19,7 @@ import { appointmentsApi } from '@/lib/appointments/appointments';
 import { useAuth } from '@/lib/auth/staffs/useAuth';
 import { useConfigurations } from '@/hooks/configurations/useConfigurations';
 import { getEffectiveConfigForDate } from '@/utils/configurations';
+import { format } from 'date-fns';
 
 export default function AppointmentsPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
