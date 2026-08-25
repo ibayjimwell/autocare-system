@@ -3,7 +3,8 @@
 import { useState } from "react";
 
 import { Sidebar } from "@/components/shared/sidebar";
-import { Header, MobileHeader } from "@/components/shared/header";
+import { Header } from "@/components/shared/Header";
+import { MobileHeader } from "@/components/shared/MobileHeader";
 import { Toaster } from "@/components/ui/sonner";
 import { useStaffActivity } from "@/hooks/use-staff-activity";
 
