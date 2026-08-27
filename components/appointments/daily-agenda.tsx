@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Clock, Search, CalendarDays, CheckCircle, XCircle, Hash,
+  Clock, Search, CalendarDays, CheckCircle, XCircle, Hash, Calendar,
 } from 'lucide-react';
 import AppointmentCard from '@/components/appointments/appointment-card';
 import CustomerCard from '@/components/customers/customer-card';
@@ -24,12 +24,15 @@ import StaffCards from '@/components/staffs/staff-cards';
 import { useServiceQueue } from '@/hooks/queue/useServiceQueue';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { canReschedule } from '@/app-utils/appointments/helpers';
+import RescheduleRequestModal from './RescheduleRequestModal';
 
 interface DailyAgendaProps {
   appointments: any[];
   selectedDate: Date;
   onConfirm: (appt: any) => void;
   onDecline: (appt: any, reason: string) => void;
+  onRefresh?: () => void; // to reload appointments after reschedule
 }
 
 // Status tabs (order matches the typical workflow)
@@ -49,6 +52,7 @@ export default function DailyAgenda({
   selectedDate,
   onConfirm,
   onDecline,
+  onRefresh,
 }: DailyAgendaProps) {
   const [sidebarFilter, setSidebarFilter] = useState('');
   const [activeStatus, setActiveStatus] = useState('ALL');
@@ -57,6 +61,12 @@ export default function DailyAgenda({
     appointment: any | null;
     reason: string;
   }>({ open: false, appointment: null, reason: '' });
+
+  // Reschedule modal state
+  const [rescheduleModal, setRescheduleModal] = useState<{
+    open: boolean;
+    appointment: any | null;
+  }>({ open: false, appointment: null });
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
@@ -90,6 +100,15 @@ export default function DailyAgenda({
       onDecline(declineModal.appointment, declineModal.reason);
       setDeclineModal({ open: false, appointment: null, reason: '' });
     }
+  };
+
+  const handleRescheduleOpen = (appt: any) => {
+    setRescheduleModal({ open: true, appointment: appt });
+  };
+
+  const handleRescheduleSuccess = () => {
+    // Refresh appointments
+    if (onRefresh) onRefresh();
   };
 
   // Render queue for CONFIRMED status
@@ -153,25 +172,37 @@ export default function DailyAgenda({
           <div className="text-xs text-muted-foreground italic">No services selected.</div>
         )}
         <StaffCards appointmentId={appt.id} />
-        {appt.status === 'PENDING' && (
-          <div className="flex gap-2 mt-2">
+        <div className="flex flex-wrap gap-2 mt-2">
+          {appt.status === 'PENDING' && (
+            <>
+              <Button
+                size="sm"
+                className="flex-1 text-green-600 bg-green-50 hover:bg-green-100 h-8 text-[10px] font-black uppercase"
+                onClick={() => onConfirm(appt)}
+              >
+                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Confirm
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="flex-1 text-red-400 hover:bg-red-50 h-8 text-[10px] font-black uppercase"
+                onClick={() => handleDeclineOpen(appt)}
+              >
+                <XCircle className="w-3.5 h-3.5 mr-1" /> Decline
+              </Button>
+            </>
+          )}
+          {canReschedule(appt.status) && (
             <Button
               size="sm"
-              className="flex-1 text-green-600 bg-green-50 hover:bg-green-100 h-8 text-[10px] font-black uppercase"
-              onClick={() => onConfirm(appt)}
+              variant="outline"
+              className="flex-1 text-blue-600 border-blue-200 hover:bg-blue-50 h-8 text-[10px] font-black uppercase"
+              onClick={() => handleRescheduleOpen(appt)}
             >
-              <CheckCircle className="w-3.5 h-3.5 mr-1" /> Confirm
+              <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="flex-1 text-red-400 hover:bg-red-50 h-8 text-[10px] font-black uppercase"
-              onClick={() => handleDeclineOpen(appt)}
-            >
-              <XCircle className="w-3.5 h-3.5 mr-1" /> Decline
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </AppointmentCard>
     ));
   };
@@ -183,6 +214,8 @@ export default function DailyAgenda({
     }
     return renderAppointments();
   };
+
+  const currentAppointment = rescheduleModal.appointment;
 
   return (
     <>
@@ -281,6 +314,18 @@ export default function DailyAgenda({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reschedule Request Modal */}
+      {currentAppointment && (
+        <RescheduleRequestModal
+          open={rescheduleModal.open}
+          onOpenChange={(open) => setRescheduleModal({ ...rescheduleModal, open })}
+          appointmentId={currentAppointment.id}
+          currentDate={currentAppointment.appointmentDate}
+          currentTime={currentAppointment.appointmentTime}
+          onSuccess={handleRescheduleSuccess}
+        />
+      )}
     </>
   );
 }

@@ -1,0 +1,138 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { Database } from '@/lib/drizzle';
+import { AppointmentRescheduleRequests } from '@/database/models/appointments/appointment-reschedule-requests.model';
+import { Appointments } from '@/database/models/appointments/appointments.model';
+import { Customers } from '@/database/models/customers/customers.model';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/staffs/auth';
+import { isValidUUID } from '@/utils/shared';
+import { eq } from 'drizzle-orm';
+import { canReschedule } from '@/utils/appointments';
+import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
+import { appointmentsTriggers } from '@/triggers/appointments';
+import { mobileAppointmentsTriggers } from '@/app-triggers/appointments';
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: appointmentId } = await params;
+  if (!isValidUUID(appointmentId)) {
+    return NextResponse.json({ error: true, errorMessage: 'Invalid appointment ID' }, { status: 422 });
+  }
+
+  const session = await getServerSession(authOptions);
+  let customerId: string | undefined = undefined;
+  let staffId: string | undefined = undefined;
+  let requestedBy: 'customer' | 'staff' = 'customer';
+
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: true, errorMessage: 'Invalid JSON' }, { status: 400 });
+  }
+
+  // Determine who is making the request
+  if (session?.user?.id) {
+    staffId = session.user.id;
+    requestedBy = 'staff';
+  } else if (body.customerId && isValidUUID(body.customerId)) {
+    customerId = body.customerId;
+    requestedBy = 'customer';
+  } else {
+    return NextResponse.json({ error: true, errorMessage: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Validate appointment exists and can be rescheduled
+  const [appointment] = await Database.select()
+    .from(Appointments)
+    .where(eq(Appointments.id, appointmentId));
+  if (!appointment) {
+    return NextResponse.json({ error: true, errorMessage: 'Appointment not found' }, { status: 404 });
+  }
+
+  if (!canReschedule(appointment.status)) {
+    return NextResponse.json({ error: true, errorMessage: 'Appointment cannot be rescheduled at this stage' }, { status: 422 });
+  }
+
+  if (requestedBy === 'customer' && appointment.customerId !== customerId) {
+    return NextResponse.json({ error: true, errorMessage: 'You do not own this appointment' }, { status: 403 });
+  }
+
+  const { newAppointmentDate, newAppointmentTime, reason } = body;
+  if (!newAppointmentDate || !newAppointmentTime) {
+    return NextResponse.json({ error: true, errorMessage: 'New date and time are required' }, { status: 422 });
+  }
+
+  // Create request
+  const [request] = await Database.insert(AppointmentRescheduleRequests)
+    .values({
+      appointmentId,
+      requestedBy,
+      requestedByCustomerId: requestedBy === 'customer' ? customerId : null,
+      requestedByStaffId: requestedBy === 'staff' ? staffId : null,
+      newAppointmentDate,
+      newAppointmentTime,
+      reason: reason || null,
+      status: 'PENDING',
+    })
+    .returning();
+
+  // ----- TRIGGERS -----
+  const info = await getAppointmentInfo(appointmentId);
+  const trackingNumber = info.trackingNumber;
+  const customerName = info.customerName || 'Customer';
+
+  // If staff requested, notify the customer (mobile)
+  if (requestedBy === 'staff') {
+    mobileAppointmentsTriggers.onRescheduleRequested({
+      customerId: appointment.customerId,
+      trackingNumber,
+      newDate: newAppointmentDate,
+      newTime: newAppointmentTime,
+    }).catch(console.error);
+  } else {
+    // If customer requested, notify staff (system)
+    appointmentsTriggers.onRescheduleRequested({
+      trackingNumber,
+      customerName,
+      requestedBy: 'customer',
+      newDate: newAppointmentDate,
+      newTime: newAppointmentTime,
+    }).catch(console.error);
+  }
+
+  return NextResponse.json({
+    error: false,
+    message: 'Reschedule request created',
+    data: request,
+  }, { status: 201 });
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: appointmentId } = await params;
+  if (!isValidUUID(appointmentId)) {
+    return NextResponse.json({ error: true, errorMessage: 'Invalid appointment ID' }, { status: 422 });
+  }
+
+  try {
+    const requests = await Database.select()
+      .from(AppointmentRescheduleRequests)
+      .where(eq(AppointmentRescheduleRequests.appointmentId, appointmentId))
+      .orderBy(desc(AppointmentRescheduleRequests.createdAt));
+
+    return NextResponse.json({
+      error: false,
+      data: requests,
+    }, { status: 200 });
+  } catch (e) {
+    return NextResponse.json({
+      error: true,
+      errorMessage: 'Failed to fetch reschedule requests',
+    }, { status: 500 });
+  }
+}

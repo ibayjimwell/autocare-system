@@ -15,3 +15,12 @@ export const FILTER_OPTIONS = [
   { value: "CONFIRMED", label: "Confirmed", icon: ClipboardCheck },
   // ... not used on this page, but placed here for other pages.
 ] as const;
+
+/**
+ * Check if an appointment status allows rescheduling.
+ * Allowed statuses: PENDING, CONFIRMED, UNDER_INSPECTION, WAITING_FOR_APPROVAL
+ */
+export function canReschedule(status: string): boolean {
+  const allowed = ['PENDING', 'CONFIRMED', 'UNDER_INSPECTION', 'WAITING_FOR_APPROVAL', 'IN_PROGRESS'];
+  return allowed.includes(status);
+}

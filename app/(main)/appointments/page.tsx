@@ -156,6 +156,7 @@ export default function AppointmentsPage() {
             selectedDate={selectedDate}
             onConfirm={handleConfirm}
             onDecline={handleDecline}
+            onRefresh={loadAppointments}
           />
         </div>
       </div>

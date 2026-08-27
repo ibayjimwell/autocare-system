@@ -17,6 +17,7 @@ export * from "./services/services.model";
 export * from "./appointments/appointments.model";
 export * from "./appointments/appointments-status-history.model";
 export * from "./appointments/enum/appointments-status.enum";
+export * from "./appointments/appointment-reschedule-requests.model";
 
 // Service Tracking
 export * from "./service-tracking/inspection-tasks.model";

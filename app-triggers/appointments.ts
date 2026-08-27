@@ -80,4 +80,32 @@ export const mobileAppointmentsTriggers = {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
+
+  /** Customer – reschedule request created (by staff) */
+  async onRescheduleRequested(payload: MobileAppointmentPayload & { newDate: string; newTime: string }) {
+    const title = '📅 Reschedule Request';
+    const body = `Staff requested to reschedule your appointment #${payload.trackingNumber} to ${payload.newDate} at ${payload.newTime}.`;
+    await sendPushToCustomer(payload.customerId, title, body, {
+      url: `/tracking?appointmentId=${payload.trackingNumber}`,
+    });
+  },
+  
+  /** Customer – reschedule approved */
+  async onRescheduleApproved(payload: MobileAppointmentPayload & { newDate: string; newTime: string }) {
+    const title = '✅ Reschedule Approved';
+    const body = `Your appointment #${payload.trackingNumber} has been rescheduled to ${payload.newDate} at ${payload.newTime}.`;
+    await sendPushToCustomer(payload.customerId, title, body, {
+      url: `/tracking?appointmentId=${payload.trackingNumber}`,
+    });
+  },
+  
+  /** Customer – reschedule rejected */
+  async onRescheduleRejected(payload: MobileAppointmentPayload) {
+    const title = '❌ Reschedule Rejected';
+    const body = `Your reschedule request for appointment #${payload.trackingNumber} was rejected.`;
+    await sendPushToCustomer(payload.customerId, title, body, {
+      url: `/tracking?appointmentId=${payload.trackingNumber}`,
+    });
+  },
+  
 };

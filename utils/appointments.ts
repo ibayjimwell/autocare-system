@@ -122,3 +122,8 @@ export async function validateAppointmentId(appointmentId: string): Promise<Next
   }
   return null;
 }
+
+export function canReschedule(status: string): boolean {
+  const allowed = ['PENDING', 'CONFIRMED', 'UNDER_INSPECTION', 'WAITING_FOR_APPROVAL', 'IN_PROGRESS'];
+  return allowed.includes(status);
+}
