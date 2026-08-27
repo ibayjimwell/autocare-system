@@ -5,7 +5,7 @@ import { Appointments } from '@/database/models/appointments/appointments.model'
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm'; // ✅ add and
 import { canReschedule } from '@/utils/appointments';
 import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
 import { appointmentsTriggers } from '@/triggers/appointments';
@@ -112,16 +112,24 @@ export async function POST(
     return NextResponse.json({ error: true, errorMessage: 'You do not own this appointment' }, { status: 403 });
   }
 
-  // Check if there's already a pending request for this appointment
-  const [pending] = await Database.select()
+  // ✅ Check if there's already a pending request for this appointment
+  // Use explicit `and()` to avoid any ambiguity
+  const pendingRequests = await Database.select()
     .from(AppointmentRescheduleRequests)
     .where(
-      eq(AppointmentRescheduleRequests.appointmentId, appointmentId),
-      eq(AppointmentRescheduleRequests.status, 'PENDING')
+      and(
+        eq(AppointmentRescheduleRequests.appointmentId, appointmentId),
+        eq(AppointmentRescheduleRequests.status, 'PENDING')
+      )
     )
     .limit(1);
-  if (pending) {
-    return NextResponse.json({ error: true, errorMessage: 'A pending reschedule request already exists for this appointment' }, { status: 409 });
+
+  if (pendingRequests.length > 0) {
+    return NextResponse.json({
+      error: true,
+      errorMessage: 'A pending reschedule request already exists for this appointment.',
+      pendingRequest: pendingRequests[0],
+    }, { status: 409 });
   }
 
   const { newAppointmentDate, newAppointmentTime, reason } = body;
