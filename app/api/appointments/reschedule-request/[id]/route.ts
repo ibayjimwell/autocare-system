@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { AppointmentRescheduleRequests } from '@/database/models/appointments/appointment-reschedule-requests.model';
 import { Appointments } from '@/database/models/appointments/appointments.model';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
 import { eq } from 'drizzle-orm';
 import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from '@/app-triggers/appointments';
+import { verifyJWT } from '@/utils/jwt';
 
 export async function PATCH(
   req: NextRequest,
@@ -17,6 +20,35 @@ export async function PATCH(
     return NextResponse.json({ error: true, errorMessage: 'Invalid request ID' }, { status: 422 });
   }
 
+  const session = await getServerSession(authOptions);
+  let staffId: string | null = null;
+  let customerId: string | null = null;
+  let isStaff = false;
+
+  if (session?.user?.id) {
+    staffId = session.user.id;
+    isStaff = true;
+  } else {
+    // Try customer JWT from header
+    const authHeader = req.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      try {
+        const decoded = await verifyJWT(token);
+        if (decoded && decoded.id) {
+          customerId = decoded.id;
+        }
+      } catch (err) {
+        console.error('JWT verification failed:', err);
+        // Continue without customerId – will return 401 below
+      }
+    }
+  }
+
+  if (!staffId && !customerId) {
+    return NextResponse.json({ error: true, errorMessage: 'Unauthorized' }, { status: 401 });
+  }
+
   let body;
   try {
     body = await req.json();
@@ -24,13 +56,13 @@ export async function PATCH(
     return NextResponse.json({ error: true, errorMessage: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { action, customerId } = body;
+  const { action, rejectionReason } = body;
   if (!action || !['approve', 'reject'].includes(action)) {
     return NextResponse.json({ error: true, errorMessage: 'Action must be approve or reject' }, { status: 422 });
   }
 
-  if (!customerId || !isValidUUID(customerId)) {
-    return NextResponse.json({ error: true, errorMessage: 'Customer ID is required' }, { status: 422 });
+  if (action === 'reject' && (!rejectionReason || typeof rejectionReason !== 'string' || rejectionReason.trim().length === 0)) {
+    return NextResponse.json({ error: true, errorMessage: 'A reason is required for rejection' }, { status: 422 });
   }
 
   const [request] = await Database.select()
@@ -44,18 +76,26 @@ export async function PATCH(
     return NextResponse.json({ error: true, errorMessage: 'Request already processed' }, { status: 422 });
   }
 
-  // Verify the customer owns the appointment
-  const [appointment] = await Database.select()
-    .from(Appointments)
-    .where(eq(Appointments.id, request.appointmentId));
-  if (!appointment || appointment.customerId !== customerId) {
-    return NextResponse.json({ error: true, errorMessage: 'You do not have permission to act on this request' }, { status: 403 });
+  // If it's a customer, verify they own the appointment
+  if (customerId) {
+    const [appointment] = await Database.select()
+      .from(Appointments)
+      .where(eq(Appointments.id, request.appointmentId));
+    if (!appointment || appointment.customerId !== customerId) {
+      return NextResponse.json({ error: true, errorMessage: 'You do not have permission to act on this request' }, { status: 403 });
+    }
   }
 
   // Get the appointment info for notifications
   const info = await getAppointmentInfo(request.appointmentId);
   const trackingNumber = info.trackingNumber;
   const customerName = info.customerName || 'Customer';
+
+  // Get customer ID for mobile notifications
+  const [appt] = await Database.select({ customerId: Appointments.customerId })
+    .from(Appointments)
+    .where(eq(Appointments.id, request.appointmentId));
+  const customerIdForNotif = appt?.customerId;
 
   if (action === 'approve') {
     // Update appointment date/time
@@ -72,12 +112,14 @@ export async function PATCH(
       .where(eq(AppointmentRescheduleRequests.id, requestId));
 
     // ----- TRIGGERS (Approved) -----
-    mobileAppointmentsTriggers.onRescheduleApproved({
-      customerId,
-      trackingNumber,
-      newDate: request.newAppointmentDate,
-      newTime: request.newAppointmentTime,
-    }).catch(console.error);
+    if (customerIdForNotif) {
+      mobileAppointmentsTriggers.onRescheduleApproved({
+        customerId: customerIdForNotif,
+        trackingNumber,
+        newDate: request.newAppointmentDate,
+        newTime: request.newAppointmentTime,
+      }).catch(console.error);
+    }
 
     appointmentsTriggers.onRescheduleApproved({
       trackingNumber,
@@ -91,20 +133,28 @@ export async function PATCH(
       message: 'Appointment rescheduled successfully',
     }, { status: 200 });
   } else {
-    // Reject
+    // Reject – update request status and store rejection reason
     await Database.update(AppointmentRescheduleRequests)
-      .set({ status: 'REJECTED', updatedAt: new Date() })
+      .set({
+        status: 'REJECTED',
+        reason: rejectionReason.trim(),
+        updatedAt: new Date(),
+      })
       .where(eq(AppointmentRescheduleRequests.id, requestId));
 
     // ----- TRIGGERS (Rejected) -----
-    mobileAppointmentsTriggers.onRescheduleRejected({
-      customerId,
-      trackingNumber,
-    }).catch(console.error);
+    if (customerIdForNotif) {
+      mobileAppointmentsTriggers.onRescheduleRejected({
+        customerId: customerIdForNotif,
+        trackingNumber,
+        reason: rejectionReason.trim(),
+      }).catch(console.error);
+    }
 
     appointmentsTriggers.onRescheduleRejected({
       trackingNumber,
       customerName,
+      reason: rejectionReason.trim(),
     }).catch(console.error);
 
     return NextResponse.json({

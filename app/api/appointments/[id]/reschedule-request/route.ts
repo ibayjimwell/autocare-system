@@ -5,11 +5,12 @@ import { Appointments } from '@/database/models/appointments/appointments.model'
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
-import { eq, desc } from 'drizzle-orm'; // ✅ add desc
+import { eq, desc } from 'drizzle-orm';
 import { canReschedule } from '@/utils/appointments';
 import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from '@/app-triggers/appointments';
+import { verifyJWT } from '@/utils/jwt';
 
 // ------------------------------------------------------------------
 // GET /api/appointments/[id]/reschedule-request – List reschedule requests
@@ -66,7 +67,7 @@ export async function POST(
     return NextResponse.json({ error: true, errorMessage: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Determine who is making the request
+  // Determine who is making the request (staff via session, customer via body or JWT)
   if (session?.user?.id) {
     staffId = session.user.id;
     requestedBy = 'staff';
@@ -74,6 +75,24 @@ export async function POST(
     customerId = body.customerId;
     requestedBy = 'customer';
   } else {
+    // Try customer JWT from header
+    const authHeader = req.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      try {
+        const decoded = await verifyJWT(token);
+        if (decoded && decoded.id) {
+          customerId = decoded.id;
+          requestedBy = 'customer';
+        }
+      } catch (err) {
+        console.error('JWT verification failed:', err);
+        // Continue without customerId – will return 401 below
+      }
+    }
+  }
+
+  if (!staffId && !customerId) {
     return NextResponse.json({ error: true, errorMessage: 'Unauthorized' }, { status: 401 });
   }
 
@@ -91,6 +110,18 @@ export async function POST(
 
   if (requestedBy === 'customer' && appointment.customerId !== customerId) {
     return NextResponse.json({ error: true, errorMessage: 'You do not own this appointment' }, { status: 403 });
+  }
+
+  // Check if there's already a pending request for this appointment
+  const [pending] = await Database.select()
+    .from(AppointmentRescheduleRequests)
+    .where(
+      eq(AppointmentRescheduleRequests.appointmentId, appointmentId),
+      eq(AppointmentRescheduleRequests.status, 'PENDING')
+    )
+    .limit(1);
+  if (pending) {
+    return NextResponse.json({ error: true, errorMessage: 'A pending reschedule request already exists for this appointment' }, { status: 409 });
   }
 
   const { newAppointmentDate, newAppointmentTime, reason } = body;
@@ -117,20 +148,35 @@ export async function POST(
   const trackingNumber = info.trackingNumber;
   const customerName = info.customerName || 'Customer';
 
-  // If staff requested, notify the customer (mobile)
   if (requestedBy === 'staff') {
+    // Staff requested → notify customer (mobile)
     mobileAppointmentsTriggers.onRescheduleRequested({
       customerId: appointment.customerId,
       trackingNumber,
       newDate: newAppointmentDate,
       newTime: newAppointmentTime,
     }).catch(console.error);
+    // Also notify staff (system)
+    appointmentsTriggers.onRescheduleRequested({
+      trackingNumber,
+      customerName,
+      requestedBy: 'staff',
+      newDate: newAppointmentDate,
+      newTime: newAppointmentTime,
+    }).catch(console.error);
   } else {
-    // If customer requested, notify staff (system)
+    // Customer requested → notify staff (system)
     appointmentsTriggers.onRescheduleRequested({
       trackingNumber,
       customerName,
       requestedBy: 'customer',
+      newDate: newAppointmentDate,
+      newTime: newAppointmentTime,
+    }).catch(console.error);
+    // Notify customer (mobile) that their request was submitted
+    mobileAppointmentsTriggers.onRescheduleRequestedByCustomer({
+      customerId: appointment.customerId,
+      trackingNumber,
       newDate: newAppointmentDate,
       newTime: newAppointmentTime,
     }).catch(console.error);
