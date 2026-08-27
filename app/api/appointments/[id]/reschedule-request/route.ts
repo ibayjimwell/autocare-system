@@ -2,16 +2,49 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { AppointmentRescheduleRequests } from '@/database/models/appointments/appointment-reschedule-requests.model';
 import { Appointments } from '@/database/models/appointments/appointments.model';
-import { Customers } from '@/database/models/customers/customers.model';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm'; // ✅ add desc
 import { canReschedule } from '@/utils/appointments';
 import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from '@/app-triggers/appointments';
 
+// ------------------------------------------------------------------
+// GET /api/appointments/[id]/reschedule-request – List reschedule requests
+// ------------------------------------------------------------------
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: appointmentId } = await params;
+  if (!isValidUUID(appointmentId)) {
+    return NextResponse.json({ error: true, errorMessage: 'Invalid appointment ID' }, { status: 422 });
+  }
+
+  try {
+    const requests = await Database.select()
+      .from(AppointmentRescheduleRequests)
+      .where(eq(AppointmentRescheduleRequests.appointmentId, appointmentId))
+      .orderBy(desc(AppointmentRescheduleRequests.createdAt));
+
+    return NextResponse.json({
+      error: false,
+      data: requests,
+    }, { status: 200 });
+  } catch (e) {
+    console.error('[GET /api/appointments/[id]/reschedule-request] Error:', e);
+    return NextResponse.json({
+      error: true,
+      errorMessage: 'Failed to fetch reschedule requests',
+    }, { status: 500 });
+  }
+}
+
+// ------------------------------------------------------------------
+// POST /api/appointments/[id]/reschedule-request – Create a reschedule request
+// ------------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -108,31 +141,4 @@ export async function POST(
     message: 'Reschedule request created',
     data: request,
   }, { status: 201 });
-}
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: appointmentId } = await params;
-  if (!isValidUUID(appointmentId)) {
-    return NextResponse.json({ error: true, errorMessage: 'Invalid appointment ID' }, { status: 422 });
-  }
-
-  try {
-    const requests = await Database.select()
-      .from(AppointmentRescheduleRequests)
-      .where(eq(AppointmentRescheduleRequests.appointmentId, appointmentId))
-      .orderBy(desc(AppointmentRescheduleRequests.createdAt));
-
-    return NextResponse.json({
-      error: false,
-      data: requests,
-    }, { status: 200 });
-  } catch (e) {
-    return NextResponse.json({
-      error: true,
-      errorMessage: 'Failed to fetch reschedule requests',
-    }, { status: 500 });
-  }
 }
