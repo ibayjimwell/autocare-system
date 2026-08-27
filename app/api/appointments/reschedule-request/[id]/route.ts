@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { AppointmentRescheduleRequests } from '@/database/models/appointments/appointment-reschedule-requests.model';
 import { Appointments } from '@/database/models/appointments/appointments.model';
-import { Customers } from '@/database/models/customers/customers.model';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
 import { eq } from 'drizzle-orm';
 import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
@@ -20,11 +17,6 @@ export async function PATCH(
     return NextResponse.json({ error: true, errorMessage: 'Invalid request ID' }, { status: 422 });
   }
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: true, errorMessage: 'Unauthorized' }, { status: 401 });
-  }
-
   let body;
   try {
     body = await req.json();
@@ -32,9 +24,13 @@ export async function PATCH(
     return NextResponse.json({ error: true, errorMessage: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { action } = body;
+  const { action, customerId } = body;
   if (!action || !['approve', 'reject'].includes(action)) {
     return NextResponse.json({ error: true, errorMessage: 'Action must be approve or reject' }, { status: 422 });
+  }
+
+  if (!customerId || !isValidUUID(customerId)) {
+    return NextResponse.json({ error: true, errorMessage: 'Customer ID is required' }, { status: 422 });
   }
 
   const [request] = await Database.select()
@@ -48,11 +44,18 @@ export async function PATCH(
     return NextResponse.json({ error: true, errorMessage: 'Request already processed' }, { status: 422 });
   }
 
-  // Get the appointment info before updating
+  // Verify the customer owns the appointment
+  const [appointment] = await Database.select()
+    .from(Appointments)
+    .where(eq(Appointments.id, request.appointmentId));
+  if (!appointment || appointment.customerId !== customerId) {
+    return NextResponse.json({ error: true, errorMessage: 'You do not have permission to act on this request' }, { status: 403 });
+  }
+
+  // Get the appointment info for notifications
   const info = await getAppointmentInfo(request.appointmentId);
   const trackingNumber = info.trackingNumber;
   const customerName = info.customerName || 'Customer';
-  const customerId = request.requestedByCustomerId;
 
   if (action === 'approve') {
     // Update appointment date/time
@@ -69,18 +72,13 @@ export async function PATCH(
       .where(eq(AppointmentRescheduleRequests.id, requestId));
 
     // ----- TRIGGERS (Approved) -----
+    mobileAppointmentsTriggers.onRescheduleApproved({
+      customerId,
+      trackingNumber,
+      newDate: request.newAppointmentDate,
+      newTime: request.newAppointmentTime,
+    }).catch(console.error);
 
-    // Notify customer (mobile)
-    if (customerId) {
-      mobileAppointmentsTriggers.onRescheduleApproved({
-        customerId,
-        trackingNumber,
-        newDate: request.newAppointmentDate,
-        newTime: request.newAppointmentTime,
-      }).catch(console.error);
-    }
-
-    // Notify staff (system)
     appointmentsTriggers.onRescheduleApproved({
       trackingNumber,
       customerName,
@@ -98,19 +96,12 @@ export async function PATCH(
       .set({ status: 'REJECTED', updatedAt: new Date() })
       .where(eq(AppointmentRescheduleRequests.id, requestId));
 
-    // Also cancel the appointment if it was requested by customer? Not needed; we just reject.
-
     // ----- TRIGGERS (Rejected) -----
+    mobileAppointmentsTriggers.onRescheduleRejected({
+      customerId,
+      trackingNumber,
+    }).catch(console.error);
 
-    // Notify customer (mobile)
-    if (customerId) {
-      mobileAppointmentsTriggers.onRescheduleRejected({
-        customerId,
-        trackingNumber,
-      }).catch(console.error);
-    }
-
-    // Notify staff (system)
     appointmentsTriggers.onRescheduleRejected({
       trackingNumber,
       customerName,
