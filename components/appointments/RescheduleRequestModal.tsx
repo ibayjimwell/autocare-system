@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { CheckCircle, XCircle, Clock, User, Calendar } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -174,11 +174,6 @@ export default function RescheduleRequestModal({
     return <Badge className={`${color} border-none`}>{label}</Badge>;
   };
 
-  const canActOnPending = pendingRequest && (
-    (pendingRequest.requestedBy === 'staff' && !pendingRequest.requestedByStaffId) || // staff requested, customer can act
-    (pendingRequest.requestedBy === 'customer' && !pendingRequest.requestedByCustomerId) // customer requested, staff can act
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -239,21 +234,25 @@ export default function RescheduleRequestModal({
                         To {format(new Date(req.newAppointmentDate), 'MMM d, yyyy')} at {req.newAppointmentTime}
                       </p>
                       {req.reason && <p className="text-xs text-muted-foreground italic">Reason: {req.reason}</p>}
+                      
+                      {/* ✅ Show Approve/Reject for ALL pending requests (staff can act on any) */}
                       {req.status === 'PENDING' && (
                         <div className="flex gap-2 mt-2">
-                          {canActOnPending && (
-                            <>
-                              <Button size="sm" onClick={() => handleApprove(req.id)} className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold">
-                                Approve
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleReject(req.id)} className="text-xs font-bold border-red-300 text-red-600 hover:bg-red-50">
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                          {!canActOnPending && (
-                            <span className="text-xs text-muted-foreground">Waiting for {req.requestedBy === 'customer' ? 'staff' : 'customer'} action</span>
-                          )}
+                          <Button
+                            size="sm"
+                            onClick={() => handleApprove(req.id)}
+                            className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold"
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleReject(req.id)}
+                            className="text-xs font-bold border-red-300 text-red-600 hover:bg-red-50"
+                          >
+                            Reject
+                          </Button>
                         </div>
                       )}
                     </div>

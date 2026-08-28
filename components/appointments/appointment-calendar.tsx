@@ -52,11 +52,18 @@ export default function AppointmentCalendar({
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startOffset = monthStart.getDay();
 
+  // Count total non-cancelled appointments per date
   const countMap: Record<string, number> = {};
+  // Count pending appointments per date
+  const pendingCountMap: Record<string, number> = {};
   appointments.forEach((apt) => {
     if (apt.status !== "CANCELLED") {
       const dateKey = apt.appointmentDate;
       countMap[dateKey] = (countMap[dateKey] || 0) + 1;
+    }
+    if (apt.status === "PENDING") {
+      const dateKey = apt.appointmentDate;
+      pendingCountMap[dateKey] = (pendingCountMap[dateKey] || 0) + 1;
     }
   });
 
@@ -137,6 +144,7 @@ export default function AppointmentCalendar({
         {daysInMonth.map((day) => {
           const dateKey = format(day, "yyyy-MM-dd");
           const count = countMap[dateKey] || 0;
+          const pendingCount = pendingCountMap[dateKey] || 0;
           const isSelected = selectedDate && isSameDay(day, selectedDate);
           const isCurrentMonth = isSameMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
@@ -151,7 +159,7 @@ export default function AppointmentCalendar({
                 "flex flex-col items-center justify-center border-2",
                 "active:scale-95",
                 !isCurrentMonth && "opacity-20",
-                isClosed && "bg-slate-100 border-slate-200 opacity-70", // visual closure
+                isClosed && "bg-slate-100 border-slate-200 opacity-70",
                 isSelected
                   ? "bg-primary border-primary text-white shadow-xl shadow-primary/30 z-10 scale-105"
                   : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-100"
@@ -170,6 +178,14 @@ export default function AppointmentCalendar({
                 {format(day, "d")}
               </span>
 
+              {/* Pending count badge (top-right) */}
+              {!isClosed && pendingCount > 0 && (
+                <div className="absolute -top-1 -right-1 text-[9px] min-w-[18px] h-[18px] rounded-full flex items-center justify-center font-black bg-red-500 text-white border-2 border-white shadow-md animate-pulse">
+                  {pendingCount}
+                </div>
+              )}
+
+              {/* Total count badge (bottom-right) */}
               {isClosed ? (
                 <div className="absolute -bottom-1 -right-1 text-[9px] w-5 h-5 rounded-lg flex items-center justify-center bg-red-100 text-red-600 border border-red-200 font-black">
                   <XCircle className="w-3 h-3" />
@@ -215,6 +231,12 @@ export default function AppointmentCalendar({
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <span className="text-[10px] font-bold text-slate-500 uppercase">
               Peak
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[10px] font-bold text-slate-500 uppercase">
+              Pending
             </span>
           </div>
           <div className="flex items-center gap-2">

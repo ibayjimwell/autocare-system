@@ -4,12 +4,14 @@ import StatusBadge from '@/components/shared/status-badge';
 import { Calendar, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import StatusAccentBar from './status-accent-bar';
+import { canReschedule } from '@/app-utils/appointments/helpers';
+import { Button } from '@/components/ui/button';
 
 interface AppointmentData {
   id: string;
   customerId: string;
   vehicleId: string;
-  services: any[] | null;      // service objects or IDs
+  services: any[] | null;
   trackingNumber: string;
   appointmentDate: string;
   appointmentTime: string;
@@ -22,12 +24,20 @@ interface AppointmentData {
 }
 
 interface AppointmentCardProps {
-  appointment: AppointmentData;     // full data from the list
+  appointment: AppointmentData;
   children?: React.ReactNode;
   className?: string;
+  pendingRescheduleCount?: number;
+  onReschedule?: (appointment: AppointmentData) => void;
 }
 
-export default function AppointmentCard({ appointment, children, className }: AppointmentCardProps) {
+export default function AppointmentCard({
+  appointment,
+  children,
+  className,
+  pendingRescheduleCount = 0,
+  onReschedule,
+}: AppointmentCardProps) {
   if (!appointment) {
     return (
       <div className={cn("w-full rounded-lg border border-destructive/20 bg-destructive/5 p-4 flex items-center gap-2 text-destructive", className)}>
@@ -36,6 +46,9 @@ export default function AppointmentCard({ appointment, children, className }: Ap
       </div>
     );
   }
+
+  const hasPendingReschedule = pendingRescheduleCount > 0;
+  const isReschedulable = canReschedule(appointment.status);
 
   return (
     <div
@@ -73,6 +86,24 @@ export default function AppointmentCard({ appointment, children, className }: Ap
       </div>
 
       {children && <div className="flex flex-col gap-2 mt-2">{children}</div>}
+
+      {/* ✅ Pending Reschedule Indicator with Pulse */}
+      {isReschedulable && onReschedule && (
+        <div className="relative inline-block mt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-blue-600 border-blue-200 hover:bg-blue-50 h-8 text-[10px] font-black uppercase relative"
+            onClick={() => onReschedule(appointment)}
+          >
+            <Calendar className="w-3.5 h-3.5 mr-1" />
+            Reschedule
+            {hasPendingReschedule && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

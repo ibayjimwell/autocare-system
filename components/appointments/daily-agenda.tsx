@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Clock, Search, CalendarDays, CheckCircle, XCircle, Hash, Calendar,
+  Clock, Search, CalendarDays, CheckCircle, XCircle,
 } from 'lucide-react';
 import AppointmentCard from '@/components/appointments/appointment-card';
 import CustomerCard from '@/components/customers/customer-card';
@@ -22,9 +22,9 @@ import VehicleCard from '@/components/customers/vehicle-card';
 import ServiceCard from '@/components/services/service-card';
 import StaffCards from '@/components/staffs/staff-cards';
 import { useServiceQueue } from '@/hooks/queue/useServiceQueue';
+import { usePendingRescheduleRequests } from '@/hooks/appointments/usePendingRescheduleRequests';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { canReschedule } from '@/app-utils/appointments/helpers';
 import RescheduleRequestModal from './RescheduleRequestModal';
 
 interface DailyAgendaProps {
@@ -32,10 +32,9 @@ interface DailyAgendaProps {
   selectedDate: Date;
   onConfirm: (appt: any) => void;
   onDecline: (appt: any, reason: string) => void;
-  onRefresh?: () => void; // to reload appointments after reschedule
+  onRefresh?: () => void;
 }
 
-// Status tabs (order matches the typical workflow)
 const STATUS_TABS = [
   { value: 'ALL', label: 'All' },
   { value: 'PENDING', label: 'Pending' },
@@ -62,7 +61,6 @@ export default function DailyAgenda({
     reason: string;
   }>({ open: false, appointment: null, reason: '' });
 
-  // Reschedule modal state
   const [rescheduleModal, setRescheduleModal] = useState<{
     open: boolean;
     appointment: any | null;
@@ -71,8 +69,15 @@ export default function DailyAgenda({
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
 
-  // Fetch queue for the selected date (only if status tab is CONFIRMED)
   const { queue, loading: queueLoading } = useServiceQueue(dateStr, activeStatus === 'CONFIRMED');
+
+  const appointmentIds = useMemo(() => {
+    return appointments
+      .filter((a) => a.appointmentDate && new Date(a.appointmentDate).toDateString() === selectedDate.toDateString())
+      .map((a) => a.id);
+  }, [appointments, selectedDate]);
+
+  const { pendingMap, loading: pendingLoading } = usePendingRescheduleRequests(appointmentIds);
 
   const filteredAppointments = useMemo(() => {
     let data = appointments.filter((a) => {
@@ -107,11 +112,9 @@ export default function DailyAgenda({
   };
 
   const handleRescheduleSuccess = () => {
-    // Refresh appointments
     if (onRefresh) onRefresh();
   };
 
-  // Render queue for CONFIRMED status
   const renderQueue = () => {
     if (queueLoading) {
       return <div className="text-center py-8 text-muted-foreground">Loading queue...</div>;
@@ -146,7 +149,6 @@ export default function DailyAgenda({
     );
   };
 
-  // Render appointment cards for non‑CONFIRMED statuses
   const renderAppointments = () => {
     if (filteredAppointments.length === 0) {
       return (
@@ -161,7 +163,12 @@ export default function DailyAgenda({
       );
     }
     return filteredAppointments.map((appt) => (
-      <AppointmentCard key={appt.id} appointment={appt}>
+      <AppointmentCard
+        key={appt.id}
+        appointment={appt}
+        pendingRescheduleCount={pendingMap[appt.id] ? 1 : 0}
+        onReschedule={handleRescheduleOpen}
+      >
         <CustomerCard customerId={appt.customerId} />
         <VehicleCard vehicleId={appt.vehicleId} customerId={appt.customerId} />
         {appt.services && appt.services.length > 0 ? (
@@ -172,42 +179,29 @@ export default function DailyAgenda({
           <div className="text-xs text-muted-foreground italic">No services selected.</div>
         )}
         <StaffCards appointmentId={appt.id} />
-        <div className="flex flex-wrap gap-2 mt-2">
-          {appt.status === 'PENDING' && (
-            <>
-              <Button
-                size="sm"
-                className="flex-1 text-green-600 bg-green-50 hover:bg-green-100 h-8 text-[10px] font-black uppercase"
-                onClick={() => onConfirm(appt)}
-              >
-                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Confirm
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="flex-1 text-red-400 hover:bg-red-50 h-8 text-[10px] font-black uppercase"
-                onClick={() => handleDeclineOpen(appt)}
-              >
-                <XCircle className="w-3.5 h-3.5 mr-1" /> Decline
-              </Button>
-            </>
-          )}
-          {canReschedule(appt.status) && (
+        {appt.status === 'PENDING' && (
+          <div className="flex flex-wrap gap-2 mt-2">
             <Button
               size="sm"
-              variant="outline"
-              className="flex-1 text-blue-600 border-blue-200 hover:bg-blue-50 h-8 text-[10px] font-black uppercase"
-              onClick={() => handleRescheduleOpen(appt)}
+              className="flex-1 text-green-600 bg-green-50 hover:bg-green-100 h-8 text-[10px] font-black uppercase"
+              onClick={() => onConfirm(appt)}
             >
-              <Calendar className="w-3.5 h-3.5 mr-1" /> Reschedule
+              <CheckCircle className="w-3.5 h-3.5 mr-1" /> Confirm
             </Button>
-          )}
-        </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="flex-1 text-red-400 hover:bg-red-50 h-8 text-[10px] font-black uppercase"
+              onClick={() => handleDeclineOpen(appt)}
+            >
+              <XCircle className="w-3.5 h-3.5 mr-1" /> Decline
+            </Button>
+          </div>
+        )}
       </AppointmentCard>
     ));
   };
 
-  // Determine what to render based on active status
   const renderContent = () => {
     if (activeStatus === 'CONFIRMED') {
       return renderQueue();
