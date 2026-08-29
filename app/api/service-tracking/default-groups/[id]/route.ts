@@ -10,7 +10,7 @@ import { isValidUUID } from '@/utils/shared';
 // ------------------------------------------------------------------
 // PUT /api/service-tracking/default-groups/:id
 // Update group and its tasks (replace tasks).
-// Body: { title?, description?, isActive?, tasks: [{ id?, title, durationMinutes?, order? }] }
+// Body: { title?, description?, isActive?, tasks: [{ id?, title, durationMinutes?, taskType?, order? }] }
 // ------------------------------------------------------------------
 export async function PUT(
   req: NextRequest,
@@ -77,6 +77,7 @@ export async function PUT(
           groupId: id,
           title: t.title?.trim() || `Task ${idx + 1}`,
           durationMinutes: t.durationMinutes ? parseInt(t.durationMinutes) : null,
+          taskType: t.taskType || 'INSPECTION', // ✅ fixed: include taskType
           order: t.order !== undefined ? parseInt(t.order) : idx,
         }));
         await Database.insert(DefaultTasks).values(taskValues);

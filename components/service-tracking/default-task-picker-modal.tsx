@@ -21,6 +21,7 @@ interface DefaultTaskPickerModalProps {
   onOpenChange: (open: boolean) => void;
   onAddTasks: (tasks: Array<{ title: string; durationMinutes?: number }>) => Promise<void>;
   isAdding: boolean;
+  phase: 'INSPECTION' | 'WORK'; // which phase to filter tasks by
 }
 
 export default function DefaultTaskPickerModal({
@@ -28,6 +29,7 @@ export default function DefaultTaskPickerModal({
   onOpenChange,
   onAddTasks,
   isAdding,
+  phase,
 }: DefaultTaskPickerModalProps) {
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,12 +68,25 @@ export default function DefaultTaskPickerModal({
     setSelectedTaskIds(newSet);
   };
 
+  const handleSelectAll = () => {
+    if (!selectedGroupId) return;
+    const group = groups.find(g => g.id === selectedGroupId);
+    if (!group) return;
+    const filteredTasks = (group.tasks || []).filter((t: any) => t.taskType === phase);
+    const allIds = filteredTasks.map((t: any) => t.id);
+    if (selectedTaskIds.size === allIds.length) {
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectedTaskIds(new Set(allIds));
+    }
+  };
+
   const handleAddSelected = async () => {
     if (!selectedGroupId) return;
     const group = groups.find(g => g.id === selectedGroupId);
     if (!group) return;
-    const tasksToAdd = group.tasks
-      .filter((t: any) => selectedTaskIds.has(t.id))
+    const tasksToAdd = (group.tasks || [])
+      .filter((t: any) => selectedTaskIds.has(t.id) && t.taskType === phase)
       .map((t: any) => ({
         title: t.title,
         durationMinutes: t.durationMinutes || undefined,
@@ -81,16 +96,19 @@ export default function DefaultTaskPickerModal({
       return;
     }
     await onAddTasks(tasksToAdd);
-    // Don't close; let the parent decide.
   };
 
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
+  const phaseLabel = phase?.toLowerCase() || 'unknown';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Add Tasks from Template</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {phase === 'INSPECTION' ? 'Inspection' : 'Repair'} tasks only
+          </p>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -118,29 +136,38 @@ export default function DefaultTaskPickerModal({
           {/* Tasks list */}
           {selectedGroup && (
             <div>
-              <Label>Tasks</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label>Tasks ({phase === 'INSPECTION' ? 'Inspection' : 'Repair'})</Label>
+                <Button variant="ghost" size="sm" onClick={handleSelectAll} className="h-7 text-xs">
+                  {selectedTaskIds.size > 0 ? 'Deselect All' : 'Select All'}
+                </Button>
+              </div>
               <ScrollArea className="max-h-60 border rounded-md p-2">
-                {selectedGroup.tasks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No tasks in this group.</p>
+                {(selectedGroup.tasks || []).filter((t: any) => t.taskType === phase).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No {phaseLabel} tasks in this group.
+                  </p>
                 ) : (
                   <div className="space-y-2">
-                    {selectedGroup.tasks.map((task: any) => (
-                      <div key={task.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`task-${task.id}`}
-                          checked={selectedTaskIds.has(task.id)}
-                          onCheckedChange={() => handleToggleTask(task.id)}
-                        />
-                        <Label htmlFor={`task-${task.id}`} className="flex-1 cursor-pointer">
-                          {task.title}
-                          {task.durationMinutes && (
-                            <span className="text-xs text-muted-foreground ml-2">
-                              ({task.durationMinutes} min)
-                            </span>
-                          )}
-                        </Label>
-                      </div>
-                    ))}
+                    {(selectedGroup.tasks || [])
+                      .filter((t: any) => t.taskType === phase)
+                      .map((task: any) => (
+                        <div key={task.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`task-${task.id}`}
+                            checked={selectedTaskIds.has(task.id)}
+                            onCheckedChange={() => handleToggleTask(task.id)}
+                          />
+                          <Label htmlFor={`task-${task.id}`} className="flex-1 cursor-pointer">
+                            {task.title}
+                            {task.durationMinutes && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                ({task.durationMinutes} min)
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                      ))}
                   </div>
                 )}
               </ScrollArea>

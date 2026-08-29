@@ -14,9 +14,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trash2, Edit2, X, Check } from 'lucide-react';
+import { Plus, Trash2, Edit2, X } from 'lucide-react';
 import { defaultGroupsApi } from '@/lib/service-tracking/default-groups';
 import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface DefaultGroupManagerModalProps {
   open: boolean;
@@ -36,7 +37,7 @@ export default function DefaultGroupManagerModal({
     title: string;
     description: string;
     isActive: boolean;
-    tasks: Array<{ id?: string; title: string; durationMinutes?: number }>;
+    tasks: Array<{ id?: string; title: string; durationMinutes?: number; taskType?: string }>;
   }>({
     title: '',
     description: '',
@@ -84,6 +85,7 @@ export default function DefaultGroupManagerModal({
         id: t.id,
         title: t.title,
         durationMinutes: t.durationMinutes || undefined,
+        taskType: t.taskType || 'INSPECTION',
       })),
     });
   };
@@ -116,6 +118,7 @@ export default function DefaultGroupManagerModal({
         tasks: formData.tasks.map(t => ({
           title: t.title.trim(),
           durationMinutes: t.durationMinutes,
+          taskType: t.taskType || 'INSPECTION', // ✅ include taskType
         })),
       };
       let res;
@@ -140,7 +143,7 @@ export default function DefaultGroupManagerModal({
   const addTask = () => {
     setFormData({
       ...formData,
-      tasks: [...formData.tasks, { title: '', durationMinutes: undefined }],
+      tasks: [...formData.tasks, { title: '', durationMinutes: undefined, taskType: 'INSPECTION' }],
     });
   };
 
@@ -150,11 +153,11 @@ export default function DefaultGroupManagerModal({
     setFormData({ ...formData, tasks: newTasks });
   };
 
-  const updateTask = (index: number, field: 'title' | 'durationMinutes', value: string) => {
+  const updateTask = (index: number, field: string, value: any) => {
     const newTasks = [...formData.tasks];
     newTasks[index] = {
       ...newTasks[index],
-      [field]: field === 'durationMinutes' ? (value ? parseInt(value) : undefined) : value,
+      [field]: value,
     };
     setFormData({ ...formData, tasks: newTasks });
   };
@@ -244,6 +247,18 @@ export default function DefaultGroupManagerModal({
                         placeholder="Min"
                         className="w-20"
                       />
+                      <Select
+                        value={task.taskType || 'INSPECTION'}
+                        onValueChange={(val) => updateTask(index, 'taskType', val)}
+                      >
+                        <SelectTrigger className="w-32 h-9">
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="INSPECTION">Inspection</SelectItem>
+                          <SelectItem value="WORK">Work</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button variant="ghost" size="icon" onClick={() => removeTask(index)}>
                         <X className="w-4 h-4 text-destructive" />
                       </Button>

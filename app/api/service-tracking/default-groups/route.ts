@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
         groupId: group.id,
         title: t.title?.trim() || `Task ${idx + 1}`,
         durationMinutes: t.durationMinutes ? parseInt(t.durationMinutes) : null,
+        taskType: t.taskType || 'INSPECTION',
         order: idx,
       }));
       await Database.insert(DefaultTasks).values(taskValues);

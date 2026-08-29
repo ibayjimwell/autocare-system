@@ -63,7 +63,8 @@ export default function ServiceTrackingPage() {
 
   // Enable the queue hook only when on the "Confirmed" tab (today's appointments)
   const isToday = activeFilter === 'CONFIRMED';
-  const { queue, loading: queueLoading, moveUp, moveDown, reorder, loadQueue } = useServiceQueue(isToday);
+  // ✅ Pass todayDate as the date string and isToday as the enabled flag
+  const { queue, loading: queueLoading, moveUp, moveDown, reorder, loadQueue } = useServiceQueue(todayDate, isToday);
 
   const handleStartInspectionFromQueue = async (appointmentId: string) => {
     try {

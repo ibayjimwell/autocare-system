@@ -15,15 +15,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useAllTaskHistory } from '@/hooks/service-tracking/useTaskHistory';
-import { Search, Loader2, Car, User } from 'lucide-react';
-import { format } from 'date-fns';
+import { Search, Loader2, Car, User, CalendarDays } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { toast } from 'sonner';
 
 interface HistoryTaskPickerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddTasks: (tasks: Array<{ title: string; durationMinutes?: number }>) => Promise<void>;
   isAdding: boolean;
-  phase: 'INSPECTION' | 'WORK'; // which phase to pick from
+  phase: 'INSPECTION' | 'WORK';
 }
 
 export default function HistoryTaskPickerModal({
@@ -43,10 +44,20 @@ export default function HistoryTaskPickerModal({
   }, [open, loadHistory]);
 
   useEffect(() => {
-    // Reload when search changes (debounce)
     const timer = setTimeout(loadHistory, 300);
     return () => clearTimeout(timer);
   }, [search, loadHistory]);
+
+  // Group history by date (appointmentDate)
+  const groupedHistory = React.useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const item of history) {
+      const date = item.appointmentDate || 'No Date';
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(item);
+    }
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [history]);
 
   const handleToggleTask = (taskId: string) => {
     const newSet = new Set(selectedTaskIds);
@@ -76,7 +87,7 @@ export default function HistoryTaskPickerModal({
         <DialogHeader className="p-4 border-b shrink-0">
           <DialogTitle className="text-xl font-bold">Add Tasks from History</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Tasks previously used in other appointments ({phase === 'INSPECTION' ? 'Inspection' : 'Repair'} phase)
+            {phase === 'INSPECTION' ? 'Inspection' : 'Repair'} tasks from past appointments
           </p>
         </DialogHeader>
 
@@ -102,47 +113,64 @@ export default function HistoryTaskPickerModal({
               No tasks found in history.
             </p>
           ) : (
-            <div className="space-y-4">
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-start gap-3 border rounded-lg p-3 hover:bg-muted/50 transition-colors"
-                >
-                  <Checkbox
-                    id={`task-${item.id}`}
-                    checked={selectedTaskIds.has(item.id)}
-                    onCheckedChange={() => handleToggleTask(item.id)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <Label htmlFor={`task-${item.id}`} className="font-medium cursor-pointer">
-                      {item.title}
-                      {item.durationMinutes && (
-                        <span className="text-xs text-muted-foreground ml-2">
-                          ({item.durationMinutes} min)
-                        </span>
-                      )}
-                    </Label>
-                    <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                      <div className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        <span>{item.customer?.fullname || 'Unknown Customer'}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Car className="w-3 h-3" />
-                        <span>
-                          {item.vehicle?.make} {item.vehicle?.model} ({item.vehicle?.plateNumber})
-                        </span>
-                      </div>
-                      <div>
-                        Used on: {item.appointmentDate ? format(new Date(item.appointmentDate), 'MMM d, yyyy') : 'N/A'}
-                        {item.appointmentTime && ` at ${item.appointmentTime}`}
-                      </div>
-                    </div>
+            <div className="space-y-6">
+              {groupedHistory.map(([date, items]) => (
+                <div key={date}>
+                  {/* Date header */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">
+                      {date === 'No Date' ? 'No Date' : format(parseISO(date), 'EEEE, MMMM d, yyyy')}
+                    </h4>
+                    <div className="h-px flex-1 bg-slate-200" />
                   </div>
-                  <Badge variant="outline" className="shrink-0">
-                    {item.phase === 'INSPECTION' ? 'Inspection' : 'Repair'}
-                  </Badge>
+
+                  {/* Tasks for this date */}
+                  <div className="space-y-3">
+                    {items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 border rounded-lg p-3 hover:bg-muted/50 transition-colors"
+                      >
+                        <Checkbox
+                          id={`task-${item.id}`}
+                          checked={selectedTaskIds.has(item.id)}
+                          onCheckedChange={() => handleToggleTask(item.id)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <Label htmlFor={`task-${item.id}`} className="font-medium cursor-pointer">
+                            {item.title}
+                            {item.durationMinutes && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                ({item.durationMinutes} min)
+                              </span>
+                            )}
+                          </Label>
+                          <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                            <div className="flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              <span>{item.customer?.fullname || 'Unknown Customer'}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Car className="w-3 h-3" />
+                              <span>
+                                {item.vehicle?.make} {item.vehicle?.model} ({item.vehicle?.plateNumber})
+                              </span>
+                            </div>
+                            {item.appointmentTime && (
+                              <div>
+                                Time: {item.appointmentTime}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="shrink-0">
+                          {item.phase === 'INSPECTION' ? 'Inspection' : 'Repair'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

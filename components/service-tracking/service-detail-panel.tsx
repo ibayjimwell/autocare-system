@@ -685,6 +685,7 @@ export default function ServiceDetailPanel({
         onOpenChange={setTaskPickerOpen}
         onAddTasks={handleAddTasksFromTemplate}
         isAdding={isAddingTemplateTasks}
+        phase={isInspection ? 'INSPECTION' : 'WORK'}
       />
 
       <HistoryTaskPickerModal

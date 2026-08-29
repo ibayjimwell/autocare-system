@@ -1,4 +1,3 @@
-// hooks/queue/useServiceQueue.ts
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
@@ -43,5 +42,24 @@ export function useServiceQueue(date: string, enabled: boolean = true) {
     date,
   });
 
-  return { queue, loading, loadQueue };
+  const reorder = useCallback(async (appointmentId: string, newPosition: number) => {
+    const res = await serviceQueueApi.reorder(appointmentId, newPosition);
+    if (res.error) {
+      toast.error(res.errorMessage || 'Failed to reorder.');
+    } else {
+      toast.success('Queue updated.');
+    }
+  }, []);
+
+  const moveUp = useCallback((appointmentId: string, currentPosition: number) => {
+    if (currentPosition <= 1) return;
+    reorder(appointmentId, currentPosition - 1);
+  }, [reorder]);
+
+  const moveDown = useCallback((appointmentId: string, currentPosition: number, maxPosition: number) => {
+    if (currentPosition >= maxPosition) return;
+    reorder(appointmentId, currentPosition + 1);
+  }, [reorder]);
+
+  return { queue, loading, loadQueue, moveUp, moveDown, reorder };
 }
