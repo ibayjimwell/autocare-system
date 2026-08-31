@@ -4,12 +4,10 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  AlertCircle,
   ArrowDownToLine,
   ArrowUpFromLine,
   ClipboardList,
   FileCheck2,
-  FileText,
   QrCode,
   ReceiptText,
   Search,
@@ -50,72 +48,145 @@ export default function PaymentsPage() {
   const router = useRouter();
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [activeTab, setActiveTab] = useState<'estimates' | 'final-bills'>('estimates');
+  const [activeTab, setActiveTab] = useState<
+    'estimates' | 'final-bills'
+  >('estimates');
   const [search, setSearch] = useState('');
 
-  const { estimates, finalBills, loading, error, reload } = usePaymentsData(
-    statusFilter,
-    search
-  );
+  const {
+    estimates,
+    finalBills,
+    loading,
+    error,
+    reload,
+  } = usePaymentsData(statusFilter, search);
 
-  const estimateActions = useEstimateActions(reload);
-  const billActions = useFinalBillActions(reload);
-  const detail = useDetailModal(reload);
+  const estimateActions =
+    useEstimateActions(reload);
 
-  const adjustments = useAdjustments({
-    selectedItem: detail.selectedItem,
-    detailType: detail.detailType,
-    refreshDetail: detail.refreshDetail,
-    reloadList: reload,
-  });
+  const billActions =
+    useFinalBillActions(reload);
+
+  const detail =
+    useDetailModal(reload);
+
+  const adjustments =
+    useAdjustments({
+      selectedItem: detail.selectedItem,
+      detailType: detail.detailType,
+      refreshDetail: detail.refreshDetail,
+      reloadList: reload,
+    });
 
   // Cashier & Receipt
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
-  const [receiptData, setReceiptData] = useState<any>(null);
-  const [receiptReference, setReceiptReference] = useState('');
+  const [
+    receiptModalOpen,
+    setReceiptModalOpen,
+  ] = useState(false);
+
+  const [
+    receiptData,
+    setReceiptData,
+  ] = useState<any>(null);
+
+  const [
+    receiptReference,
+    setReceiptReference,
+  ] = useState('');
 
   // QR Scanner
-  const [qrScannerOpen, setQrScannerOpen] = useState(false);
+  const [
+    qrScannerOpen,
+    setQrScannerOpen,
+  ] = useState(false);
 
-  const handleHold = (id: string, rate: number, unit: string) => {
-    billActions.updateStatus(id, 'HOLD', rate, unit);
+  const handleHold = (
+    id: string,
+    rate: number,
+    unit: string
+  ) => {
+    billActions.updateStatus(
+      id,
+      'HOLD',
+      rate,
+      unit
+    );
   };
 
-  const handleMakeOfficial = (id: string) => {
-    billActions.updateStatus(id, 'OFFICIAL');
+  const handleMakeOfficial = (
+    id: string
+  ) => {
+    billActions.updateStatus(
+      id,
+      'OFFICIAL'
+    );
   };
 
-  const handleBackToPending = (id: string) => {
-    billActions.updateStatus(id, 'PENDING');
+  const handleBackToPending = (
+    id: string
+  ) => {
+    billActions.updateStatus(
+      id,
+      'PENDING'
+    );
   };
 
-  const handlePaymentSuccess = (referenceNumber: string) => {
-    toast.success(`Payment processed! Receipt ${referenceNumber} generated.`);
+  const handlePaymentSuccess = (
+    referenceNumber: string
+  ) => {
+    toast.success(
+      `Payment processed! Receipt ${referenceNumber} generated.`
+    );
+
     reload();
   };
 
-  const handleQrScan = async (billId: string) => {
+  const handleQrScan = async (
+    billId: string
+  ) => {
     try {
-      const res = await finalBillsApi.get(billId);
+      const res =
+        await finalBillsApi.get(
+          billId
+        );
 
-      if (res.error || !res.data) {
-        toast.error(res.errorMessage || 'Bill not found.');
+      if (
+        res.error ||
+        !res.data
+      ) {
+        toast.error(
+          res.errorMessage ||
+            'Bill not found.'
+        );
         return;
       }
 
-      billActions.handleOpenCashier(res.data);
+      billActions.handleOpenCashier(
+        res.data
+      );
     } catch (err: any) {
-      toast.error('Failed to load bill.');
+      toast.error(
+        'Failed to load bill.'
+      );
     }
   };
 
-  if (loading && estimates.length === 0 && finalBills.length === 0) {
+  if (
+    loading &&
+    estimates.length === 0 &&
+    finalBills.length === 0
+  ) {
     return <LoadingSpinner />;
   }
 
-  const totalRecords = estimates.length + finalBills.length;
+  const totalRecords =
+    estimates.length +
+    finalBills.length;
+
   const currentRecords =
-    activeTab === 'estimates' ? estimates.length : finalBills.length;
+    activeTab === 'estimates'
+      ? estimates.length
+      : finalBills.length;
 
   return (
     <PageContainer
@@ -127,9 +198,17 @@ export default function PaymentsPage() {
             type="button"
             variant="outline"
             className="
-              h-11 w-full rounded-md px-4 md:h-9 md:w-auto md:px-3
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-ring focus-visible:ring-offset-2
+              h-11
+              w-full
+              rounded-md
+              px-4
+              md:h-9
+              md:w-auto
+              md:px-3
+              focus-visible:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-ring
+              focus-visible:ring-offset-2
             "
           >
             <ArrowDownToLine className="mr-2 h-4 w-4" />
@@ -140,34 +219,27 @@ export default function PaymentsPage() {
             type="button"
             variant="outline"
             className="
-              h-11 w-full rounded-md px-4 md:h-9 md:w-auto md:px-3
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-ring focus-visible:ring-offset-2
+              h-11
+              w-full
+              rounded-md
+              px-4
+              md:h-9
+              md:w-auto
+              md:px-3
+              focus-visible:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-ring
+              focus-visible:ring-offset-2
             "
           >
             <ArrowUpFromLine className="mr-2 h-4 w-4" />
             Import
           </Button>
-
-          <Button
-            type="button"
-            onClick={() => setQrScannerOpen(true)}
-            className="
-              h-11 w-full rounded-md bg-primary px-4
-              text-primary-foreground shadow-sm
-              transition-colors hover:bg-primary/90
-              md:h-9 md:w-auto md:px-3
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-ring focus-visible:ring-offset-2
-            "
-          >
-            <QrCode className="mr-2 h-4 w-4" />
-            Scan QR
-          </Button>
         </div>
       }
     >
       <div className="space-y-4 md:space-y-5 lg:space-y-6">
+        {/* Error */}
         {error && (
           <Card className="border-destructive/20 bg-card shadow-sm">
             <CardContent className="p-0">
@@ -180,15 +252,31 @@ export default function PaymentsPage() {
           </Card>
         )}
 
-        {/* KPI STRIP */}
+        {/* SUMMARY */}
         <section
           aria-label="Payments summary"
           className="
-            overflow-hidden rounded-xl border border-border
-            bg-card text-card-foreground shadow-sm
+            overflow-hidden
+            rounded-xl
+            border
+            border-border
+            bg-card
+            text-card-foreground
+            shadow-sm
           "
         >
-          <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+          <div
+            className="
+              grid
+              grid-cols-1
+              divide-y
+              divide-border
+              sm:grid-cols-2
+              sm:divide-x
+              sm:divide-y-0
+              lg:grid-cols-4
+            "
+          >
             <SummaryMetric
               icon={WalletCards}
               label="Total Records"
@@ -201,7 +289,9 @@ export default function PaymentsPage() {
               label="Estimates"
               value={estimates.length.toLocaleString()}
               description="Estimate records"
-              active={activeTab === 'estimates'}
+              active={
+                activeTab === 'estimates'
+              }
             />
 
             <SummaryMetric
@@ -209,7 +299,9 @@ export default function PaymentsPage() {
               label="Final Bills"
               value={finalBills.length.toLocaleString()}
               description="Generated bills"
-              active={activeTab === 'final-bills'}
+              active={
+                activeTab === 'final-bills'
+              }
             />
 
             <SummaryMetric
@@ -228,53 +320,139 @@ export default function PaymentsPage() {
         {/* TOOLBAR */}
         <section
           className="
-            rounded-xl border border-border bg-card
-            p-3 shadow-sm sm:p-4
+            rounded-xl
+            border
+            border-border
+            bg-card
+            p-3
+            shadow-sm
+            sm:p-4
           "
         >
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <PaymentsTabs
+          {/* TABS */}
+          <div className="mb-4">
+            <PaymentsTabs
+              activeTab={activeTab}
+              onTabChange={(value) =>
+                setActiveTab(
+                  value as
+                    | 'estimates'
+                    | 'final-bills'
+                )
+              }
+            />
+          </div>
+
+          {/* FILTER + SEARCH + QR SCANNER */}
+          <div
+            className="
+              flex
+              flex-col
+              gap-3
+              lg:flex-row
+              lg:items-center
+              lg:justify-between
+            "
+          >
+            {/* STATUS FILTER */}
+            <div className="w-full lg:w-auto">
+              <FilterBar
                 activeTab={activeTab}
-                onTabChange={(value) =>
-                  setActiveTab(value as 'estimates' | 'final-bills')
+                statusFilter={statusFilter}
+                onStatusChange={
+                  setStatusFilter
+                }
+                search={search}
+                onSearchChange={
+                  setSearch
                 }
               />
             </div>
 
-            <div className="w-full lg:max-w-sm">
-              <div className="relative">
+            {/* SEARCH + QR */}
+            <div
+              className="
+                flex
+                w-full
+                flex-col
+                gap-2
+                sm:flex-row
+                lg:w-auto
+                lg:min-w-[440px]
+              "
+            >
+              {/* SEARCH INPUT */}
+              <div className="relative min-w-0 flex-1">
                 <Search
                   aria-hidden="true"
                   className="
-                    pointer-events-none absolute left-3 top-1/2
-                    h-4 w-4 -translate-y-1/2 text-muted-foreground
+                    pointer-events-none
+                    absolute
+                    left-3
+                    top-1/2
+                    h-4
+                    w-4
+                    -translate-y-1/2
+                    text-muted-foreground
                   "
                 />
 
                 <Input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) =>
+                    setSearch(
+                      e.target.value
+                    )
+                  }
                   placeholder="Search by plate, customer, or tracking..."
                   className="
-                    h-11 rounded-md pl-9 text-base
-                    md:h-9 md:text-sm
-                    focus-visible:outline-none focus-visible:ring-2
-                    focus-visible:ring-ring focus-visible:ring-offset-2
+                    h-11
+                    w-full
+                    rounded-md
+                    pl-9
+                    text-base
+                    md:h-9
+                    md:text-sm
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-ring
+                    focus-visible:ring-offset-2
                   "
                 />
               </div>
-            </div>
-          </div>
 
-          <div className="mt-3 border-t border-border pt-3">
-            <FilterBar
-              activeTab={activeTab}
-              statusFilter={statusFilter}
-              onStatusChange={setStatusFilter}
-              search={search}
-              onSearchChange={setSearch}
-            />
+              {/* QR SCANNER BUTTON */}
+              <Button
+                type="button"
+                onClick={() =>
+                  setQrScannerOpen(
+                    true
+                  )
+                }
+                className="
+                  h-11
+                  w-full
+                  shrink-0
+                  rounded-md
+                  bg-primary
+                  px-4
+                  text-primary-foreground
+                  shadow-sm
+                  transition-colors
+                  hover:bg-primary/90
+                  sm:w-auto
+                  md:h-9
+                  md:px-4
+                  focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-ring
+                  focus-visible:ring-offset-2
+                "
+              >
+                <QrCode className="mr-2 h-4 w-4" />
+                Scan QR
+              </Button>
+            </div>
           </div>
         </section>
 
@@ -283,109 +461,266 @@ export default function PaymentsPage() {
           {activeTab === 'estimates' ? (
             <EstimatesList
               estimates={estimates}
-              statusFilter={statusFilter}
-              onSendForApproval={estimateActions.handleSendForApproval}
-              onApprove={estimateActions.handleApproveEstimate}
-              onDecline={estimateActions.handleDeclineEstimate}
-              onOpenDetail={(item) => detail.openDetail(item, 'estimate')}
+              statusFilter={
+                statusFilter
+              }
+              onSendForApproval={
+                estimateActions.handleSendForApproval
+              }
+              onApprove={
+                estimateActions.handleApproveEstimate
+              }
+              onDecline={
+                estimateActions.handleDeclineEstimate
+              }
+              onOpenDetail={(item) =>
+                detail.openDetail(
+                  item,
+                  'estimate'
+                )
+              }
             />
           ) : (
             <FinalBillsList
               bills={finalBills}
-              statusFilter={statusFilter}
-              onPay={billActions.handleOpenCashier}
-              onOpenDetail={(item) => detail.openDetail(item, 'final-bill')}
-              onDelete={billActions.confirmDelete}
+              statusFilter={
+                statusFilter
+              }
+              onPay={
+                billActions.handleOpenCashier
+              }
+              onOpenDetail={(item) =>
+                detail.openDetail(
+                  item,
+                  'final-bill'
+                )
+              }
+              onDelete={
+                billActions.confirmDelete
+              }
               onHold={handleHold}
-              onMakeOfficial={handleMakeOfficial}
-              onBackToPending={handleBackToPending}
-              actionLoading={billActions.actionLoading}
+              onMakeOfficial={
+                handleMakeOfficial
+              }
+              onBackToPending={
+                handleBackToPending
+              }
+              actionLoading={
+                billActions.actionLoading
+              }
             />
           )}
         </section>
       </div>
 
+      {/* DETAIL MODAL */}
       <DetailModal
-        open={detail.detailModalOpen}
-        onOpenChange={detail.setDetailModalOpen}
-        detailType={detail.detailType}
-        selectedItem={detail.selectedItem}
-        detailLoading={detail.detailLoading}
-        onAddFee={adjustments.handleAddFee}
-        onAddDiscount={adjustments.handleAddDiscount}
-        onEditPart={adjustments.handleEditPartOpen}
-        feeModalOpen={adjustments.feeModalOpen}
-        setFeeModalOpen={adjustments.setFeeModalOpen}
-        feeForm={adjustments.feeForm}
-        setFeeForm={adjustments.setFeeForm}
-        discountModalOpen={adjustments.discountModalOpen}
-        setDiscountModalOpen={adjustments.setDiscountModalOpen}
-        discountForm={adjustments.discountForm}
-        setDiscountForm={adjustments.setDiscountForm}
-        editPartModalOpen={adjustments.editPartModalOpen}
-        setEditPartModalOpen={adjustments.setEditPartModalOpen}
-        editingPart={adjustments.editingPart}
-        editPartForm={adjustments.editPartForm}
-        setEditPartForm={adjustments.setEditPartForm}
-        submittingAdjustment={adjustments.submittingAdjustment}
-        onSaveFee={adjustments.handleAddFee}
-        onSaveDiscount={adjustments.handleAddDiscount}
-        onSavePart={adjustments.handleEditPartSave}
+        open={
+          detail.detailModalOpen
+        }
+        onOpenChange={
+          detail.setDetailModalOpen
+        }
+        detailType={
+          detail.detailType
+        }
+        selectedItem={
+          detail.selectedItem
+        }
+        detailLoading={
+          detail.detailLoading
+        }
+        onAddFee={
+          adjustments.handleAddFee
+        }
+        onAddDiscount={
+          adjustments.handleAddDiscount
+        }
+        onEditPart={
+          adjustments.handleEditPartOpen
+        }
+        feeModalOpen={
+          adjustments.feeModalOpen
+        }
+        setFeeModalOpen={
+          adjustments.setFeeModalOpen
+        }
+        feeForm={
+          adjustments.feeForm
+        }
+        setFeeForm={
+          adjustments.setFeeForm
+        }
+        discountModalOpen={
+          adjustments.discountModalOpen
+        }
+        setDiscountModalOpen={
+          adjustments.setDiscountModalOpen
+        }
+        discountForm={
+          adjustments.discountForm
+        }
+        setDiscountForm={
+          adjustments.setDiscountForm
+        }
+        editPartModalOpen={
+          adjustments.editPartModalOpen
+        }
+        setEditPartModalOpen={
+          adjustments.setEditPartModalOpen
+        }
+        editingPart={
+          adjustments.editingPart
+        }
+        editPartForm={
+          adjustments.editPartForm
+        }
+        setEditPartForm={
+          adjustments.setEditPartForm
+        }
+        submittingAdjustment={
+          adjustments.submittingAdjustment
+        }
+        onSaveFee={
+          adjustments.handleAddFee
+        }
+        onSaveDiscount={
+          adjustments.handleAddDiscount
+        }
+        onSavePart={
+          adjustments.handleEditPartSave
+        }
       />
 
+      {/* FEE MODAL */}
       <FeeModal
-        open={adjustments.feeModalOpen}
-        onOpenChange={adjustments.setFeeModalOpen}
-        form={adjustments.feeForm}
-        setForm={adjustments.setFeeForm}
-        onSave={adjustments.handleAddFee}
-        saving={adjustments.submittingAdjustment}
-        findings={detail.selectedItem?.findings}
+        open={
+          adjustments.feeModalOpen
+        }
+        onOpenChange={
+          adjustments.setFeeModalOpen
+        }
+        form={
+          adjustments.feeForm
+        }
+        setForm={
+          adjustments.setFeeForm
+        }
+        onSave={
+          adjustments.handleAddFee
+        }
+        saving={
+          adjustments.submittingAdjustment
+        }
+        findings={
+          detail.selectedItem
+            ?.findings
+        }
       />
 
+      {/* DISCOUNT MODAL */}
       <DiscountModal
-        open={adjustments.discountModalOpen}
-        onOpenChange={adjustments.setDiscountModalOpen}
-        form={adjustments.discountForm}
-        setForm={adjustments.setDiscountForm}
-        onSave={adjustments.handleAddDiscount}
-        saving={adjustments.submittingAdjustment}
+        open={
+          adjustments.discountModalOpen
+        }
+        onOpenChange={
+          adjustments.setDiscountModalOpen
+        }
+        form={
+          adjustments.discountForm
+        }
+        setForm={
+          adjustments.setDiscountForm
+        }
+        onSave={
+          adjustments.handleAddDiscount
+        }
+        saving={
+          adjustments.submittingAdjustment
+        }
       />
 
+      {/* EDIT PART MODAL */}
       <EditPartModal
-        open={adjustments.editPartModalOpen}
-        onOpenChange={adjustments.setEditPartModalOpen}
-        part={adjustments.editingPart}
-        form={adjustments.editPartForm}
-        setForm={adjustments.setEditPartForm}
-        onSave={adjustments.handleEditPartSave}
-        saving={adjustments.submittingAdjustment}
+        open={
+          adjustments.editPartModalOpen
+        }
+        onOpenChange={
+          adjustments.setEditPartModalOpen
+        }
+        part={
+          adjustments.editingPart
+        }
+        form={
+          adjustments.editPartForm
+        }
+        setForm={
+          adjustments.setEditPartForm
+        }
+        onSave={
+          adjustments.handleEditPartSave
+        }
+        saving={
+          adjustments.submittingAdjustment
+        }
       />
 
+      {/* DELETE CONFIRMATION */}
       <DeleteConfirmationModal
-        open={billActions.deleteDialogOpen}
-        onOpenChange={billActions.setDeleteDialogOpen}
-        onConfirm={() => billActions.handleDelete(activeTab)}
+        open={
+          billActions.deleteDialogOpen
+        }
+        onOpenChange={
+          billActions.setDeleteDialogOpen
+        }
+        onConfirm={() =>
+          billActions.handleDelete(
+            activeTab
+          )
+        }
       />
 
+      {/* CASHIER */}
       <CashierModal
-        open={billActions.cashierModalOpen}
-        onOpenChange={billActions.setCashierModalOpen}
-        bill={billActions.selectedBillForPayment}
-        onPaid={handlePaymentSuccess}
+        open={
+          billActions.cashierModalOpen
+        }
+        onOpenChange={
+          billActions.setCashierModalOpen
+        }
+        bill={
+          billActions.selectedBillForPayment
+        }
+        onPaid={
+          handlePaymentSuccess
+        }
       />
 
+      {/* QR SCANNER */}
       <QRScannerModal
         open={qrScannerOpen}
-        onOpenChange={setQrScannerOpen}
-        onScan={handleQrScan}
+        onOpenChange={
+          setQrScannerOpen
+        }
+        onScan={
+          handleQrScan
+        }
       />
 
+      {/* RECEIPT */}
       <ReceiptModal
-        open={receiptModalOpen}
-        onOpenChange={setReceiptModalOpen}
-        receiptData={receiptData}
-        referenceNumber={receiptReference}
+        open={
+          receiptModalOpen
+        }
+        onOpenChange={
+          setReceiptModalOpen
+        }
+        receiptData={
+          receiptData
+        }
+        referenceNumber={
+          receiptReference
+        }
       />
     </PageContainer>
   );
@@ -407,16 +742,30 @@ function SummaryMetric({
   return (
     <div
       className={`
-        flex items-center gap-3 px-4 py-4
+        flex
+        items-center
+        gap-3
+        px-4
+        py-4
         sm:px-5
         ${active ? 'bg-primary/[0.035]' : ''}
       `}
     >
       <div
         className={`
-          flex h-9 w-9 shrink-0 items-center justify-center rounded-md
+          flex
+          h-9
+          w-9
+          shrink-0
+          items-center
+          justify-center
+          rounded-md
           border
-          ${active ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-muted/50 text-muted-foreground'}
+          ${
+            active
+              ? 'border-primary/20 bg-primary/10 text-primary'
+              : 'border-border bg-muted/50 text-muted-foreground'
+          }
         `}
       >
         <Icon className="h-4 w-4" />
