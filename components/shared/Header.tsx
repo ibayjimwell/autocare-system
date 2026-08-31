@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, ChevronRight } from "lucide-react";
+import { Wrench, Menu, ChevronRight } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 
 function getPageInfo(pathname: string): { title: string; subtitle: string } {
@@ -32,51 +32,70 @@ function getPageInfo(pathname: string): { title: string; subtitle: string } {
   return { title: fallbackTitle, subtitle: "" };
 }
 
-export function Header() {
+interface HeaderProps {
+  /** Opens the sidebar drawer on screens below lg. Supplied by MainLayout. */
+  onMenuOpen?: () => void;
+}
+
+export function Header({ onMenuOpen }: HeaderProps) {
   const { user } = useAuth();
   const pathname = usePathname();
   const { title, subtitle } = getPageInfo(pathname);
 
   return (
-    <header className="h-14 md:h-16 bg-card backdrop-blur-md border-b border-border min-h-[72px] px-4 md:px-8 flex items-center justify-between sticky top-0 z-40 transition-all duration-300">
-      <div className="flex flex-col justify-center min-w-0">
-        <h2 className="font-black text-foreground md:text-xl tracking-tight leading-tight truncate">
-          {title}
-        </h2>
-        {subtitle && (
-          <p className="text-[9px] md:text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mt-0.5 truncate opacity-80">
-            {subtitle}
-          </p>
+    // Sticky chrome → the one place vibrancy is sanctioned (Rule 5).
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b border-border/50 bg-background/80 px-4 shadow-sm backdrop-blur-xl md:h-[72px] md:bg-background/70 md:px-6 lg:px-8">
+      {/* ---- Left: menu trigger (< lg) + page context ---- */}
+      <div className="flex min-w-0 items-center gap-1 md:gap-2">
+        {onMenuOpen && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onMenuOpen}
+            aria-label="Open navigation menu"
+            aria-haspopup="dialog"
+            className="-ml-2 h-11 w-11 shrink-0 text-foreground hover:bg-accent hover:text-accent-foreground md:-ml-1 md:h-10 md:w-10 lg:hidden"
+          >
+            <Menu className="h-6 w-6 md:h-5 md:w-5" />
+          </Button>
         )}
+
+        <div className="flex min-w-0 flex-col justify-center">
+          <h2 className="truncate text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-xl lg:text-2xl">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground md:text-sm">
+              {subtitle}
+            </p>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center gap-3 group cursor-pointer select-none active:scale-95 transition-transform">
+      {/* ---- Notifications + identity ---- */}
+      <div className="group flex shrink-0 cursor-pointer select-none items-center gap-2 transition-transform active:scale-95 md:gap-3">
         <NotificationBell />
 
-        <div className="hidden sm:flex flex-col items-end text-right">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-black text-foreground leading-none group-hover:text-primary transition-colors">
+        <div className="hidden flex-col items-end text-right sm:flex">
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-semibold leading-none text-foreground transition-colors group-hover:text-primary">
               {user?.name || "Guest Account"}
             </span>
-            <ChevronRight className="w-3 h-3 text-slate-400 group-hover:translate-y-0.5 transition-transform duration-200 rotate-90" />
+            <ChevronRight className="h-4 w-4 rotate-90 text-muted-foreground transition-transform duration-200 group-hover:translate-y-0.5" />
           </div>
-          <div className="mt-1">
-            <Badge
-              variant="secondary"
-              className="text-[8px] px-1.5 py-0 h-3.5 font-black uppercase tracking-widest border-none bg-red-50 text-primary bg-opacity-10"
-            >
-              {user?.role || "GUEST"}
-            </Badge>
-          </div>
+          <Badge
+            variant="secondary"
+            className="mt-1 h-5 max-w-[140px] truncate rounded-md border border-primary/20 bg-primary/10 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary"
+          >
+            {user?.role || "GUEST"}
+          </Badge>
         </div>
 
-        <div className="relative">
-          <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/10 transform group-hover:rotate-6 transition-transform duration-300">
-            <span className="text-xs md:text-sm font-black text-primary-foreground">
-              {user?.name?.charAt(0).toUpperCase() || "U"}
-            </span>
+        <div className="relative shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm transition-transform duration-300 group-hover:scale-105 md:h-10 md:w-10">
+            {user?.name?.charAt(0).toUpperCase() || "U"}
           </div>
-          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full shadow-sm" />
+          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-emerald-500" />
         </div>
       </div>
     </header>

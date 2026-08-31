@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { Sidebar } from "@/components/shared/sidebar";
 import { Header } from "@/components/shared/Header";
-import { MobileHeader } from "@/components/shared/MobileHeader";
 import { Toaster } from "@/components/ui/sonner";
 import { useStaffActivity } from "@/hooks/use-staff-activity";
 
@@ -26,10 +25,9 @@ export default function MainLayout({
     <div className="flex min-h-screen bg-background">
       <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <MobileHeader onMenuClick={() => setMobileOpen(true)} />
-        {/* Header receives page‑specific title/subtitle from the page */}
-        <Header />
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+        {/* Header renders the menu trigger (< lg) that opens the sidebar drawer */}
+        <Header onMenuOpen={() => setMobileOpen(true)} />
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</div>
         <Toaster />
       </main>
     </div>

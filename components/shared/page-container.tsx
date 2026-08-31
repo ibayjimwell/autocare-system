@@ -16,7 +16,7 @@ export default function PageContainer({
   return (
     <section className="flex flex-col h-full gap-6 p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* ---- Header ---- */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           {title && (
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
@@ -26,7 +26,7 @@ export default function PageContainer({
           )}
         </div>
         {actions && <div className="flex-shrink-0">{actions}</div>}
-      </div>
+      </div> */}
 
       {/* ---- Content ---- */}
       <div className="flex-1">{children}</div>
