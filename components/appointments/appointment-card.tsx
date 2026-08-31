@@ -1,4 +1,6 @@
 // components/appointments/appointment-card.tsx
+"use client";
+
 import React, { useState } from 'react';
 import StatusBadge from '@/components/shared/status-badge';
 import { Calendar, Clock, AlertCircle, ChevronDown, User, Car } from 'lucide-react';
