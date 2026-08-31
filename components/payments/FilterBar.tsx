@@ -1,6 +1,10 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface FilterBarProps {
   activeTab: 'estimates' | 'final-bills';
@@ -14,10 +18,7 @@ export default function FilterBar({
   activeTab,
   statusFilter,
   onStatusChange,
-  search,
-  onSearchChange,
 }: FilterBarProps) {
-  // Status options based on active tab
   const statusOptions =
     activeTab === 'estimates'
       ? [
@@ -36,30 +37,43 @@ export default function FilterBar({
         ];
 
   return (
-    <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center justify-between">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Status:</span>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Status
+        </span>
+
         <Select value={statusFilter} onValueChange={onStatusChange}>
-          <SelectTrigger className="w-[180px] h-9 rounded-xl border-slate-200">
+          <SelectTrigger
+            className="
+              h-11 w-full rounded-md text-base sm:w-[190px]
+              md:h-9 md:text-sm
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-ring focus-visible:ring-offset-2
+            "
+          >
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
-          <SelectContent>
+
+          <SelectContent className="rounded-lg">
             {statusOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
+              <SelectItem
+                key={opt.value}
+                value={opt.value}
+                className="
+                  focus-visible:outline-none focus-visible:ring-2
+                  focus-visible:ring-ring focus-visible:ring-offset-2
+                "
+              >
                 {opt.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-      <div className="relative w-full sm:max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by plate, customer, or tracking..."
-          className="pl-10 rounded-xl"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-        />
+
+      <div className="text-xs text-muted-foreground">
+        Use the search field above to quickly locate a record.
       </div>
     </div>
   );

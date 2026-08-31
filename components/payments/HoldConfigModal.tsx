@@ -1,8 +1,21 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { PauseCircle } from 'lucide-react';
 import { useState } from 'react';
 
 interface HoldConfigModalProps {
@@ -12,7 +25,15 @@ interface HoldConfigModalProps {
   loading?: boolean;
 }
 
-export default function HoldConfigModal({ open, onOpenChange, onConfirm, loading }: HoldConfigModalProps) {
+const focusClass =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+
+export default function HoldConfigModal({
+  open,
+  onOpenChange,
+  onConfirm,
+  loading,
+}: HoldConfigModalProps) {
   const [rate, setRate] = useState<number>(5);
   const [unit, setUnit] = useState<string>('hour');
 
@@ -24,45 +45,98 @@ export default function HoldConfigModal({ open, onOpenChange, onConfirm, loading
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-md">
+      <DialogContent
+        className="
+          w-[calc(100%-1rem)] rounded-xl border border-border
+          bg-card shadow-2xl sm:max-w-md
+        "
+      >
         <DialogHeader>
-          <DialogTitle className="font-black">Hold & Apply Parking Fee</DialogTitle>
-          <p className="text-sm text-muted-foreground">Set the parking fee rate for this hold period.</p>
+          <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+            <PauseCircle className="h-5 w-5 text-primary" />
+            Hold & Apply Parking Fee
+          </DialogTitle>
+
+          <p className="text-sm text-muted-foreground">
+            Set the parking fee rate for this hold period.
+          </p>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Fee Rate</Label>
+
+        <div className="space-y-5 py-2">
+          <Field label="Fee Rate">
             <Input
               type="number"
               step="0.01"
               min="0.01"
               value={rate}
-              onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
-              className="rounded-xl"
+              onChange={(e) =>
+                setRate(parseFloat(e.target.value) || 0)
+              }
+              className={`h-11 rounded-md text-base md:h-9 md:text-sm ${focusClass}`}
             />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Unit</Label>
+          </Field>
+
+          <Field label="Unit">
             <Select value={unit} onValueChange={setUnit}>
-              <SelectTrigger className="rounded-xl">
+              <SelectTrigger
+                className={`h-11 rounded-md text-base md:h-9 md:text-sm ${focusClass}`}
+              >
                 <SelectValue placeholder="Select unit" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="minute">Per Minute</SelectItem>
+
+              <SelectContent className="rounded-lg">
+                <SelectItem value="minute">
+                  Per Minute
+                </SelectItem>
                 <SelectItem value="hour">Per Hour</SelectItem>
                 <SelectItem value="day">Per Day</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-muted-foreground">The fee will be calculated based on the elapsed time from now until the hold is removed.</p>
-          </div>
+
+            <p className="text-xs text-muted-foreground">
+              The fee will be calculated based on the elapsed time from now until the hold is removed.
+            </p>
+          </Field>
         </div>
-        <DialogFooter className="gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
-          <Button onClick={handleConfirm} disabled={loading || rate <= 0} className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 font-bold">
+
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+            className={`h-11 w-full rounded-md md:h-9 md:w-auto ${focusClass}`}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            type="button"
+            onClick={handleConfirm}
+            disabled={loading || rate <= 0}
+            className={`h-11 w-full rounded-md md:h-9 md:w-auto ${focusClass}`}
+          >
             {loading ? 'Holding...' : 'Confirm Hold'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
   );
 }

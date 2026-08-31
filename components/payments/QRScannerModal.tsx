@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
 import {
   Dialog,
   DialogContent,
@@ -12,9 +18,21 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+
 import { Html5Qrcode } from 'html5-qrcode';
-import { QrCode, Keyboard, X, Loader2 } from 'lucide-react';
+import {
+  Keyboard,
+  Loader2,
+  QrCode,
+  ScanLine,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 interface QRScannerModalProps {
@@ -23,15 +41,22 @@ interface QRScannerModalProps {
   onScan: (billId: string) => void;
 }
 
-export default function QRScannerModal({ open, onOpenChange, onScan }: QRScannerModalProps) {
+const focusClass =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+
+export default function QRScannerModal({
+  open,
+  onOpenChange,
+  onScan,
+}: QRScannerModalProps) {
   const [manualId, setManualId] = useState('');
   const [scanError, setScanError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);        // camera active?
-  const [starting, setStarting] = useState(false);        // permission + init phase
+  const [scanning, setScanning] = useState(false);
+  const [starting, setStarting] = useState(false);
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerId = 'qr-reader-container';
 
-  // ---------- cleanup ----------
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
       try {
@@ -39,75 +64,86 @@ export default function QRScannerModal({ open, onOpenChange, onScan }: QRScanner
       } catch (err) {
         console.error('Error stopping scanner:', err);
       }
+
       scannerRef.current = null;
     }
+
     setScanning(false);
     setStarting(false);
   }, []);
 
-  // ---------- start with permission check ----------
   const startScanner = useCallback(async () => {
     setScanError(null);
     setStarting(true);
 
-    // 1. Trigger native camera permission prompt
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
-      // Stop the stream immediately – we only needed the permission
-      stream.getTracks().forEach(track => track.stop());
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+          },
+        });
+
+      stream.getTracks().forEach((track) => track.stop());
     } catch (err: any) {
       console.error('Camera permission denied:', err);
-      setScanError('Camera access denied. Please allow camera permissions in your browser settings.');
+
+      setScanError(
+        'Camera access denied. Please allow camera permissions in your browser settings.'
+      );
+
       setStarting(false);
       return;
     }
 
-    // 2. Check that the container exists (after Modal animation)
-    const container = document.getElementById(scannerContainerId);
+    const container =
+      document.getElementById(scannerContainerId);
+
     if (!container) {
       setScanError('Scanner container not found.');
       setStarting(false);
       return;
     }
 
-    // 3. Create and start the scanner
     try {
-      const scanner = new Html5Qrcode(scannerContainerId);
+      const scanner = new Html5Qrcode(
+        scannerContainerId
+      );
+
       scannerRef.current = scanner;
 
       await scanner.start(
         { facingMode: 'environment' },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: {
+            width: 250,
+            height: 250,
+          },
           aspectRatio: 1.0,
         },
         (decodedText: string) => {
-          // QR detected
           stopScanner().catch(console.error);
           onScan(decodedText);
           onOpenChange(false);
         },
-        () => {
-          // scan failure – ignore (the library already shows a "no QR code" message)
-        }
+        () => {}
       );
 
       setScanning(true);
     } catch (err: any) {
       console.error('Scanner start error:', err);
-      setScanError('Failed to start camera. Please refresh the page and try again.');
+
+      setScanError(
+        'Failed to start camera. Please refresh the page and try again.'
+      );
     } finally {
       setStarting(false);
     }
   }, [onScan, onOpenChange, stopScanner]);
 
-  // ---------- open / close ----------
   useEffect(() => {
     if (open) {
-      // wait a tick for the dialog to render the container
       setTimeout(() => {
         startScanner();
       }, 400);
@@ -122,13 +158,14 @@ export default function QRScannerModal({ open, onOpenChange, onScan }: QRScanner
     };
   }, [open, startScanner, stopScanner]);
 
-  // ---------- manual entry ----------
   const handleManualSubmit = () => {
     const trimmed = manualId.trim();
+
     if (!trimmed) {
       toast.error('Please enter a valid Bill ID.');
       return;
     }
+
     onScan(trimmed);
     setManualId('');
     onOpenChange(false);
@@ -136,89 +173,133 @@ export default function QRScannerModal({ open, onOpenChange, onScan }: QRScanner
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md rounded-3xl border-none shadow-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-black">
-            <QrCode className="h-5 w-5 text-primary" /> Scan QR Code
-          </DialogTitle>
-          <DialogDescription>
-            Scan the customer's QR code or enter the Bill ID manually.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        className="
+          w-[calc(100%-1rem)] overflow-hidden rounded-xl
+          border border-border bg-card p-0 shadow-2xl
+          sm:max-w-md
+        "
+      >
+        <div className="border-b border-border bg-background/80 p-4 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+              <QrCode className="h-5 w-5 text-primary" />
+              Scan QR Code
+            </DialogTitle>
 
-        <Tabs defaultValue="scan" className="w-full mt-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="scan" className="font-bold">
-              <QrCode className="h-4 w-4 mr-2" /> Scan QR
-            </TabsTrigger>
-            <TabsTrigger value="manual" className="font-bold">
-              <Keyboard className="h-4 w-4 mr-2" /> Manual Entry
-            </TabsTrigger>
-          </TabsList>
+            <DialogDescription>
+              Scan the customer's QR code or enter the Bill ID manually.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-          <TabsContent value="scan">
-            {/* Loading state */}
-            {starting && (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                <p className="text-sm text-muted-foreground">Accessing camera…</p>
-              </div>
-            )}
+        <div className="p-4 sm:p-5">
+          <Tabs defaultValue="scan" className="w-full">
+            <TabsList className="grid h-11 w-full grid-cols-2 rounded-md bg-muted/60 p-1 md:h-9">
+              <TabsTrigger
+                value="scan"
+                className={`rounded-sm text-sm ${focusClass}`}
+              >
+                <ScanLine className="mr-2 h-4 w-4" />
+                Scan QR
+              </TabsTrigger>
 
-            {/* Error state */}
-            {scanError && !starting && (
-              <div className="text-center py-8">
-                <X className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">{scanError}</p>
+              <TabsTrigger
+                value="manual"
+                className={`rounded-sm text-sm ${focusClass}`}
+              >
+                <Keyboard className="mr-2 h-4 w-4" />
+                Manual Entry
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent
+              value="scan"
+              className="mt-4"
+            >
+              {starting && (
+                <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border bg-muted/20">
+                  <Loader2 className="mb-3 h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">
+                    Accessing camera...
+                  </p>
+                </div>
+              )}
+
+              {scanError && !starting && (
+                <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/[0.03] px-6 text-center">
+                  <X className="mb-3 h-8 w-8 text-destructive" />
+                  <p className="text-sm text-muted-foreground">
+                    {scanError}
+                  </p>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={`mt-4 h-11 rounded-md md:h-9 ${focusClass}`}
+                    onClick={() => {
+                      stopScanner();
+                      startScanner();
+                    }}
+                  >
+                    Try Again
+                  </Button>
+                </div>
+              )}
+
+              <div
+                id={scannerContainerId}
+                className="w-full overflow-hidden rounded-lg"
+                style={{
+                  minHeight: scanning ? 300 : 0,
+                }}
+              />
+            </TabsContent>
+
+            <TabsContent
+              value="manual"
+              className="mt-4"
+            >
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Bill ID
+                  </Label>
+
+                  <Input
+                    value={manualId}
+                    onChange={(e) =>
+                      setManualId(e.target.value)
+                    }
+                    placeholder="Paste or type the Bill ID"
+                    className={`h-11 rounded-md text-base md:h-9 md:text-sm ${focusClass}`}
+                  />
+                </div>
+
                 <Button
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => {
-                    stopScanner();
-                    startScanner();
-                  }}
+                  type="button"
+                  onClick={handleManualSubmit}
+                  className={`h-11 w-full rounded-md md:h-9 ${focusClass}`}
                 >
-                  Try Again
+                  Look Up Bill
                 </Button>
               </div>
-            )}
+            </TabsContent>
+          </Tabs>
+        </div>
 
-            {/* Camera view – always show the container */}
-            <div
-              id={scannerContainerId}
-              className="w-full rounded-xl overflow-hidden"
-              style={{ minHeight: scanning ? 300 : 0 }}
-            />
-          </TabsContent>
-
-          <TabsContent value="manual">
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Bill ID
-                </Label>
-                <Input
-                  value={manualId}
-                  onChange={(e) => setManualId(e.target.value)}
-                  placeholder="Paste or type the Bill ID"
-                  className="rounded-xl"
-                />
-              </div>
-              <Button
-                onClick={handleManualSubmit}
-                className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl font-bold"
-              >
-                Look Up Bill
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-        </DialogFooter>
+        <div className="border-t border-border p-4">
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className={`h-11 w-full rounded-md md:h-9 md:w-auto ${focusClass}`}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
