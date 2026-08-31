@@ -115,10 +115,13 @@ export default function AppointmentsPage() {
       )}
 
       {/*
-        Layout (mirrors the inspiration):
-        · Right pane (60%): the day schedule — time-axis timeline, pinned viewport height.
-        · Left column (40%): month calendar for date navigation, booking form beneath.
-        · Mobile (< lg): stacks in flow order — Calendar → Agenda → Booking.
+        Layout:
+        · Right pane (60%): day schedule — STRETCHED across BOTH rows (calendar
+          AND booking form), pinned sticky at viewport height with internal
+          scroll. Compact cards keep this tall pane dense and usable.
+        · Left column (40%): month calendar, booking form beneath.
+        · Mobile (< lg): natural stacking — Calendar → Agenda → Booking — the
+          agenda grows with content and the page scrolls normally.
       */}
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:items-start lg:[grid-template-columns:minmax(0,2fr)_minmax(0,3fr)] lg:[grid-template-areas:'calendar_agenda'_'booking_agenda']">
         {/* ---- Month calendar + closed-date notice ---- */}
@@ -146,9 +149,9 @@ export default function AppointmentsPage() {
           )}
         </div>
 
-        {/* ---- Day schedule (primary pane, mirrors the image) ---- */}
-        <div className="lg:sticky lg:top-24 lg:self-start lg:[grid-area:agenda]">
-          <div className="lg:h-[calc(100vh-11rem)] lg:min-h-[30rem]">
+        {/* ---- Day schedule (primary pane) — stretched over the booking row ---- */}
+        <div className="lg:sticky lg:self-start lg:[grid-area:agenda]">
+          <div className="lg:h-[calc(100vh-10rem)] lg:min-h-[32rem]">
             <DailyAgenda
               appointments={appointments}
               selectedDate={selectedDate}

@@ -126,9 +126,9 @@ export default function DailyAgenda({
     return (
       <div className="space-y-3">
         {queue.map((item) => (
-          <Card key={item.queueId} className="flex flex-col gap-3 rounded-xl border-border p-4 shadow-sm sm:flex-row sm:items-center">
-            <div className="flex w-full items-center gap-4 sm:w-auto">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-2xl font-semibold tabular-nums text-primary">
+          <Card key={item.queueId} className="flex flex-col gap-3 rounded-xl border-border p-3 shadow-sm sm:flex-row sm:items-center md:p-4">
+            <div className="flex w-full items-center gap-3 sm:w-auto sm:gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xl font-semibold tabular-nums text-primary md:h-12 md:w-12 md:text-2xl">
                 {item.queueNumber}
               </div>
               <div className="min-w-0 flex-1 space-y-2">
@@ -153,7 +153,7 @@ export default function DailyAgenda({
   const renderAppointments = () => {
     if (filteredAppointments.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="flex flex-col items-center justify-center py-12 text-center md:py-16">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
             <CalendarDays className="h-7 w-7 text-muted-foreground/50" />
           </div>
@@ -177,19 +177,20 @@ export default function DailyAgenda({
     return (
       <div className="space-y-1">
         {slots.map((slot) => (
-          <div key={slot.time} className="flex gap-2 sm:gap-3">
-            {/* Time gutter — the schedule's time axis */}
-            <div className="w-16 shrink-0 pt-3.5 text-right">
-              <span className="text-[11px] font-semibold tabular-nums tracking-wide text-muted-foreground">
+          <div key={slot.time} className="flex gap-1.5 sm:gap-3">
+            {/* Time gutter — slimmed on phones (w-12) to hand the reclaimed
+                width back to the appointment cards */}
+            <div className="w-12 shrink-0 pt-2.5 text-right sm:w-16 sm:pt-3.5">
+              <span className="text-[10px] font-semibold tabular-nums tracking-wide text-muted-foreground sm:text-[11px]">
                 {slot.time === '—' ? 'N/A' : formatTime12h(slot.time)}
               </span>
             </div>
 
-            {/* Rail + appointment blocks for this slot */}
-            <div className="relative min-w-0 flex-1 space-y-3 border-l-2 border-border pb-5 pl-3 sm:pl-4">
+            {/* Rail + appointment blocks for this slot (compact spacing) */}
+            <div className="relative min-w-0 flex-1 space-y-2 border-l-2 border-border pb-4 pl-2.5 sm:space-y-3 sm:pb-5 sm:pl-4">
               <span
                 aria-hidden="true"
-                className="absolute -left-[7px] top-4 h-3 w-3 rounded-full border-2 border-card bg-primary shadow-sm"
+                className="absolute -left-[7px] top-3 h-3 w-3 rounded-full border-2 border-card bg-primary shadow-sm"
               />
               {slot.items.map((appt) => (
                 <AppointmentCard
@@ -249,7 +250,7 @@ export default function DailyAgenda({
     <>
       {/* ---- Day schedule pane (mirrors the inspiration's schedule panel) ---- */}
       <Card className="flex h-full flex-col overflow-hidden rounded-xl border-border bg-card text-card-foreground shadow-sm">
-        <CardHeader className="shrink-0 space-y-3 border-b border-border px-4 py-4 md:px-5">
+        <CardHeader className="shrink-0 space-y-2.5 border-b border-border px-4 py-3 md:px-5 md:py-4">
           {/* Date header */}
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -277,7 +278,7 @@ export default function DailyAgenda({
             </Badge>
           </div>
 
-          {/* Status tabs — segmented control */}
+          {/* Status tabs — segmented control (36px touch → 32px pointer) */}
           <div className="flex gap-0.5 overflow-x-auto rounded-lg bg-muted p-1">
             {STATUS_TABS.map((tab) => {
               const isActive = activeStatus === tab.value;
@@ -295,7 +296,7 @@ export default function DailyAgenda({
                   key={tab.value}
                   onClick={() => setActiveStatus(tab.value)}
                   className={cn(
-                    'h-8 shrink-0 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    'h-9 shrink-0 whitespace-nowrap rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:h-8',
                     isActive
                       ? 'bg-card text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground',
@@ -320,7 +321,7 @@ export default function DailyAgenda({
         </CardHeader>
 
         {/* ---- Timeline / queue content ---- */}
-        <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 md:space-y-4 md:p-4">
           {renderContent()}
         </CardContent>
       </Card>
