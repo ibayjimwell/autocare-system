@@ -35,7 +35,7 @@ export default function CustomerCard({ customerId, className }: CustomerCardProp
       try {
         setIsLoading(true);
         setError(null);
-        
+
         const response = await customersApi.get(customerId);
         const data = response?.data || response?.customer || response;
 
@@ -58,11 +58,11 @@ export default function CustomerCard({ customerId, className }: CustomerCardProp
   // Micro Horizontal Skeleton Loader
   if (isLoading) {
     return (
-      <div className={cn("w-full rounded-md border border-border bg-card/50 p-3 flex items-center gap-3 animate-pulse", className)}>
-        <div className="h-10 w-10 bg-muted rounded-md shrink-0" />
+      <div className={cn("flex w-full animate-pulse items-center gap-3 rounded-lg border border-border bg-card/60 p-3", className)}>
+        <div className="h-10 w-10 shrink-0 rounded-md bg-muted" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 w-32 bg-muted rounded" />
-          <div className="h-3 w-48 bg-muted rounded" />
+          <div className="h-4 w-32 rounded bg-muted" />
+          <div className="h-3 w-48 rounded bg-muted" />
         </div>
       </div>
     );
@@ -71,7 +71,7 @@ export default function CustomerCard({ customerId, className }: CustomerCardProp
   // Error Fallback State
   if (error || !customer) {
     return (
-      <div className={cn("w-full rounded-md border border-destructive/10 bg-destructive/5 p-3 flex items-center gap-2 text-destructive text-xs", className)}>
+      <div className={cn("flex w-full items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive", className)}>
         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
         <span>{error || "Missing customer reference."}</span>
       </div>
@@ -87,42 +87,42 @@ export default function CustomerCard({ customerId, className }: CustomerCardProp
     .toUpperCase();
 
   return (
-    <div 
+    <div
       className={cn(
-        "relative w-full overflow-hidden rounded-md border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50 flex items-center gap-3.5",
-        customer.deactivated && "opacity-70 border-destructive/20",
-        className
+        "relative flex w-full items-center gap-3 overflow-hidden rounded-lg border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50",
+        customer.deactivated && "border-destructive/20 opacity-70",
+        className,
       )}
     >
       {/* Decorative Watermark Background Vector Icon - Digital ID Look */}
-      <User className="absolute -right-4 -bottom-6 h-20 w-20 text-primary/20 pointer-events-none select-none" />
+      <User aria-hidden="true" className="pointer-events-none absolute -bottom-6 -right-4 h-20 w-20 select-none text-primary/10" />
 
       {/* Profile ID Badge Side Panel */}
-      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10 text-primary font-heading font-semibold text-sm tracking-wider">
+      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-primary/10 bg-primary/10 font-heading text-sm font-semibold tracking-wider text-primary">
         {initials || <User className="h-4 w-4" />}
-        
+
         {/* Guard rails for checking deactivated customer records */}
         {customer.deactivated && (
-          <div className="absolute -top-1 -right-1 bg-destructive p-0.5 rounded-full text-destructive-foreground shadow-xs">
+          <div className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-destructive-foreground shadow-xs">
             <ShieldX className="h-2.5 w-2.5" />
           </div>
         )}
       </div>
 
       {/* Main Metadata Identifier Block */}
-      <div className="flex-1 min-w-0 space-y-1">
-        <h4 className="font-sans text-sm font-bold tracking-tight text-foreground truncate leading-none">
+      <div className="min-w-0 flex-1 space-y-1">
+        <h4 className="truncate text-sm font-semibold leading-none tracking-tight text-foreground">
           {customer.fullname}
         </h4>
-        
+
         {/* Quick Contact Rows Container */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground font-medium">
-          <span className="flex items-center gap-1 truncate max-w-[180px]">
-            <Mail className="h-3 w-3 text-primary/70 shrink-0" />
+        <div className="flex flex-col gap-x-3 gap-y-0.5 text-xs font-medium text-muted-foreground sm:flex-row sm:items-center">
+          <span className="flex max-w-[180px] items-center gap-1 truncate">
+            <Mail className="h-3 w-3 shrink-0 text-primary/70" />
             <span className="truncate">{customer.email}</span>
           </span>
-          <span className="flex items-center gap-1 shrink-0">
-            <Phone className="h-3 w-3 text-secondary shrink-0" />
+          <span className="flex shrink-0 items-center gap-1">
+            <Phone className="h-3 w-3 shrink-0 text-muted-foreground" />
             <span>{customer.phone}</span>
           </span>
         </div>

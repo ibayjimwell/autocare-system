@@ -14,22 +14,23 @@ export default function PageContainer({
   children,
 }: PageContainerProps) {
   return (
-    <section className="flex flex-col h-full gap-6 p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <section className="flex h-full flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* ---- Header ---- */}
+      {/* Kept disabled as in the current build — the app Header already renders page context. */}
       {/* <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           {title && (
-            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+            <h1 className="text-2xl md:text-xl lg:text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
           )}
           {subtitle && (
-            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           )}
         </div>
         {actions && <div className="flex-shrink-0">{actions}</div>}
       </div> */}
 
       {/* ---- Content ---- */}
-      <div className="flex-1">{children}</div>
+      <div className="min-h-0 flex-1">{children}</div>
     </section>
   );
 }

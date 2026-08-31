@@ -27,35 +27,37 @@ export default function StatusChangeDialog({
 }: StatusChangeDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl">
+      <AlertDialogContent className="rounded-xl p-6 shadow-lg">
         <AlertDialogHeader>
           <div className={cn(
-            "w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto md:mx-0",
-            action === 'deactivate' ? "bg-destructive/10" : "bg-green-100"
+            "mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full md:mx-0",
+            action === 'deactivate' ? "bg-destructive/10" : "bg-emerald-500/10",
           )}>
             {action === 'deactivate' ? (
-              <UserX className="w-8 h-8 text-destructive" />
+              <UserX className="h-7 w-7 text-destructive" />
             ) : (
-              <UserCheck className="w-8 h-8 text-green-600" />
+              <UserCheck className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
             )}
           </div>
-          <AlertDialogTitle className="text-2xl font-black text-slate-900">
+          <AlertDialogTitle className="text-lg font-semibold text-foreground">
             {action === 'deactivate' ? 'Deactivate' : 'Reactivate'} Customer
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-base text-slate-600">
+          <AlertDialogDescription className="text-sm text-muted-foreground">
             {action === 'deactivate'
-              ? <>You are about to deactivate <strong>{name}</strong>. This will prevent them from logging in. They can be reactivated later.</>
-              : <>You are about to reactivate <strong>{name}</strong>. They will be able to log in again.</>
+              ? <>You are about to deactivate <strong className="text-foreground">{name}</strong>. This will prevent them from logging in. They can be reactivated later.</>
+              : <>You are about to reactivate <strong className="text-foreground">{name}</strong>. They will be able to log in again.</>
             }
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="mt-8 gap-3">
-          <AlertDialogCancel className="h-12 rounded-xl border-slate-200 font-bold px-6">Cancel</AlertDialogCancel>
+        <AlertDialogFooter className="mt-6">
+          <AlertDialogCancel className="h-11 rounded-md px-4 font-medium md:h-9">Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className={cn(
-              "h-12 rounded-xl font-bold px-6",
-              action === 'deactivate' ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "bg-green-600 text-white hover:bg-green-700"
+              "h-11 rounded-md px-4 font-medium md:h-9",
+              action === 'deactivate'
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : "bg-emerald-600 text-white hover:bg-emerald-700",
             )}
           >
             Confirm {action === 'deactivate' ? 'Deactivate' : 'Reactivate'}

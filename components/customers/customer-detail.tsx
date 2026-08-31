@@ -9,7 +9,7 @@ import ErrorHandler from "@/components/shared/error-handler";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; 
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   Car,
@@ -133,7 +133,7 @@ export default function CustomerDetail({ customer, onBack }: CustomerDetailProps
     try {
       const res = await appointmentsApi.getHistoryForCustomer(customer.id);
       if (res.error) {
-        setHistoryError({ type: res.errorType || "fe", title: "Error", message: res.errorMessage || "Failed to load history." });
+        setHistoryError({ type: res.errorType || "fe", title: res.errorTitle || "Error", message: res.errorMessage || "Failed to load history." });
         setHistoryData([]);
       } else {
         setHistoryData(res.data || []);
@@ -270,26 +270,30 @@ export default function CustomerDetail({ customer, onBack }: CustomerDetailProps
       title={customer.fullname}
       subtitle="Customer Profile & Asset Management"
       actions={
-        <Button variant="ghost" onClick={onBack} className="rounded-xl hover:bg-slate-100 transition-all font-semibold">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to List
+        <Button variant="ghost" onClick={onBack} className="h-11 rounded-md px-4 text-sm font-medium text-foreground hover:bg-accent md:h-9">
+          <ArrowLeft className="h-5 w-5 md:h-4 md:w-4" /> Back to List
         </Button>
       }
     >
       {/* Customer Info Header */}
-      <Card className="mb-8 border-none shadow-sm bg-gradient-to-r from-slate-50 to-white overflow-hidden animate-in fade-in duration-500">
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row md:items-center gap-6">
-            <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground text-3xl font-black shadow-lg">
+      <Card className="mb-6 animate-in fade-in overflow-hidden rounded-xl border-border shadow-sm duration-500">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-primary text-2xl font-semibold text-primary-foreground shadow-sm md:h-20 md:w-20 md:text-3xl">
               {customer.fullname.charAt(0)}
             </div>
-            <div className="space-y-1 flex-1">
-              <h2 className="text-2xl font-black tracking-tight text-slate-900 uppercase">{customer.fullname}</h2>
-              <div className="flex flex-wrap gap-4">
-                <span className="flex items-center text-sm font-medium text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-100">
-                  <Mail className="w-3.5 h-3.5 mr-2 text-primary" /> {customer.email}
+            <div className="min-w-0 flex-1 space-y-2">
+              <h2 className="truncate text-xl font-semibold tracking-tight text-foreground md:text-2xl">
+                {customer.fullname}
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-sm text-foreground">
+                  <Mail className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate">{customer.email}</span>
                 </span>
-                <span className="flex items-center text-sm font-medium text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-100">
-                  <Phone className="w-3.5 h-3.5 mr-2 text-primary" /> {customer.phone}
+                <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-sm text-foreground">
+                  <Phone className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate">{customer.phone}</span>
                 </span>
               </div>
             </div>
@@ -300,80 +304,118 @@ export default function CustomerDetail({ customer, onBack }: CustomerDetailProps
       {apiError && <div className="mb-4"><ErrorHandler type={apiError.type} title={apiError.title} message={apiError.message} /></div>}
 
       <Tabs defaultValue="vehicles" className="w-full space-y-6">
-        <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-14 w-full md:w-auto grid grid-cols-2 md:inline-flex">
-          <TabsTrigger value="vehicles" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold px-8 transition-all">
-            <Car className="w-4 h-4 mr-2" /> Registered Vehicles
+        <TabsList className="grid h-12 w-full grid-cols-2 rounded-lg bg-muted p-1 md:h-10 md:w-auto md:inline-grid">
+          <TabsTrigger
+            value="vehicles"
+            className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm md:gap-2 md:px-4 md:text-sm"
+          >
+            <Car className="h-4 w-4" />
+            <span className="hidden sm:inline">Registered Vehicles</span>
+            <span className="sm:hidden">Vehicles</span>
           </TabsTrigger>
-          <TabsTrigger value="appointments" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold px-8 transition-all">
-            <History className="w-4 h-4 mr-2" /> Appointments History
+          <TabsTrigger
+            value="appointments"
+            className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm md:gap-2 md:px-4 md:text-sm"
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Appointments History</span>
+            <span className="sm:hidden">History</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* ===== Vehicles Tab (unchanged) ===== */}
-        <TabsContent value="vehicles" className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-            <div className="relative w-full md:w-96 group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
+        {/* ===== Vehicles Tab ===== */}
+        <TabsContent value="vehicles" className="animate-in space-y-4 slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground md:h-4 md:w-4" />
               <Input
                 placeholder="Find specific vehicle..."
-                className="pl-10 h-11 rounded-xl bg-white border-slate-200 focus:ring-primary"
+                className="h-11 rounded-md pl-11 text-base md:h-9 md:pl-10 md:text-sm"
                 value={vSearch}
                 onChange={(e) => { setVSearch(e.target.value); }}
               />
             </div>
             <Button
               onClick={openCreateVehicle}
-              className="w-full md:w-auto h-11 px-6 rounded-xl font-bold shadow-md shadow-primary/20"
+              className="h-11 w-full rounded-md px-4 text-base font-medium shadow-sm md:h-9 md:w-auto md:px-3 md:text-sm"
             >
-              <Plus className="w-4 h-4 mr-2" /> Add Vehicle
+              <Plus className="h-5 w-5 md:h-4 md:w-4" /> Add Vehicle
             </Button>
           </div>
 
-          <Card className="border-slate-100 shadow-sm overflow-hidden rounded-2xl">
+          <Card className="overflow-hidden rounded-xl border-border shadow-sm">
             <CardContent className="p-0">
               {filteredVehicles.length === 0 ? (
-                <div className="text-center py-16">
-                  <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Car className="text-slate-300 w-8 h-8" />
+                <div className="flex flex-col items-center justify-center py-14 text-center md:py-16">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                    <Car className="h-7 w-7 text-muted-foreground/60" />
                   </div>
-                  <p className="text-slate-500 font-medium">No registered vehicles found</p>
+                  <p className="text-sm text-muted-foreground">No registered vehicles found</p>
                 </div>
               ) : (
                 <>
-                  <div className="divide-y divide-slate-50">
+                  <div className="divide-y divide-border">
                     {paginatedVehicles.map((v) => (
-                      <div key={v.id} className="p-5 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className="bg-slate-100 p-3 rounded-xl">
-                            <Info className="w-5 h-5 text-slate-600" />
+                      <div key={v.id} className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted/30">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Car className="h-5 w-5" />
                           </div>
-                          <div>
-                            <p className="font-black text-slate-900 uppercase">{v.make} {v.model}</p>
-                            <div className="flex gap-3 mt-1">
-                              <span className="text-xs font-bold px-2 py-0.5 bg-slate-200 text-slate-700 rounded-md">YEAR: {v.year || "N/A"}</span>
-                              <span className="text-xs font-bold px-2 py-0.5 bg-primary/10 text-primary rounded-md uppercase">PLATE: {v.plateNumber}</span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">{v.make} {v.model}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">YEAR: {v.year || "N/A"}</span>
+                              <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-primary">PLATE: {v.plateNumber}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openEditVehicle(v)} className="rounded-lg hover:bg-primary/10 hover:text-primary">
-                            <Pencil className="w-4 h-4" />
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditVehicle(v)}
+                            aria-label={`Edit ${v.make} ${v.model}`}
+                            className="h-9 w-9 rounded-md text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => confirmDelete(v.id, `${v.make} ${v.model} (${v.plateNumber})`)} className="rounded-lg text-destructive hover:bg-destructive/10">
-                            <Trash2 className="w-4 h-4" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => confirmDelete(v.id, `${v.make} ${v.model} (${v.plateNumber})`)}
+                            aria-label={`Delete ${v.make} ${v.model}`}
+                            className="h-9 w-9 rounded-md text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
                     ))}
                   </div>
                   {vTotalPages > 1 && (
-                    <div className="p-4 border-t border-slate-50 flex items-center justify-center gap-2 bg-slate-50/20">
-                      <Button variant="ghost" size="sm" onClick={() => setVPage((p) => Math.max(1, p - 1))} disabled={vPage === 1}>
-                        <ChevronLeft className="w-4 h-4" />
+                    <div className="flex items-center justify-center gap-2 border-t border-border bg-muted/20 p-3">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setVPage((p) => Math.max(1, p - 1))}
+                        disabled={vPage === 1}
+                        aria-label="Previous page"
+                        className="h-9 w-9 rounded-md"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Page {vPage} of {vTotalPages}</span>
-                      <Button variant="ghost" size="sm" onClick={() => setVPage((p) => Math.min(vTotalPages, p + 1))} disabled={vPage === vTotalPages}>
-                        <ChevronRight className="w-4 h-4" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Page {vPage} of {vTotalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setVPage((p) => Math.min(vTotalPages, p + 1))}
+                        disabled={vPage === vTotalPages}
+                        aria-label="Next page"
+                        className="h-9 w-9 rounded-md"
+                      >
+                        <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>
                   )}
@@ -384,40 +426,40 @@ export default function CustomerDetail({ customer, onBack }: CustomerDetailProps
         </TabsContent>
 
         {/* ===== Appointments History Tab ===== */}
-        <TabsContent value="appointments" className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+        <TabsContent value="appointments" className="animate-in space-y-6 slide-in-from-bottom-4 duration-500">
           {historyLoading ? (
             <LoadingSpinner />
           ) : historyError ? (
             <div className="mb-4"><ErrorHandler type={historyError.type} title={historyError.title} message={historyError.message} /></div>
           ) : groupedHistory.length === 0 ? (
-            <Card className="border-slate-100 shadow-sm overflow-hidden rounded-2xl">
-              <CardContent className="p-8 text-center">
-                <CalendarDays className="w-10 h-10 mx-auto text-slate-300 mb-3" />
-                <p className="text-slate-500 font-medium">No appointment history found for this customer.</p>
+            <Card className="rounded-xl border-border shadow-sm">
+              <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+                <CalendarDays className="mb-3 h-10 w-10 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">No appointment history found for this customer.</p>
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-10">
+            <div className="space-y-8 md:space-y-10">
               {groupedHistory.map(([date, appointmentsMap]) => (
                 <div key={date}>
                   {/* Date Header */}
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="h-px flex-1 bg-slate-200" />
-                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                  <div className="mb-4 flex items-center gap-4">
+                    <div className="h-px flex-1 bg-border" />
+                    <h3 className="whitespace-nowrap text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                       {format(parseISO(date), "MMMM dd, yyyy")}
                     </h3>
-                    <div className="h-px flex-1 bg-slate-200" />
+                    <div className="h-px flex-1 bg-border" />
                   </div>
 
                   {/* Horizontal scrollable row of appointments */}
-                  <div className="flex gap-4 overflow-x-auto pb-4 px-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+                  <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-4">
                     {Array.from(appointmentsMap.entries()).map(([appointmentId, entries]) => {
                       const apptData = entries[0]?.appointment;
                       if (!apptData) return null;
                       const sortedEntries = [...entries].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
                       return (
-                        <div key={appointmentId} className="min-w-[350px] max-w-[400px] flex-shrink-0 snap-start">
+                        <div key={appointmentId} className="w-[320px] shrink-0 snap-start sm:w-[360px] md:max-w-[400px]">
                           {/* Appointment Card */}
                           <AppointmentCard appointment={apptData} className="mb-3">
                             <CustomerCard customerId={apptData.customerId} />
@@ -428,25 +470,25 @@ export default function CustomerDetail({ customer, onBack }: CustomerDetailProps
                           </AppointmentCard>
 
                           {/* Timeline of status changes for this appointment on this date */}
-                          <div className="ml-4 pl-8 border-l-2 border-slate-200 space-y-2">
+                          <div className="ml-4 space-y-2 border-l-2 border-border pl-6">
                             {sortedEntries.map((entry, idx) => (
                               <div key={entry.id} className="relative flex items-start gap-3 pb-2 last:pb-0">
-                                <div className="absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full bg-primary border-2 border-white shadow-sm" />
+                                <div className="absolute -left-[31px] mt-1.5 h-3 w-3 rounded-full border-2 border-background bg-primary shadow-sm" />
                                 <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <StatusBadge status={entry.toStatus} className="text-[10px]" />
                                     {entry.fromStatus && (
-                                      <span className="text-[10px] text-slate-400">
-                                        from <StatusBadge status={entry.fromStatus} className="text-[10px] inline-block" />
+                                      <span className="text-[10px] text-muted-foreground">
+                                        from <StatusBadge status={entry.fromStatus} className="inline-block text-[10px]" />
                                       </span>
                                     )}
-                                    <span className="text-[10px] text-slate-400">
+                                    <span className="text-[10px] text-muted-foreground">
                                       {format(parseISO(entry.createdAt), "h:mm a")}
                                     </span>
                                   </div>
                                   {entry.staff && (
-                                    <p className="text-[10px] text-slate-500 mt-0.5">
-                                      Changed by <strong>{entry.staff.fullname}</strong>
+                                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                      Changed by <strong className="text-foreground">{entry.staff.fullname}</strong>
                                     </p>
                                   )}
                                 </div>
@@ -469,65 +511,68 @@ export default function CustomerDetail({ customer, onBack }: CustomerDetailProps
         <div className="space-y-4">
           {apiError && <ErrorHandler type={apiError.type} title={apiError.title} message={apiError.message} />}
           <div className="space-y-2">
-            <Label className="text-sm font-bold text-slate-700">Plate Number</Label>
+            <Label className="text-sm font-medium text-foreground">Plate Number</Label>
             <Input
               value={vehicleForm.plateNumber}
               onChange={(e) => { setVehicleForm({ ...vehicleForm, plateNumber: e.target.value }); if (vehicleFormErrors.plateNumber) setVehicleFormErrors({ ...vehicleFormErrors, plateNumber: undefined }); }}
-              className={cn("rounded-xl border-slate-200 focus:ring-primary/20", vehicleFormErrors.plateNumber && "border-destructive")}
+              className={cn("h-11 rounded-md text-base md:h-9 md:text-sm", vehicleFormErrors.plateNumber && "border-destructive")}
               placeholder="ABC-1234"
             />
-            {vehicleFormErrors.plateNumber && <p className="text-xs text-destructive">{vehicleFormErrors.plateNumber}</p>}
+            {vehicleFormErrors.plateNumber && <p className="text-xs font-medium text-destructive">{vehicleFormErrors.plateNumber}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-700">Make</Label>
+              <Label className="text-sm font-medium text-foreground">Make</Label>
               <Input
                 value={vehicleForm.make}
                 onChange={(e) => { setVehicleForm({ ...vehicleForm, make: e.target.value }); if (vehicleFormErrors.make) setVehicleFormErrors({ ...vehicleFormErrors, make: undefined }); }}
-                className={cn("rounded-xl border-slate-200 focus:ring-primary/20", vehicleFormErrors.make && "border-destructive")}
+                className={cn("h-11 rounded-md text-base md:h-9 md:text-sm", vehicleFormErrors.make && "border-destructive")}
                 placeholder="Toyota"
               />
-              {vehicleFormErrors.make && <p className="text-xs text-destructive">{vehicleFormErrors.make}</p>}
+              {vehicleFormErrors.make && <p className="text-xs font-medium text-destructive">{vehicleFormErrors.make}</p>}
             </div>
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-700">Model</Label>
+              <Label className="text-sm font-medium text-foreground">Model</Label>
               <Input
                 value={vehicleForm.model}
                 onChange={(e) => { setVehicleForm({ ...vehicleForm, model: e.target.value }); if (vehicleFormErrors.model) setVehicleFormErrors({ ...vehicleFormErrors, model: undefined }); }}
-                className={cn("rounded-xl border-slate-200 focus:ring-primary/20", vehicleFormErrors.model && "border-destructive")}
+                className={cn("h-11 rounded-md text-base md:h-9 md:text-sm", vehicleFormErrors.model && "border-destructive")}
                 placeholder="Camry"
               />
-              {vehicleFormErrors.model && <p className="text-xs text-destructive">{vehicleFormErrors.model}</p>}
+              {vehicleFormErrors.model && <p className="text-xs font-medium text-destructive">{vehicleFormErrors.model}</p>}
             </div>
           </div>
           <div className="space-y-2">
-            <Label className="text-sm font-bold text-slate-700">Year (optional)</Label>
+            <Label className="text-sm font-medium text-foreground">Year (optional)</Label>
             <Input
               value={vehicleForm.year}
               onChange={(e) => { setVehicleForm({ ...vehicleForm, year: e.target.value }); if (vehicleFormErrors.year) setVehicleFormErrors({ ...vehicleFormErrors, year: undefined }); }}
-              className={cn("rounded-xl border-slate-200 focus:ring-primary/20", vehicleFormErrors.year && "border-destructive")}
+              className={cn("h-11 rounded-md text-base md:h-9 md:text-sm", vehicleFormErrors.year && "border-destructive")}
               placeholder="e.g., 2020"
             />
-            {vehicleFormErrors.year && <p className="text-xs text-destructive">{vehicleFormErrors.year}</p>}
+            {vehicleFormErrors.year && <p className="text-xs font-medium text-destructive">{vehicleFormErrors.year}</p>}
           </div>
         </div>
       </DataModal>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
-        <AlertDialogContent className="rounded-3xl p-8 border-none shadow-2xl">
+        <AlertDialogContent className="rounded-xl p-6 shadow-lg">
           <AlertDialogHeader>
-            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4 mx-auto md:mx-0">
-              <Trash2 className="w-8 h-8 text-destructive" />
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 md:mx-0">
+              <Trash2 className="h-7 w-7 text-destructive" />
             </div>
-            <AlertDialogTitle className="text-2xl font-black text-slate-900">Delete Vehicle</AlertDialogTitle>
-            <AlertDialogDescription className="text-base text-slate-600">
-              You are about to delete <strong>{deleteDialog.vehicleName}</strong>. This action cannot be undone.
+            <AlertDialogTitle className="text-lg font-semibold text-foreground">Delete Vehicle</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              You are about to delete <strong className="text-foreground">{deleteDialog.vehicleName}</strong>. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="mt-8 gap-3">
-            <AlertDialogCancel className="h-12 rounded-xl border-slate-200 font-bold px-6">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteVehicle} className="h-12 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold px-6">
+          <AlertDialogFooter className="mt-6">
+            <AlertDialogCancel className="h-11 rounded-md px-4 font-medium md:h-9">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteVehicle}
+              className="h-11 rounded-md bg-destructive px-4 font-medium text-destructive-foreground hover:bg-destructive/90 md:h-9"
+            >
               Confirm Delete
             </AlertDialogAction>
           </AlertDialogFooter>
