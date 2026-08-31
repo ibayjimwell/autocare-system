@@ -62,14 +62,16 @@ export default function VehiclePickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-2xl max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="p-6 border-b bg-muted/10 shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-black flex items-center gap-2">
-              <Car className="w-5 h-5 text-primary" />
+      {/* Full-screen sheet on mobile (rounded-none), centered card from sm up */}
+      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-2xl sm:rounded-xl">
+        {/* ---- Header: title + search ---- */}
+        <DialogHeader className="shrink-0 space-y-3 border-b border-border p-4 md:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className="flex flex-wrap items-center gap-x-2 text-lg font-semibold tracking-tight text-foreground">
+              <Car className="h-5 w-5 text-primary" />
               Select Vehicle
               {customerName && (
-                <span className="text-sm font-medium text-muted-foreground ml-2">
+                <span className="text-sm font-normal text-muted-foreground">
                   for {customerName}
                 </span>
               )}
@@ -78,31 +80,33 @@ export default function VehiclePickerModal({
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
-              className="h-8 w-8 rounded-full"
+              aria-label="Close"
+              className="h-11 w-11 rounded-md md:h-9 md:w-9"
             >
-              <X className="w-4 h-4" />
+              <X className="h-5 w-5 md:h-4 md:w-4" />
             </Button>
           </div>
-          <div className="relative mt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground md:h-4 md:w-4" />
             <Input
               placeholder="Search by make, model, plate, or year..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 rounded-xl border-slate-200 focus:ring-primary/20"
+              className="h-11 rounded-md pl-11 text-base md:h-9 md:pl-10 md:text-sm"
               autoFocus
             />
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 p-6">
+        {/* ---- Options ---- */}
+        <ScrollArea className="min-h-0 flex-1 p-4 md:p-6">
           {vehicles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="bg-muted/30 p-4 rounded-full mb-4">
-                <Car className="w-8 h-8 text-muted-foreground" />
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                <Car className="h-7 w-7 text-muted-foreground/60" />
               </div>
-              <p className="text-sm font-bold text-muted-foreground">No vehicles found</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm font-semibold text-muted-foreground">No vehicles found</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {customerName
                   ? `This customer has no registered vehicles.`
                   : "Please select a customer first."}
@@ -110,40 +114,38 @@ export default function VehiclePickerModal({
             </div>
           ) : filteredVehicles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="text-sm font-bold text-muted-foreground">No matching vehicles</p>
-              <p className="text-xs text-muted-foreground">Try adjusting your search term.</p>
+              <p className="text-sm font-semibold text-muted-foreground">No matching vehicles</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Try adjusting your search term.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {filteredVehicles.map((vehicle) => (
                 <button
                   key={vehicle.id}
                   onClick={() => handleSelect(vehicle)}
                   className={cn(
-                    "group relative p-4 rounded-2xl border-2 transition-all text-left hover:shadow-md active:scale-[0.98]",
+                    "relative rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     selectedVehicleId === vehicle.id
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-slate-200 hover:border-primary/30 hover:bg-muted/20"
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/25"
+                      : "border-border hover:border-primary/40 hover:bg-accent/50",
                   )}
                 >
                   {selectedVehicleId === vehicle.id && (
-                    <div className="absolute top-3 right-3">
-                      <CheckCircle className="w-5 h-5 text-primary" />
-                    </div>
+                    <CheckCircle className="absolute right-3 top-3 h-5 w-5 text-primary" />
                   )}
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                      <Car className="w-5 h-5" />
+                  <div className="flex items-start gap-3 pr-6">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Car className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-bold text-foreground truncate">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {vehicle.make} {vehicle.model}
                       </p>
-                      <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                        <Badge variant="outline" className="text-[10px]">
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        <Badge variant="outline" className="rounded-md text-[10px] font-medium text-muted-foreground">
                           {vehicle.year}
                         </Badge>
-                        <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">
+                        <Badge variant="outline" className="rounded-md border-primary/25 bg-primary/5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                           {vehicle.plateNumber}
                         </Badge>
                       </div>
@@ -155,11 +157,12 @@ export default function VehiclePickerModal({
           )}
         </ScrollArea>
 
-        <div className="p-4 border-t bg-muted/5 shrink-0">
+        {/* ---- Footer ---- */}
+        <div className="shrink-0 border-t border-border p-3 md:p-4">
           <Button
             variant="ghost"
             onClick={() => onOpenChange(false)}
-            className="w-full rounded-xl font-bold"
+            className="h-11 w-full rounded-md text-sm font-medium md:h-9"
           >
             Cancel
           </Button>

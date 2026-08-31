@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 interface RescheduleRequestModalProps {
   open: boolean;
@@ -165,47 +166,49 @@ export default function RescheduleRequestModal({
 
   const getStatusBadge = (status: string) => {
     const config = {
-      PENDING: { color: 'bg-amber-100 text-amber-700', label: 'Pending' },
-      APPROVED: { color: 'bg-green-100 text-green-700', label: 'Approved' },
-      REJECTED: { color: 'bg-red-100 text-red-700', label: 'Rejected' },
-      CANCELLED: { color: 'bg-slate-100 text-slate-700', label: 'Cancelled' },
+      PENDING: { color: 'bg-amber-500/15 text-amber-700 dark:text-amber-400', label: 'Pending' },
+      APPROVED: { color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400', label: 'Approved' },
+      REJECTED: { color: 'bg-destructive/15 text-destructive', label: 'Rejected' },
+      CANCELLED: { color: 'bg-muted text-muted-foreground', label: 'Cancelled' },
     };
     const { color, label } = config[status as keyof typeof config] || config.PENDING;
-    return <Badge className={`${color} border-none`}>{label}</Badge>;
+    return <Badge variant="outline" className={cn('border-transparent font-medium', color)}>{label}</Badge>;
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-none p-4 sm:max-w-lg sm:rounded-xl sm:p-6">
         <DialogHeader>
-          <DialogTitle className="font-black">Reschedule Request</DialogTitle>
+          <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">Reschedule Request</DialogTitle>
           <p className="text-sm text-muted-foreground">Current: {currentDate} at {currentTime}</p>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* New Request Form – disabled if there's a pending request */}
-          <div className={pendingRequest ? 'opacity-50 pointer-events-none' : ''}>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">New Date</Label>
-              <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="rounded-xl" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">New Time</Label>
-              <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="rounded-xl" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Reason (optional)</Label>
-              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why do you want to reschedule?" className="rounded-xl" />
+          <div className={pendingRequest ? 'pointer-events-none opacity-50' : ''}>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">New Date</Label>
+                <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-11 rounded-md text-base md:h-9 md:text-sm" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">New Time</Label>
+                <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="h-11 rounded-md text-base md:h-9 md:text-sm" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reason (optional)</Label>
+                <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why do you want to reschedule?" className="rounded-md text-base md:text-sm" />
+              </div>
             </div>
           </div>
 
           {pendingRequest && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-              <p className="text-sm text-amber-700 font-medium flex items-center gap-2">
-                <Clock className="w-4 h-4" />
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+                <Clock className="h-4 w-4" />
                 A pending reschedule request exists.
               </p>
-              <p className="text-xs text-amber-600 mt-1">
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                 {pendingRequest.requestedBy === 'customer' ? 'Customer' : 'Staff'} requested to move to {format(new Date(pendingRequest.newAppointmentDate), 'MMM d, yyyy')} at {pendingRequest.newAppointmentTime}.
               </p>
             </div>
@@ -214,14 +217,14 @@ export default function RescheduleRequestModal({
           {/* History of requests */}
           {requests.length > 0 && (
             <div>
-              <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">History</Label>
-              <ScrollArea className="max-h-60 mt-2">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">History</Label>
+              <ScrollArea className="mt-2 max-h-60">
                 <div className="space-y-2">
                   {requests.map((req) => (
-                    <div key={req.id} className="border rounded-xl p-3 space-y-1">
-                      <div className="flex items-center justify-between">
+                    <div key={req.id} className="space-y-1.5 rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold">
+                          <span className="text-xs font-semibold text-foreground">
                             {req.requestedBy === 'customer' ? 'Customer' : 'Staff'}
                           </span>
                           {getStatusBadge(req.status)}
@@ -230,18 +233,18 @@ export default function RescheduleRequestModal({
                           {format(new Date(req.createdAt), 'MMM d, h:mm a')}
                         </span>
                       </div>
-                      <p className="text-sm">
+                      <p className="text-sm text-foreground">
                         To {format(new Date(req.newAppointmentDate), 'MMM d, yyyy')} at {req.newAppointmentTime}
                       </p>
-                      {req.reason && <p className="text-xs text-muted-foreground italic">Reason: {req.reason}</p>}
-                      
+                      {req.reason && <p className="text-xs italic text-muted-foreground">Reason: {req.reason}</p>}
+
                       {/* ✅ Show Approve/Reject for ALL pending requests (staff can act on any) */}
                       {req.status === 'PENDING' && (
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex gap-2 pt-1">
                           <Button
                             size="sm"
                             onClick={() => handleApprove(req.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold"
+                            className="h-9 rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700"
                           >
                             Approve
                           </Button>
@@ -249,7 +252,7 @@ export default function RescheduleRequestModal({
                             size="sm"
                             variant="outline"
                             onClick={() => handleReject(req.id)}
-                            className="text-xs font-bold border-red-300 text-red-600 hover:bg-red-50"
+                            className="h-9 rounded-md border-destructive/40 px-3 text-xs font-semibold text-destructive hover:bg-destructive/10"
                           >
                             Reject
                           </Button>
@@ -264,9 +267,9 @@ export default function RescheduleRequestModal({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Close</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting} className="h-11 rounded-md px-4 text-sm font-medium md:h-9">Close</Button>
           {!pendingRequest && (
-            <Button onClick={handleSubmit} disabled={submitting} className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 font-bold">
+            <Button onClick={handleSubmit} disabled={submitting} className="h-11 rounded-md px-4 text-sm font-semibold md:h-9">
               {submitting ? 'Submitting...' : 'Send Request'}
             </Button>
           )}

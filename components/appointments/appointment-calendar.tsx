@@ -1,5 +1,3 @@
-// components/appointments/appointment-calendar.tsx
-
 import React from "react";
 import {
   format,
@@ -20,12 +18,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+// Same branching logic as before; class strings mapped to AutoCare HIG tokens
+// so badge tints stay synchronized with the legend below.
 const getCountBadgeClass = (count: number, isSelected: boolean): string => {
   if (count === 0) return "hidden";
-  if (isSelected) return "bg-white text-primary shadow-sm";
-  if (count <= 2) return "bg-slate-100 text-slate-600 border border-slate-200";
-  if (count <= 4) return "bg-amber-100 text-amber-700 border border-amber-200";
-  return "bg-red-100 text-red-600 border border-red-200 animate-pulse-subtle";
+  if (isSelected) return "bg-primary-foreground text-primary shadow-sm";
+  if (count <= 2) return "bg-muted text-muted-foreground border border-border";
+  if (count <= 4) return "bg-amber-500/15 text-amber-700 border border-amber-500/30 dark:text-amber-400";
+  return "bg-destructive/15 text-destructive border border-destructive/30";
 };
 
 interface AppointmentCalendarProps {
@@ -70,75 +70,75 @@ export default function AppointmentCalendar({
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <div className="bg-white rounded-[2rem] p-5 md:p-8 w-full transition-all duration-300">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <CalendarIcon className="w-5 h-5 text-primary" />
+    <div className="w-full p-4 md:p-6">
+      {/* ---- Calendar header: month identity + navigation ---- */}
+      <div className="mb-4 flex items-center justify-between gap-2 md:mb-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <CalendarIcon className="h-5 w-5" />
           </div>
-          <div>
-            <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-none">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold leading-none tracking-tight text-foreground">
               {format(currentMonth, "MMMM")}
             </h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               {format(currentMonth, "yyyy")} Schedule
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           {onConfigureDate && (
             <Button
               variant="outline"
               size="icon"
               onClick={onConfigureDate}
-              className="h-9 w-9 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-all"
               title="Configure selected date"
+              aria-label="Configure selected date"
+              className="h-11 w-11 rounded-md md:h-9 md:w-9"
             >
-              <Settings className="w-4 h-4" />
+              <Settings className="h-5 w-5 md:h-4 md:w-4" />
             </Button>
           )}
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+          <div className="flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => onMonthChange(-1)}
-              className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-500 active:scale-90 transition-all"
+              aria-label="Previous month"
+              className="h-11 w-11 rounded-[5px] md:h-9 md:w-9"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => onMonthChange(1)}
-              className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-500 active:scale-90 transition-all"
+              aria-label="Next month"
+              className="h-11 w-11 rounded-[5px] md:h-9 md:w-9"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Weekday Labels */}
-      <div className="grid grid-cols-7 gap-2 mb-4">
+      {/* ---- Weekday labels ---- */}
+      <div className="mb-2 grid grid-cols-7 gap-1.5 md:gap-2">
         {weekdays.map((day) => (
           <div
             key={day}
-            className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest"
+            className="py-1 text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground"
           >
             {day}
           </div>
         ))}
       </div>
 
-      {/* Date Grid */}
-      <div className="grid grid-cols-7 gap-2 md:gap-3">
+      {/* ---- Day grid ---- */}
+      <div className="grid grid-cols-7 gap-1.5 md:gap-2">
         {Array.from({ length: startOffset }).map((_, i) => (
-          <div
-            key={`empty-${i}`}
-            className="aspect-square opacity-0 pointer-events-none"
-          />
+          <div key={`empty-${i}`} className="aspect-square" aria-hidden="true" />
         ))}
 
         {daysInMonth.map((day) => {
@@ -154,25 +154,32 @@ export default function AppointmentCalendar({
             <button
               key={dateKey}
               onClick={() => onDateClick(day)}
+              aria-pressed={!!isSelected}
+              aria-current={isToday ? "date" : undefined}
               className={cn(
-                "relative group aspect-square rounded-[1.25rem] transition-all duration-300",
-                "flex flex-col items-center justify-center border-2",
-                "active:scale-95",
-                !isCurrentMonth && "opacity-20",
-                isClosed && "bg-slate-100 border-slate-200 opacity-70",
+                "relative flex aspect-square flex-col items-center justify-center rounded-md border transition-all duration-200 active:scale-95",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                !isCurrentMonth && "opacity-30",
                 isSelected
-                  ? "bg-primary border-primary text-white shadow-xl shadow-primary/30 z-10 scale-105"
-                  : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-100"
+                  ? "z-10 border-primary bg-primary text-primary-foreground shadow-md"
+                  : isClosed
+                    ? "border-border/50 bg-muted/50"
+                    : "border-transparent bg-card hover:border-border hover:bg-accent",
               )}
             >
-              {isToday && !isSelected && !isClosed && (
-                <span className="absolute top-2 w-1 h-1 bg-primary rounded-full" />
+              {/* Today marker */}
+              {isToday && !isSelected && (
+                <span className="absolute left-1/2 top-1 h-1 w-1 -translate-x-1/2 rounded-full bg-primary" />
               )}
 
               <span
                 className={cn(
-                  "text-sm md:text-lg font-black tracking-tighter transition-colors",
-                  isSelected ? "text-white" : isClosed ? "text-slate-400" : "text-slate-800"
+                  "text-sm font-semibold tabular-nums md:text-base",
+                  isSelected
+                    ? "text-primary-foreground"
+                    : isClosed
+                      ? "text-muted-foreground"
+                      : "text-foreground",
                 )}
               >
                 {format(day, "d")}
@@ -180,70 +187,60 @@ export default function AppointmentCalendar({
 
               {/* Pending count badge (top-right) */}
               {!isClosed && pendingCount > 0 && (
-                <div className="absolute -top-1 -right-1 text-[9px] min-w-[18px] h-[18px] rounded-full flex items-center justify-center font-black bg-red-500 text-white border-2 border-white shadow-md animate-pulse">
+                <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] animate-pulse items-center justify-center rounded-full border-2 border-card bg-destructive px-0.5 text-[9px] font-bold text-destructive-foreground shadow-sm">
                   {pendingCount}
-                </div>
+                </span>
               )}
 
-              {/* Total count badge (bottom-right) */}
+              {/* Total count / closed indicator (bottom-right) */}
               {isClosed ? (
-                <div className="absolute -bottom-1 -right-1 text-[9px] w-5 h-5 rounded-lg flex items-center justify-center bg-red-100 text-red-600 border border-red-200 font-black">
-                  <XCircle className="w-3 h-3" />
-                </div>
+                <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
+                  <XCircle className="h-3 w-3" />
+                </span>
               ) : (
-                <div
+                <span
                   className={cn(
-                    "absolute -bottom-1 -right-1 text-[9px] w-5 h-5 rounded-lg flex items-center justify-center font-black",
-                    getCountBadgeClass(count, isSelected)
+                    "absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-md text-[9px] font-bold",
+                    getCountBadgeClass(count, !!isSelected),
                   )}
                 >
                   {count}
-                </div>
+                </span>
               )}
             </button>
           );
         })}
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mt-10 pt-6 border-t border-slate-100">
-        <div className="flex items-center gap-2 text-slate-400">
-          <Info className="w-3.5 h-3.5" />
-          <span className="text-[10px] font-bold uppercase tracking-wider">
+      {/* ---- Legend ---- */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-border pt-4 md:mt-6 md:pt-5">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Info className="h-3.5 w-3.5" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider">
             Shop Load Intensity
           </span>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-slate-200" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">
-              Available
-            </span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full border border-border bg-muted" />
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">Available</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">
-              Busy
-            </span>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">Busy</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">
-              Peak
-            </span>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">Peak</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">
-              Pending
-            </span>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full border-2 border-card bg-destructive" />
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">Pending</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-slate-300 border border-slate-400" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">
-              Closed
-            </span>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full border border-muted-foreground/40 bg-muted" />
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">Closed</span>
           </div>
         </div>
       </div>

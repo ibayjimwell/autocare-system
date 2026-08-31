@@ -96,31 +96,34 @@ export default function AppointmentsPage() {
     <PageContainer title="Service Scheduler" subtitle="Confirm or decline customer bookings">
       {apiError && (
         <div className="mb-4">
-          <ErrorHandler
-            type={apiError.type}
-            title={apiError.title}
-            message={apiError.message}
-          />
+          <ErrorHandler type={apiError.type} title={apiError.title} message={apiError.message} />
         </div>
       )}
 
+      {/* ---- Toolbar: configurator action, right-aligned ---- */}
       {canConfigure && (
-        <div className="flex justify-end mb-4">
+        <div className="mb-4 flex justify-end">
           <Button
             variant="outline"
-            size="sm"
             onClick={() => setGlobalConfigOpen(true)}
-            className="flex items-center gap-2"
+            className="h-11 rounded-md px-4 text-base font-medium md:h-9 md:px-3 md:text-sm"
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-5 w-5 md:h-4 md:w-4" />
             Configure Settings
           </Button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-8 space-y-6">
-          <Card className="border-none shadow-xl bg-white rounded-3xl overflow-hidden">
+      {/*
+        Layout (mirrors the inspiration):
+        · Right pane (60%): the day schedule — time-axis timeline, pinned viewport height.
+        · Left column (40%): month calendar for date navigation, booking form beneath.
+        · Mobile (< lg): stacks in flow order — Calendar → Agenda → Booking.
+      */}
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:items-start lg:[grid-template-columns:minmax(0,2fr)_minmax(0,3fr)] lg:[grid-template-areas:'calendar_agenda'_'booking_agenda']">
+        {/* ---- Month calendar + closed-date notice ---- */}
+        <div className="flex flex-col gap-4 md:gap-6 lg:[grid-area:calendar]">
+          <Card className="overflow-hidden rounded-xl border-border bg-card text-card-foreground shadow-sm">
             <AppointmentCalendar
               currentMonth={currentMonth}
               onMonthChange={(dir: number) => setCurrentMonth(addMonths(currentMonth, dir))}
@@ -133,30 +136,36 @@ export default function AppointmentsPage() {
           </Card>
 
           {isSelectedDateClosed && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm flex items-center gap-2">
-              <XCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/10 p-3 text-sm font-medium text-destructive">
+              <XCircle className="h-4 w-4 shrink-0" />
               <span>
                 This date is closed. No appointments can be booked.
                 {effective?.reason && ` Reason: ${effective.reason}`}
               </span>
             </div>
           )}
+        </div>
 
+        {/* ---- Day schedule (primary pane, mirrors the image) ---- */}
+        <div className="lg:sticky lg:top-24 lg:self-start lg:[grid-area:agenda]">
+          <div className="lg:h-[calc(100vh-11rem)] lg:min-h-[30rem]">
+            <DailyAgenda
+              appointments={appointments}
+              selectedDate={selectedDate}
+              onConfirm={handleConfirm}
+              onDecline={handleDecline}
+              onRefresh={loadAppointments}
+            />
+          </div>
+        </div>
+
+        {/* ---- Booking form ---- */}
+        <div className="lg:[grid-area:booking]">
           <BookingFormCard
             customers={customers}
             services={services}
             selectedDate={selectedDate}
             onSuccess={loadAppointments}
-          />
-        </div>
-
-        <div className="lg:col-span-4 h-full">
-          <DailyAgenda
-            appointments={appointments}
-            selectedDate={selectedDate}
-            onConfirm={handleConfirm}
-            onDecline={handleDecline}
-            onRefresh={loadAppointments}
           />
         </div>
       </div>
