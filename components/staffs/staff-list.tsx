@@ -2,39 +2,82 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
+
 import {
-  Popover, PopoverContent, PopoverTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
 } from '@/components/ui/popover';
+
 import {
-  Plus, UserCog, Pencil, Search, UserCircle2, ChevronLeft, ChevronRight,
-  Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LogOut, Key, ShieldCheck,
-  UserPlus, ArrowUpFromLine,
+  Plus,
+  UserCog,
+  Pencil,
+  Search,
+  UserCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  LogOut,
+  Key,
+  ShieldCheck,
+  ArrowUpFromLine,
+  Download,
+  SlidersHorizontal,
+  MoreHorizontal,
+  Users,
 } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
-import { useStaffData } from '@/hooks/staffs/useStaffData';
+import {
+  useStaffData,
+} from '@/hooks/staffs/useStaffData';
 import { useStaffForm } from '@/hooks/staffs/useStaffForm';
-import { MODULES, MODULE_LABELS, PREDEFINED_ROLES, SortField } from '@/app-utils/staffs/constants';
+
+import {
+  MODULES,
+  MODULE_LABELS,
+  PREDEFINED_ROLES,
+  SortField,
+} from '@/app-utils/staffs/constants';
+
 import DataModal from '@/components/shared/data-modal';
 import ErrorHandler from '@/components/shared/error-handler';
 import TempPasswordDialog from './temp-password-dialog';
 import AccessModals from './access-modals';
 import EmptyState from '@/components/shared/empty-state';
 import LoadingSpinner from '@/components/shared/loading-spinner';
+
 import { toast } from 'sonner';
 import { staffApi } from '@/lib/staffs/staffs';
 
-// Status tabs
 const STATUS_TABS = [
   { value: 'ALL', label: 'All' },
   { value: 'online', label: 'Online' },
@@ -51,37 +94,68 @@ export default function StaffList() {
   // Filter & Sort state
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
-  const [statusTab, setStatusTab] = useState<string>('ALL'); // NEW: tab for status
-  const [sortField, setSortField] = useState<SortField>('createdAt'); // Default: newest first
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc'); // Descending = newest first
+  const [statusTab, setStatusTab] = useState<string>('ALL');
+  const [sortField, setSortField] =
+    useState<SortField>('createdAt');
+  const [sortDirection, setSortDirection] =
+    useState<'asc' | 'desc'>('desc');
   const [filterOpen, setFilterOpen] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 7;
 
   // Highlight
-  const [highlightId, setHighlightId] = useState<string | null>(null);
-  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [highlightId, setHighlightId] =
+    useState<string | null>(null);
+
+  const highlightTimeoutRef =
+    useRef<NodeJS.Timeout | null>(null);
+
   const triggerHighlight = (id: string) => {
     setHighlightId(id);
-    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
-    highlightTimeoutRef.current = setTimeout(() => setHighlightId(null), 2000);
+
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+
+    highlightTimeoutRef.current = setTimeout(
+      () => setHighlightId(null),
+      2000
+    );
   };
 
   // Access modals state
-  const [accessModalOpen, setAccessModalOpen] = useState(false);
-  const [editAccessModalOpen, setEditAccessModalOpen] = useState(false);
-  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [accessModalOpen, setAccessModalOpen] =
+    useState(false);
+
+  const [editAccessModalOpen, setEditAccessModalOpen] =
+    useState(false);
+
+  const [selectedStaffId, setSelectedStaffId] =
+    useState<string | null>(null);
 
   // Use staff form hook
   const {
-    modalOpen, setModalOpen, editingStaff, form, setForm, saving, formError,
-    openCreate, openEdit, handleSave, handleFullNameChange,
-    tempPassword, tempStaffName, tempStaffId, setTempPassword,
+    modalOpen,
+    setModalOpen,
+    editingStaff,
+    form,
+    setForm,
+    saving,
+    formError,
+    openCreate,
+    openEdit,
+    handleSave,
+    handleFullNameChange,
+    tempPassword,
+    tempStaffName,
+    tempStaffId,
+    setTempPassword,
   } = useStaffForm(loadStaff, triggerHighlight);
 
   // Temp password dialog state
-  const [tempDialogOpen, setTempDialogOpen] = useState(false);
+  const [tempDialogOpen, setTempDialogOpen] =
+    useState(false);
 
   // When a new staff is created, open the temp password dialog and remember the staff ID
   useEffect(() => {
@@ -93,13 +167,28 @@ export default function StaffList() {
 
   // ----- Onboard handler (for offboarded staff) -----
   const handleOnboard = async (staff: any) => {
-    if (!window.confirm(`Are you sure you want to onboard ${staff.fullname}?`)) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to onboard ${staff.fullname}?`
+      )
+    ) {
+      return;
+    }
+
     try {
-      const res = await staffApi.update(staff.id, { inBoarding: true });
+      const res = await staffApi.update(staff.id, {
+        inBoarding: true,
+      });
+
       if (res.error) {
-        toast.error(res.errorMessage || 'Failed to onboard staff.');
+        toast.error(
+          res.errorMessage || 'Failed to onboard staff.'
+        );
       } else {
-        toast.success(`${staff.fullname} has been onboarded.`);
+        toast.success(
+          `${staff.fullname} has been onboarded.`
+        );
+
         await loadStaff();
         triggerHighlight(staff.id);
       }
@@ -110,13 +199,28 @@ export default function StaffList() {
 
   // ----- Outboard handler (for onboarded staff) -----
   const handleOutboard = async (staff: any) => {
-    if (!window.confirm(`Are you sure you want to outboard ${staff.fullname}?`)) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to outboard ${staff.fullname}?`
+      )
+    ) {
+      return;
+    }
+
     try {
-      const res = await staffApi.update(staff.id, { inBoarding: false });
+      const res = await staffApi.update(staff.id, {
+        inBoarding: false,
+      });
+
       if (res.error) {
-        toast.error(res.errorMessage || 'Failed to outboard staff.');
+        toast.error(
+          res.errorMessage || 'Failed to outboard staff.'
+        );
       } else {
-        toast.success(`${staff.fullname} has been outboarded.`);
+        toast.success(
+          `${staff.fullname} has been outboarded.`
+        );
+
         await loadStaff();
         triggerHighlight(staff.id);
       }
@@ -133,394 +237,1917 @@ export default function StaffList() {
   const handleTempPasswordComplete = () => {
     setTempDialogOpen(false);
     setTempPassword(null);
+
     if (tempStaffId) {
       setSelectedStaffId(tempStaffId);
       setAccessModalOpen(true);
     } else {
-      toast.error('Could not determine staff ID. Please assign access manually.');
+      toast.error(
+        'Could not determine staff ID. Please assign access manually.'
+      );
     }
   };
 
   // Client-side filtering & sorting (also exclude current staff)
   const filteredAndSortedStaff = useMemo(() => {
     let data = [...staffList];
-    if (currentStaffId) data = data.filter(s => s.id !== currentStaffId);
+
+    if (currentStaffId) {
+      data = data.filter(
+        (s) => s.id !== currentStaffId
+      );
+    }
 
     // Search
     if (search.trim()) {
       const term = search.toLowerCase();
-      data = data.filter(s =>
-        s.fullname?.toLowerCase().includes(term) ||
-        s.username?.toLowerCase().includes(term) ||
-        s.role?.toLowerCase().includes(term)
+
+      data = data.filter(
+        (s) =>
+          s.fullname
+            ?.toLowerCase()
+            .includes(term) ||
+          s.username
+            ?.toLowerCase()
+            .includes(term) ||
+          s.role
+            ?.toLowerCase()
+            .includes(term)
       );
     }
 
     // Role filter
-    if (roleFilter !== 'ALL') data = data.filter(s => s.role === roleFilter);
+    if (roleFilter !== 'ALL') {
+      data = data.filter(
+        (s) => s.role === roleFilter
+      );
+    }
 
     // Status tab filter
-    if (statusTab === 'online') data = data.filter(s => s.isOnline === true && s.inBoarding !== false);
-    else if (statusTab === 'offline') data = data.filter(s => s.isOnline !== true && s.inBoarding !== false);
-    else if (statusTab === 'offboarded') data = data.filter(s => s.inBoarding === false);
+    if (statusTab === 'online') {
+      data = data.filter(
+        (s) =>
+          s.isOnline === true &&
+          s.inBoarding !== false
+      );
+    } else if (statusTab === 'offline') {
+      data = data.filter(
+        (s) =>
+          s.isOnline !== true &&
+          s.inBoarding !== false
+      );
+    } else if (statusTab === 'offboarded') {
+      data = data.filter(
+        (s) => s.inBoarding === false
+      );
+    }
 
     // Sorting
     data.sort((a, b) => {
-      let valA: any, valB: any;
+      let valA: any;
+      let valB: any;
+
       switch (sortField) {
-        case 'fullname': valA = (a.fullname || '').toLowerCase(); valB = (b.fullname || '').toLowerCase(); break;
-        case 'username': valA = (a.username || '').toLowerCase(); valB = (b.username || '').toLowerCase(); break;
-        case 'role': valA = (a.role || '').toLowerCase(); valB = (b.role || '').toLowerCase(); break;
-        case 'status': valA = a.inBoarding === false ? 2 : (a.isOnline ? 0 : 1); valB = b.inBoarding === false ? 2 : (b.isOnline ? 0 : 1); break;
-        case 'accessCount': valA = a.accessCount || 0; valB = b.accessCount || 0; break;
-        case 'currentModule': valA = (a.currentModule || '').toLowerCase(); valB = (b.currentModule || '').toLowerCase(); break;
-        case 'createdAt': valA = new Date(a.createdAt).getTime(); valB = new Date(b.createdAt).getTime(); break;
-        default: return 0;
+        case 'fullname':
+          valA = (a.fullname || '').toLowerCase();
+          valB = (b.fullname || '').toLowerCase();
+          break;
+
+        case 'username':
+          valA = (a.username || '').toLowerCase();
+          valB = (b.username || '').toLowerCase();
+          break;
+
+        case 'role':
+          valA = (a.role || '').toLowerCase();
+          valB = (b.role || '').toLowerCase();
+          break;
+
+        case 'status':
+          valA =
+            a.inBoarding === false
+              ? 2
+              : a.isOnline
+                ? 0
+                : 1;
+
+          valB =
+            b.inBoarding === false
+              ? 2
+              : b.isOnline
+                ? 0
+                : 1;
+          break;
+
+        case 'accessCount':
+          valA = a.accessCount || 0;
+          valB = b.accessCount || 0;
+          break;
+
+        case 'currentModule':
+          valA = (
+            a.currentModule || ''
+          ).toLowerCase();
+
+          valB = (
+            b.currentModule || ''
+          ).toLowerCase();
+          break;
+
+        case 'createdAt':
+          valA = new Date(
+            a.createdAt
+          ).getTime();
+
+          valB = new Date(
+            b.createdAt
+          ).getTime();
+          break;
+
+        default:
+          return 0;
       }
-      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+
+      if (valA < valB) {
+        return sortDirection === 'asc'
+          ? -1
+          : 1;
+      }
+
+      if (valA > valB) {
+        return sortDirection === 'asc'
+          ? 1
+          : -1;
+      }
+
       return 0;
     });
-    return data;
-  }, [staffList, search, roleFilter, statusTab, sortField, sortDirection, currentStaffId]);
 
-  const totalPages = Math.ceil(filteredAndSortedStaff.length / itemsPerPage);
-  const paginatedStaff = filteredAndSortedStaff.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  useEffect(() => { setCurrentPage(1); }, [search, roleFilter, statusTab, sortField, sortDirection]);
+    return data;
+  }, [
+    staffList,
+    search,
+    roleFilter,
+    statusTab,
+    sortField,
+    sortDirection,
+    currentStaffId,
+  ]);
+
+  const totalPages = Math.ceil(
+    filteredAndSortedStaff.length / itemsPerPage
+  );
+
+  const paginatedStaff =
+    filteredAndSortedStaff.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    search,
+    roleFilter,
+    statusTab,
+    sortField,
+    sortDirection,
+  ]);
 
   const handleSort = (field: SortField) => {
-    if (sortField === field) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDirection('asc'); }
+    if (sortField === field) {
+      setSortDirection((prev) =>
+        prev === 'asc' ? 'desc' : 'asc'
+      );
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown className="w-4 h-4 text-slate-400" />;
-    return sortDirection === 'asc' ? <ArrowUp className="w-4 h-4 text-primary" /> : <ArrowDown className="w-4 h-4 text-primary" />;
+  const SortIcon = ({
+    field,
+  }: {
+    field: SortField;
+  }) => {
+    if (sortField !== field) {
+      return (
+        <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40" />
+      );
+    }
+
+    return sortDirection === 'asc' ? (
+      <ArrowUp className="h-3.5 w-3.5 text-foreground" />
+    ) : (
+      <ArrowDown className="h-3.5 w-3.5 text-foreground" />
+    );
   };
 
-  const resetFilters = () => { setRoleFilter('ALL'); setStatusTab('ALL'); };
+  const resetFilters = () => {
+    setRoleFilter('ALL');
+    setStatusTab('ALL');
+  };
 
-  if (loading && staffList.length === 0) return <LoadingSpinner />;
+  const hasActiveFilters =
+    roleFilter !== 'ALL' ||
+    statusTab !== 'ALL';
+
+  const getStatusCount = (value: string) => {
+    if (value === 'ALL') {
+      return currentStaffId
+        ? staffList.filter(
+            (s) => s.id !== currentStaffId
+          ).length
+        : staffList.length;
+    }
+
+    if (value === 'online') {
+      return staffList.filter(
+        (s) =>
+          s.isOnline === true &&
+          s.inBoarding !== false
+      ).length;
+    }
+
+    if (value === 'offline') {
+      return staffList.filter(
+        (s) =>
+          s.isOnline !== true &&
+          s.inBoarding !== false
+      ).length;
+    }
+
+    if (value === 'offboarded') {
+      return staffList.filter(
+        (s) => s.inBoarding === false
+      ).length;
+    }
+
+    return 0;
+  };
+
+  const getStatusLabel = (staff: any) => {
+    if (staff.inBoarding === false) {
+      return 'Offboarded';
+    }
+
+    return staff.isOnline
+      ? 'Online'
+      : 'Offline';
+  };
+
+  const getStatusClass = (staff: any) => {
+    if (staff.inBoarding === false) {
+      return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400';
+    }
+
+    return staff.isOnline
+      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+      : 'border-border bg-muted text-muted-foreground';
+  };
+
+  const getStatusDotClass = (staff: any) => {
+    if (staff.inBoarding === false) {
+      return 'bg-amber-500';
+    }
+
+    return staff.isOnline
+      ? 'bg-emerald-500'
+      : 'bg-muted-foreground/50';
+  };
+
+  if (
+    loading &&
+    staffList.length === 0
+  ) {
+    return <LoadingSpinner />;
+  }
 
   return (
     <>
-      {/* Top Action Button */}
-      <div className="flex justify-end mb-4">
-        <Button
-          onClick={openCreate}
-          className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 px-6 active:scale-95 transition-all"
+      {/* ============================================================
+          TOP TOOLBAR
+          ============================================================ */}
+      <div className="space-y-3">
+        {/* View controls */}
+        <div
+          className="
+            flex flex-col gap-3
+            border-b border-border pb-3
+            md:flex-row md:items-center
+            md:justify-between
+          "
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Team Member
-        </Button>
-      </div>
+          {/* Status segments */}
+          <div
+            className="
+              flex w-full items-center overflow-x-auto
+              rounded-lg border border-border
+              bg-muted/40 p-1
+              md:w-auto
+            "
+          >
+            {STATUS_TABS.map((tab) => {
+              const isActive =
+                statusTab === tab.value;
 
-      {/* Status Tabs */}
-      <div className="flex items-center gap-1 p-1 bg-slate-100/80 rounded-2xl mb-6 w-fit border border-slate-200/50">
-        {STATUS_TABS.map((tab) => {
-          const isActive = statusTab === tab.value;
-          const count = tab.value === 'ALL'
-            ? (currentStaffId ? staffList.filter(s => s.id !== currentStaffId).length : staffList.length)
-            : (() => {
-                if (tab.value === 'online') return staffList.filter(s => s.isOnline === true && s.inBoarding !== false).length;
-                if (tab.value === 'offline') return staffList.filter(s => s.isOnline !== true && s.inBoarding !== false).length;
-                if (tab.value === 'offboarded') return staffList.filter(s => s.inBoarding === false).length;
-                return 0;
-              })();
-          return (
-            <button
-              key={tab.value}
-              onClick={() => setStatusTab(tab.value)}
-              className={cn(
-                'px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap',
-                isActive
-                  ? 'bg-white text-primary shadow-sm ring-1 ring-black/5 scale-100'
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 scale-95'
-              )}
-            >
-              {tab.label} <span className="text-xs font-normal text-slate-400">({count})</span>
-            </button>
-          );
-        })}
-      </div>
+              const count =
+                getStatusCount(tab.value);
 
-      {/* Search & Filter Bar */}
-      <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between">
-        <div className="relative w-full md:max-w-md group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-          <Input
-            placeholder="Search by name, role, or username..."
-            className="pl-10 rounded-2xl border-slate-200 focus:ring-primary/20 transition-all bg-white"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
-            <UserCircle2 className="w-3 h-3" />
-            {filteredAndSortedStaff.length} Total Personnel
+              return (
+                <button
+                  type="button"
+                  key={tab.value}
+                  onClick={() =>
+                    setStatusTab(tab.value)
+                  }
+                  className={cn(
+                    `
+                    flex min-h-10 shrink-0
+                    items-center gap-1.5
+                    rounded-md px-3
+                    text-sm font-medium
+                    transition-colors
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-ring
+                    focus-visible:ring-offset-2
+                    md:h-8 md:min-h-0
+                    md:px-3 md:text-xs
+                    `,
+                    isActive
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-card/60 hover:text-foreground'
+                  )}
+                >
+                  {tab.label}
+
+                  <span
+                    className={cn(
+                      'text-[11px]',
+                      isActive
+                        ? 'font-semibold text-foreground'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+
+          {/* Primary action */}
+          <Button
+            type="button"
+            onClick={openCreate}
+            className="
+              h-11 w-full rounded-md
+              px-4 text-base font-medium
+              shadow-sm
+              focus-visible:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-ring
+              focus-visible:ring-offset-2
+              md:h-9 md:w-auto
+              md:px-3 md:text-sm
+            "
+          >
+            <Plus className="h-5 w-5 md:h-4 md:w-4" />
+            Add Team Member
+          </Button>
+        </div>
+
+        {/* Search / utilities */}
+        <div
+          className="
+            flex flex-col gap-3
+            md:flex-row md:items-center
+            md:justify-between
+          "
+        >
+          <div className="relative w-full md:max-w-md">
+            <Search
+              className="
+                pointer-events-none absolute
+                left-3 top-1/2
+                h-5 w-5 -translate-y-1/2
+                text-muted-foreground
+                md:h-4 md:w-4
+              "
+            />
+
+            <Input
+              placeholder="Search by name, role, or username..."
+              aria-label="Search staff"
+              className="
+                h-11 rounded-md
+                border-input bg-background
+                pl-11 text-base
+                shadow-none
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-1
+                md:h-9 md:pl-10 md:text-sm
+              "
+              value={search}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+            />
+
+            {search && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Clear search"
+                onClick={() =>
+                  setSearch('')
+                }
+                className="
+                  absolute right-1.5 top-1/2
+                  h-8 w-8 -translate-y-1/2
+                  rounded-md
+                  text-muted-foreground
+                  hover:text-foreground
+                  focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-ring
+                  focus-visible:ring-offset-1
+                "
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <div
+              className="
+                hidden items-center gap-2
+                rounded-md border border-border
+                bg-muted/30 px-3
+                text-xs text-muted-foreground
+                lg:flex
+              "
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>
+                {filteredAndSortedStaff.length} team members
+              </span>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="
+                h-11 shrink-0 rounded-md
+                px-3 text-sm font-medium
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
+                md:h-9
+              "
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                Customize
+              </span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="
+                hidden h-9 shrink-0
+                rounded-md px-3
+                text-sm font-medium
+                lg:inline-flex
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
+              "
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="More staff actions"
+              className="
+                hidden h-9 w-9 shrink-0
+                rounded-md lg:inline-flex
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
+              "
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Filter row */}
+        <div
+          className="
+            flex flex-wrap items-center gap-2
+            rounded-lg border border-border
+            bg-card p-2
+            md:bg-transparent
+            md:p-0
+          "
+        >
+          <Popover
+            open={filterOpen}
+            onOpenChange={setFilterOpen}
+          >
             <PopoverTrigger asChild>
-              <Button variant="outline" className="border-slate-200">
-                <Filter className="w-4 h-4 mr-2" /> Filters
-                {(roleFilter !== 'ALL' || statusTab !== 'ALL') && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
+              <Button
+                type="button"
+                variant="outline"
+                className="
+                  h-10 rounded-md
+                  px-3 text-sm font-medium
+                  focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-ring
+                  focus-visible:ring-offset-2
+                  md:h-9
+                "
+              >
+                <Filter className="h-4 w-4" />
+                Filters
+
+                {hasActiveFilters && (
+                  <span
+                    className="
+                      ml-1.5 h-1.5 w-1.5
+                      rounded-full bg-primary
+                    "
+                  />
+                )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-60 p-4 rounded-2xl shadow-lg border-slate-200">
+
+            <PopoverContent
+              align="start"
+              sideOffset={8}
+              className="
+                w-[calc(100vw-2rem)] max-w-sm
+                rounded-lg
+                border-border
+                bg-popover/95
+                p-4 shadow-xl
+                backdrop-blur-xl
+              "
+            >
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-sm">Filter Staff</h4>
-                  <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 text-xs"><X className="w-3 h-3 mr-1" /> Reset</Button>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">
+                      Filter staff
+                    </h4>
+
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Refine the team directory.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetFilters}
+                    className="
+                      h-8 rounded-md
+                      px-2 text-xs
+                      focus-visible:outline-none
+                      focus-visible:ring-2
+                      focus-visible:ring-ring
+                      focus-visible:ring-offset-2
+                    "
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reset
+                  </Button>
                 </div>
+
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-500">Role</Label>
-                  <Select value={roleFilter} onValueChange={setRoleFilter}>
-                    <SelectTrigger className="h-9 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Roles</SelectItem>
-                      {PREDEFINED_ROLES.map(role => (
-                        <SelectItem key={role} value={role}>{role}</SelectItem>
-                      ))}
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    Role
+                  </Label>
+
+                  <Select
+                    value={roleFilter}
+                    onValueChange={setRoleFilter}
+                  >
+                    <SelectTrigger
+                      className="
+                        h-11 rounded-md
+                        text-base
+                        focus-visible:ring-2
+                        focus-visible:ring-ring
+                        focus-visible:ring-offset-2
+                        md:h-9 md:text-sm
+                      "
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+
+                    <SelectContent className="rounded-lg">
+                      <SelectItem value="ALL">
+                        All Roles
+                      </SelectItem>
+
+                      {PREDEFINED_ROLES.map(
+                        (role) => (
+                          <SelectItem
+                            key={role}
+                            value={role}
+                          >
+                            {role}
+                          </SelectItem>
+                        )
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => setFilterOpen(false)}>Apply Filters</Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="
+                    h-11 w-full rounded-md
+                    text-sm font-medium
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-ring
+                    focus-visible:ring-offset-2
+                    md:h-9
+                  "
+                  onClick={() =>
+                    setFilterOpen(false)
+                  }
+                >
+                  Apply Filters
+                </Button>
               </div>
             </PopoverContent>
           </Popover>
+
+          {roleFilter !== 'ALL' && (
+            <Badge
+              variant="secondary"
+              className="
+                h-8 rounded-full
+                px-2.5 text-[11px]
+                font-medium
+              "
+            >
+              Role: {roleFilter}
+            </Badge>
+          )}
+
+          {statusTab !== 'ALL' && (
+            <Badge
+              variant="secondary"
+              className="
+                h-8 rounded-full
+                px-2.5 text-[11px]
+                font-medium
+              "
+            >
+              Status:{' '}
+              {
+                STATUS_TABS.find(
+                  (tab) =>
+                    tab.value === statusTab
+                )?.label
+              }
+            </Badge>
+          )}
+
+          {hasActiveFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="
+                h-8 rounded-md px-2
+                text-xs text-muted-foreground
+                hover:text-foreground
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
+              "
+            >
+              Clear filters
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Empty State */}
+      {/* ============================================================
+          EMPTY STATES
+          ============================================================ */}
       {filteredAndSortedStaff.length === 0 ? (
-        <EmptyState icon={UserCog} title="No staff members found"
-          description={search || roleFilter !== 'ALL' || statusTab !== 'ALL' ? 'Try adjusting your search or filters.' : 'Your team directory is currently empty.'} />
+        <Card className="mt-4 rounded-xl border-border bg-card shadow-sm">
+          <CardContent className="p-0">
+            <EmptyState
+              icon={UserCog}
+              title="No staff members found"
+              description={
+                search ||
+                roleFilter !== 'ALL' ||
+                statusTab !== 'ALL'
+                  ? 'Try adjusting your search or filters.'
+                  : 'Your team directory is currently empty.'
+              }
+            />
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-6">
-          {/* Mobile Cards */}
-          <div className="grid grid-cols-1 gap-4 md:hidden">
-            {paginatedStaff.map(staff => (
-              <Card key={staff.id}
-                className={cn('rounded-2xl border-slate-100 shadow-sm overflow-hidden active:scale-[0.98] transition-transform',
-                  highlightId === staff.id && 'ring-2 ring-primary ring-offset-2 animate-pulse')}>
-                <CardContent className="p-4 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex gap-3 items-center">
-                      <div className="relative">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">{staff.fullname?.charAt(0) || '?'}</div>
-                        {staff.isOnline && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-black text-slate-800 leading-tight truncate">{staff.fullname}</p>
-                        <p className="text-xs text-slate-400">@{staff.username}</p>
-                        {staff.isOnline && staff.currentModule && (
-                          <p className="text-[10px] text-primary font-semibold mt-0.5">
-                            Viewing: {MODULE_LABELS[staff.currentModule] || staff.currentModule}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <Badge className={cn('rounded-lg border-none px-2 py-0.5 text-[10px] font-black uppercase tracking-tighter',
-                      staff.inBoarding === false ? 'bg-yellow-100 text-yellow-700' : staff.isOnline ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500')}>
-                      {staff.inBoarding === false ? 'Offboarded' : staff.isOnline ? 'Online' : 'Offline'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{staff.role}</span>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(staff)} className="h-9 w-9 rounded-xl text-slate-400"><Pencil className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleEditAccess(staff.id)} className="h-9 w-9 rounded-xl text-slate-400"><Key className="w-4 h-4" /></Button>
-                      {staff.inBoarding === false ? (
-                        <Button variant="ghost" size="icon" onClick={() => handleOnboard(staff)} className="h-9 w-9 rounded-xl text-emerald-500 hover:bg-emerald-50">
-                          <ArrowUpFromLine className="w-4 h-4" />
-                        </Button>
-                      ) : (
-                        <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl text-yellow-500 hover:bg-yellow-50">
-                          <LogOut className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+        <div className="mt-4 space-y-3">
+          {/* ========================================================
+              DATA CARD
+              ======================================================== */}
+          <Card
+            className="
+              overflow-hidden
+              rounded-xl
+              border-border
+              bg-card
+              shadow-sm
+            "
+          >
+            <CardContent className="p-0">
+              {/* ================= MOBILE ================= */}
+              <div className="md:hidden">
+                <div
+                  className="
+                    flex items-center justify-between
+                    border-b border-border
+                    bg-muted/25
+                    px-4 py-3
+                  "
+                >
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Team members
+                    </p>
 
-          {/* Desktop Table */}
-          <Card className="hidden md:block rounded-[2rem] border-slate-100 shadow-sm overflow-hidden">
-            <Table>
-              <TableHeader className="bg-slate-50/50">
-                <TableRow className="border-slate-100 hover:bg-transparent">
-                  <TableHead className="pl-8 text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('fullname')}>
-                    <div className="flex items-center gap-2">Team Member <SortIcon field="fullname" /></div>
-                  </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('username')}>
-                    <div className="flex items-center gap-2">Username <SortIcon field="username" /></div>
-                  </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('role')}>
-                    <div className="flex items-center gap-2">Role & Access <SortIcon field="role" /></div>
-                  </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('status')}>
-                    <div className="flex items-center gap-2">Status <SortIcon field="status" /></div>
-                  </TableHead>
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer select-none" onClick={() => handleSort('currentModule')}>
-                    <div className="flex items-center gap-2">Current Module <SortIcon field="currentModule" /></div>
-                  </TableHead>
-                  <TableHead className="pr-8 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedStaff.map(staff => (
-                  <TableRow key={staff.id} className={cn('group hover:bg-slate-50/30 transition-colors border-slate-50', highlightId === staff.id && 'bg-primary/5 animate-pulse')}>
-                    <TableCell className="pl-8 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-500 font-black text-sm">{staff.fullname?.charAt(0) || '?'}</div>
-                          {staff.isOnline && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />}
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-800 text-sm">{staff.fullname}</p>
-                          <p className="text-xs text-slate-400">Internal Personnel</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell><code className="text-xs font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded-md">{staff.username}</code></TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-bold text-slate-700">{staff.role}</span>
-                        <p className="text-[9px] text-slate-400 font-medium">{staff.accessCount || 0} modules assigned</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {staff.inBoarding === false ? (
-                        <Badge className="rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-widest bg-yellow-50 text-yellow-700 border-none">Offboarded</Badge>
-                      ) : staff.isOnline ? (
-                        <Badge className="rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-widest bg-green-50 text-green-600 border-none">Online</Badge>
-                      ) : (
-                        <Badge className="rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border-none">Offline</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {staff.isOnline && staff.currentModule ? (
-                        <span className="text-xs font-bold text-primary bg-primary/5 px-2 py-1 rounded-md">{MODULE_LABELS[staff.currentModule] || staff.currentModule}</span>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="pr-8">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(staff)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all">
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditAccess(staff.id)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm text-slate-400 hover:text-primary transition-all">
-                          <ShieldCheck className="w-4 h-4" />
-                        </Button>
-                        {staff.inBoarding === false ? (
-                          <Button variant="ghost" size="icon" onClick={() => handleOnboard(staff)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 text-emerald-500 transition-all" title="Onboard">
-                            <ArrowUpFromLine className="w-4 h-4" />
-                          </Button>
-                        ) : (
-                          <Button variant="ghost" size="icon" onClick={() => handleOutboard(staff)} className="h-9 w-9 rounded-xl hover:bg-yellow-50 text-yellow-500 transition-all" title="Outboard">
-                            <LogOut className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {filteredAndSortedStaff.length}{' '}
+                      records
+                    </p>
+                  </div>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Page {currentPage} of {totalPages || 1}</p>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="h-8 rounded-xl border-slate-200 text-slate-600 disabled:opacity-30">
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <div className="flex gap-1">
-                {Array.from({ length: Math.min(totalPages, 7) }).map((_, i) => {
-                  let pageNum = i + 1;
-                  if (totalPages > 7) {
-                    if (i === 0) pageNum = 1;
-                    else if (i === 1) pageNum = Math.max(2, currentPage - 1);
-                    else if (i === 2) pageNum = Math.max(3, currentPage);
-                    else if (i === 3) pageNum = Math.min(totalPages - 1, currentPage + 1);
-                    else if (i === 4) pageNum = totalPages;
-                    else if (i === 5) pageNum = totalPages - 1;
-                    else pageNum = totalPages - 2;
-                    if (i > 0 && pageNum === (i === 1 ? 1 : i === 2 ? Math.max(2, currentPage - 1) : 0)) pageNum = Math.min(totalPages, pageNum + 1);
-                  }
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={cn('w-8 h-8 rounded-xl text-[10px] font-black transition-all', currentPage === pageNum ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-100')}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
+                  <Badge
+                    variant="outline"
+                    className="
+                      rounded-full
+                      bg-background
+                      px-2.5 py-1
+                      text-[11px]
+                    "
+                  >
+                    Page {currentPage} of{' '}
+                    {totalPages || 1}
+                  </Badge>
+                </div>
+
+                <div className="divide-y divide-border">
+                  {paginatedStaff.map(
+                    (staff) => (
+                      <div
+                        key={staff.id}
+                        className={cn(
+                          'p-4 transition-colors',
+                          highlightId ===
+                            staff.id &&
+                            'bg-primary/5'
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Avatar */}
+                          <div className="relative shrink-0">
+                            <div
+                              className="
+                                flex h-11 w-11
+                                items-center justify-center
+                                rounded-lg
+                                border border-border
+                                bg-muted
+                                text-sm font-semibold
+                                text-foreground
+                              "
+                            >
+                              {staff.fullname?.charAt(
+                                0
+                              ) || '?'}
+                            </div>
+
+                            <span
+                              className={cn(
+                                `
+                                absolute -bottom-0.5
+                                -right-0.5
+                                h-3 w-3
+                                rounded-full
+                                border-2
+                                border-card
+                                `,
+                                getStatusDotClass(
+                                  staff
+                                )
+                              )}
+                            />
+                          </div>
+
+                          {/* Identity */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-base font-semibold tracking-tight text-foreground">
+                                  {staff.fullname}
+                                </p>
+
+                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                  @{staff.username}
+                                </p>
+                              </div>
+
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  `
+                                  shrink-0 rounded-full
+                                  px-2 py-0.5
+                                  text-[10px]
+                                  font-semibold
+                                  `,
+                                  getStatusClass(
+                                    staff
+                                  )
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'mr-1.5 h-1.5 w-1.5 rounded-full',
+                                    getStatusDotClass(
+                                      staff
+                                    )
+                                  )}
+                                />
+
+                                {getStatusLabel(
+                                  staff
+                                )}
+                              </Badge>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-2 gap-2">
+                              <div className="rounded-md bg-muted/40 p-2.5">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Role
+                                </p>
+
+                                <p className="mt-0.5 truncate text-xs font-medium text-foreground">
+                                  {staff.role}
+                                </p>
+                              </div>
+
+                              <div className="rounded-md bg-muted/40 p-2.5">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Access
+                                </p>
+
+                                <p className="mt-0.5 text-xs font-medium text-foreground">
+                                  {staff.accessCount ||
+                                    0}{' '}
+                                  modules
+                                </p>
+                              </div>
+
+                              {staff.isOnline &&
+                                staff.currentModule && (
+                                  <div className="col-span-2 rounded-md border border-primary/10 bg-primary/5 p-2.5">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                      Current module
+                                    </p>
+
+                                    <p className="mt-0.5 truncate text-xs font-medium text-primary">
+                                      {
+                                        MODULE_LABELS[
+                                          staff
+                                            .currentModule
+                                        ] ||
+                                        staff.currentModule
+                                      }
+                                    </p>
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Mobile action row */}
+                        <div
+                          className="
+                            mt-4 flex items-center
+                            gap-1
+                            border-t border-border
+                            pt-3
+                          "
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              openEdit(staff)
+                            }
+                            className="
+                              h-11 flex-1
+                              rounded-md px-3
+                              text-sm font-medium
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              handleEditAccess(
+                                staff.id
+                              )
+                            }
+                            className="
+                              h-11
+                              rounded-md
+                              px-3
+                              text-sm
+                              font-medium
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            <Key className="h-4 w-4" />
+                            Access
+                          </Button>
+
+                          {staff.inBoarding ===
+                          false ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                handleOnboard(
+                                  staff
+                                )
+                              }
+                              aria-label={`Onboard ${staff.fullname}`}
+                              className="
+                                h-11 w-11
+                                rounded-md
+                                text-emerald-600
+                                hover:bg-emerald-500/10
+                                dark:text-emerald-400
+                                focus-visible:outline-none
+                                focus-visible:ring-2
+                                focus-visible:ring-ring
+                                focus-visible:ring-offset-2
+                              "
+                            >
+                              <ArrowUpFromLine className="h-5 w-5" />
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                handleOutboard(
+                                  staff
+                                )
+                              }
+                              aria-label={`Outboard ${staff.fullname}`}
+                              className="
+                                h-11 w-11
+                                rounded-md
+                                text-amber-600
+                                hover:bg-amber-500/10
+                                focus-visible:outline-none
+                                focus-visible:ring-2
+                                focus-visible:ring-ring
+                                focus-visible:ring-offset-2
+                              "
+                            >
+                              <LogOut className="h-5 w-5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
-              <Button variant="outline" size="sm" disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="h-8 rounded-xl border-slate-200 text-slate-600 disabled:opacity-30">
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+
+              {/* ================= DESKTOP ================= */}
+              <div className="hidden md:block">
+                <div
+                  className="
+                    flex items-center justify-between
+                    border-b border-border
+                    bg-muted/20
+                    px-4 py-3
+                    lg:px-5
+                  "
+                >
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Team directory
+                    </p>
+
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Showing{' '}
+                      <span className="font-semibold text-foreground">
+                        {paginatedStaff.length}
+                      </span>{' '}
+                      of{' '}
+                      <span className="font-semibold text-foreground">
+                        {filteredAndSortedStaff.length}
+                      </span>{' '}
+                      records
+                    </p>
+                  </div>
+
+                  <div className="hidden items-center gap-2 lg:flex">
+                    <span className="text-xs text-muted-foreground">
+                      Sorted by
+                    </span>
+
+                    <span className="text-xs font-medium text-foreground">
+                      {sortField === 'fullname'
+                        ? 'Full name'
+                        : sortField === 'username'
+                          ? 'Username'
+                          : sortField === 'role'
+                            ? 'Role'
+                            : sortField ===
+                                'status'
+                              ? 'Status'
+                              : sortField ===
+                                  'accessCount'
+                                ? 'Access count'
+                                : sortField ===
+                                    'currentModule'
+                                  ? 'Current module'
+                                  : 'Created date'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[1050px]">
+                    <TableHeader>
+                      <TableRow
+                        className="
+                          border-border
+                          bg-muted/30
+                          hover:bg-muted/30
+                        "
+                      >
+                        <TableHead className="h-11 w-[250px] px-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:px-5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSort(
+                                'fullname'
+                              )
+                            }
+                            aria-sort={
+                              sortField ===
+                              'fullname'
+                                ? sortDirection ===
+                                  'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                            className="
+                              inline-flex items-center
+                              gap-1.5 rounded-md
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            Full name
+                            <SortIcon field="fullname" />
+                          </button>
+                        </TableHead>
+
+                        <TableHead className="h-11 w-[190px] px-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:px-5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSort(
+                                'username'
+                              )
+                            }
+                            aria-sort={
+                              sortField ===
+                              'username'
+                                ? sortDirection ===
+                                  'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                            className="
+                              inline-flex items-center
+                              gap-1.5 rounded-md
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            Username
+                            <SortIcon field="username" />
+                          </button>
+                        </TableHead>
+
+                        <TableHead className="h-11 w-[190px] px-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:px-5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSort(
+                                'role'
+                              )
+                            }
+                            aria-sort={
+                              sortField ===
+                              'role'
+                                ? sortDirection ===
+                                  'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                            className="
+                              inline-flex items-center
+                              gap-1.5 rounded-md
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            Role
+                            <SortIcon field="role" />
+                          </button>
+                        </TableHead>
+
+                        <TableHead className="h-11 w-[150px] px-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:px-5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSort(
+                                'status'
+                              )
+                            }
+                            aria-sort={
+                              sortField ===
+                              'status'
+                                ? sortDirection ===
+                                  'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                            className="
+                              inline-flex items-center
+                              gap-1.5 rounded-md
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            Status
+                            <SortIcon field="status" />
+                          </button>
+                        </TableHead>
+
+                        <TableHead className="h-11 w-[190px] px-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:px-5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSort(
+                                'currentModule'
+                              )
+                            }
+                            aria-sort={
+                              sortField ===
+                              'currentModule'
+                                ? sortDirection ===
+                                  'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                            className="
+                              inline-flex items-center
+                              gap-1.5 rounded-md
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            Current module
+                            <SortIcon field="currentModule" />
+                          </button>
+                        </TableHead>
+
+                        <TableHead className="h-11 w-[120px] px-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:px-5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSort(
+                                'accessCount'
+                              )
+                            }
+                            aria-sort={
+                              sortField ===
+                              'accessCount'
+                                ? sortDirection ===
+                                  'asc'
+                                  ? 'ascending'
+                                  : 'descending'
+                                : 'none'
+                            }
+                            className="
+                              inline-flex items-center
+                              gap-1.5 rounded-md
+                              focus-visible:outline-none
+                              focus-visible:ring-2
+                              focus-visible:ring-ring
+                              focus-visible:ring-offset-2
+                            "
+                          >
+                            Access
+                            <SortIcon field="accessCount" />
+                          </button>
+                        </TableHead>
+
+                        <TableHead className="h-11 w-[170px] px-4 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:px-5">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                      {paginatedStaff.map(
+                        (staff) => (
+                          <TableRow
+                            key={staff.id}
+                            className={cn(
+                              `
+                              border-border
+                              transition-colors
+                              hover:bg-muted/20
+                              `,
+                              highlightId ===
+                                staff.id &&
+                                'bg-primary/5'
+                            )}
+                          >
+                            {/* Full name */}
+                            <TableCell className="px-4 py-2.5 lg:px-5">
+                              <div className="flex items-center gap-3">
+                                <div className="relative shrink-0">
+                                  <div
+                                    className="
+                                      flex h-9 w-9
+                                      items-center justify-center
+                                      rounded-lg
+                                      bg-primary/10
+                                      text-sm font-semibold
+                                      text-primary
+                                    "
+                                  >
+                                    {staff.fullname?.charAt(
+                                      0
+                                    ) || '?'}
+                                  </div>
+
+                                  <span
+                                    className={cn(
+                                      `
+                                      absolute -bottom-0.5
+                                      -right-0.5
+                                      h-2.5 w-2.5
+                                      rounded-full
+                                      border-2
+                                      border-card
+                                      `,
+                                      getStatusDotClass(
+                                        staff
+                                      )
+                                    )}
+                                  />
+                                </div>
+
+                                <div className="min-w-0">
+                                  <p className="max-w-[175px] truncate text-sm font-medium text-foreground">
+                                    {staff.fullname}
+                                  </p>
+
+                                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                    Team member
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+
+                            {/* Username */}
+                            <TableCell className="px-4 py-2.5 lg:px-5">
+                              <code
+                                className="
+                                  inline-flex max-w-[160px]
+                                  truncate rounded-md
+                                  bg-muted px-2 py-1
+                                  font-mono text-xs
+                                  text-muted-foreground
+                                "
+                              >
+                                @{staff.username}
+                              </code>
+                            </TableCell>
+
+                            {/* Role */}
+                            <TableCell className="px-4 py-2.5 lg:px-5">
+                              <div className="min-w-0">
+                                <p className="max-w-[165px] truncate text-sm font-medium text-foreground">
+                                  {staff.role}
+                                </p>
+
+                                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                  Staff role
+                                </p>
+                              </div>
+                            </TableCell>
+
+                            {/* Status */}
+                            <TableCell className="px-4 py-2.5 lg:px-5">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  `
+                                  inline-flex
+                                  items-center gap-1.5
+                                  rounded-full
+                                  px-2 py-0.5
+                                  text-[11px]
+                                  font-semibold
+                                  `,
+                                  getStatusClass(
+                                    staff
+                                  )
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'h-1.5 w-1.5 rounded-full',
+                                    getStatusDotClass(
+                                      staff
+                                    )
+                                  )}
+                                />
+
+                                {getStatusLabel(
+                                  staff
+                                )}
+                              </Badge>
+                            </TableCell>
+
+                            {/* Current module */}
+                            <TableCell className="px-4 py-2.5 lg:px-5">
+                              {staff.isOnline &&
+                              staff.currentModule ? (
+                                <span
+                                  className="
+                                    inline-flex max-w-[165px]
+                                    truncate
+                                    rounded-md
+                                    border
+                                    border-primary/10
+                                    bg-primary/5
+                                    px-2 py-1
+                                    text-xs font-medium
+                                    text-primary
+                                  "
+                                >
+                                  {MODULE_LABELS[
+                                    staff
+                                      .currentModule
+                                  ] ||
+                                    staff.currentModule}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  —
+                                </span>
+                              )}
+                            </TableCell>
+
+                            {/* Access count */}
+                            <TableCell className="px-4 py-2.5 lg:px-5">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+
+                                <span className="text-sm font-medium text-foreground">
+                                  {staff.accessCount ||
+                                    0}
+                                </span>
+
+                                <span className="text-[11px] text-muted-foreground">
+                                  modules
+                                </span>
+                              </div>
+                            </TableCell>
+
+                            {/* Actions */}
+                            <TableCell className="px-4 py-2.5 lg:px-5">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    openEdit(
+                                      staff
+                                    )
+                                  }
+                                  aria-label={`Edit ${staff.fullname}`}
+                                  className="
+                                    h-8 rounded-md
+                                    px-2.5 text-xs
+                                    focus-visible:outline-none
+                                    focus-visible:ring-2
+                                    focus-visible:ring-ring
+                                    focus-visible:ring-offset-2
+                                  "
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Edit
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() =>
+                                    handleEditAccess(
+                                      staff.id
+                                    )
+                                  }
+                                  aria-label={`Edit access for ${staff.fullname}`}
+                                  className="
+                                    h-8 w-8 rounded-md
+                                    text-muted-foreground
+                                    hover:text-foreground
+                                    focus-visible:outline-none
+                                    focus-visible:ring-2
+                                    focus-visible:ring-ring
+                                    focus-visible:ring-offset-2
+                                  "
+                                >
+                                  <Key className="h-4 w-4" />
+                                </Button>
+
+                                {staff.inBoarding ===
+                                false ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      handleOnboard(
+                                        staff
+                                      )
+                                    }
+                                    aria-label={`Onboard ${staff.fullname}`}
+                                    className="
+                                      h-8 w-8 rounded-md
+                                      text-emerald-600
+                                      hover:bg-emerald-500/10
+                                      dark:text-emerald-400
+                                      focus-visible:outline-none
+                                      focus-visible:ring-2
+                                      focus-visible:ring-ring
+                                      focus-visible:ring-offset-2
+                                    "
+                                  >
+                                    <ArrowUpFromLine className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      handleOutboard(
+                                        staff
+                                      )
+                                    }
+                                    aria-label={`Outboard ${staff.fullname}`}
+                                    className="
+                                      h-8 w-8 rounded-md
+                                      text-amber-600
+                                      hover:bg-amber-500/10
+                                      focus-visible:outline-none
+                                      focus-visible:ring-2
+                                      focus-visible:ring-ring
+                                      focus-visible:ring-offset-2
+                                    "
+                                  >
+                                    <LogOut className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* ================= PAGINATION ================= */}
+              <div
+                className="
+                  flex flex-col gap-3
+                  border-t border-border
+                  bg-muted/20
+                  px-4 py-3
+                  sm:flex-row sm:items-center
+                  sm:justify-between
+                  lg:px-5
+                "
+              >
+                <p className="text-xs text-muted-foreground">
+                  <span className="sm:hidden">
+                    Page{' '}
+                    <span className="font-semibold text-foreground">
+                      {currentPage}
+                    </span>{' '}
+                    of{' '}
+                    {totalPages || 1}
+                  </span>
+
+                  <span className="hidden sm:inline">
+                    Showing{' '}
+                    <span className="font-semibold text-foreground">
+                      {paginatedStaff.length}
+                    </span>{' '}
+                    of{' '}
+                    <span className="font-semibold text-foreground">
+                      {
+                        filteredAndSortedStaff.length
+                      }
+                    </span>{' '}
+                    records
+                  </span>
+                </p>
+
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={currentPage === 1}
+                    onClick={() =>
+                      setCurrentPage(
+                        (p) =>
+                          Math.max(
+                            1,
+                            p - 1
+                          )
+                      )
+                    }
+                    aria-label="Previous page"
+                    className="
+                      h-9 w-9 rounded-md
+                      focus-visible:outline-none
+                      focus-visible:ring-2
+                      focus-visible:ring-ring
+                      focus-visible:ring-offset-2
+                    "
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="hidden items-center gap-1 md:flex">
+                    {Array.from({
+                      length: totalPages,
+                    }).map((_, i) => {
+                      const page =
+                        i + 1;
+
+                      return (
+                        <Button
+                          type="button"
+                          key={page}
+                          size="icon"
+                          variant={
+                            currentPage ===
+                            page
+                              ? 'default'
+                              : 'ghost'
+                          }
+                          onClick={() =>
+                            setCurrentPage(
+                              page
+                            )
+                          }
+                          aria-label={`Go to page ${page}`}
+                          aria-current={
+                            currentPage ===
+                            page
+                              ? 'page'
+                              : undefined
+                          }
+                          className="
+                            h-8 w-8 rounded-md
+                            text-xs font-medium
+                            focus-visible:outline-none
+                            focus-visible:ring-2
+                            focus-visible:ring-ring
+                            focus-visible:ring-offset-2
+                          "
+                        >
+                          {page}
+                        </Button>
+                      );
+                    })}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={
+                      currentPage ===
+                        totalPages ||
+                      totalPages === 0
+                    }
+                    onClick={() =>
+                      setCurrentPage(
+                        (p) =>
+                          Math.min(
+                            Math.max(
+                              totalPages,
+                              1
+                            ),
+                            p + 1
+                          )
+                      )
+                    }
+                    aria-label="Next page"
+                    className="
+                      h-9 w-9 rounded-md
+                      focus-visible:outline-none
+                      focus-visible:ring-2
+                      focus-visible:ring-ring
+                      focus-visible:ring-offset-2
+                    "
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {/* Create/Edit Staff Modal */}
-      <DataModal open={modalOpen} onOpenChange={setModalOpen} title={editingStaff ? 'Update Personnel' : 'Onboard New Staff'} onSubmit={handleSave} isLoading={saving}>
-        <div className="space-y-6 px-2">
-          {formError && <ErrorHandler type={formError.type} title={formError.title} message={formError.message} />}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* ============================================================
+          CREATE / EDIT STAFF MODAL
+          ============================================================ */}
+      <DataModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        title={
+          editingStaff
+            ? 'Update Personnel'
+            : 'Onboard New Staff'
+        }
+        onSubmit={handleSave}
+        isLoading={saving}
+      >
+        <div className="space-y-5 px-1">
+          {formError && (
+            <ErrorHandler
+              type={formError.type}
+              title={formError.title}
+              message={formError.message}
+            />
+          )}
+
+          <div className="rounded-lg border border-border bg-muted/30 p-3.5">
+            <p className="text-sm font-semibold text-foreground">
+              Staff account
+            </p>
+
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Enter the personnel details and assign an
+              organizational role.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Full Legal Name</Label>
-              <Input value={form.fullname} onChange={handleFullNameChange} placeholder="Ex. Michael Tan" className="rounded-xl border-slate-200 focus:ring-primary/20" />
+              <Label className="text-sm font-medium text-foreground">
+                Full Legal Name
+              </Label>
+
+              <Input
+                value={form.fullname}
+                onChange={handleFullNameChange}
+                placeholder="Ex. Michael Tan"
+                className="
+                  h-11 rounded-md
+                  border-input
+                  text-base
+                  focus-visible:ring-2
+                  focus-visible:ring-ring
+                  focus-visible:ring-offset-1
+                  md:h-9 md:text-sm
+                "
+              />
             </div>
+
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">System Username</Label>
-              <Input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder="autocare@john" className="rounded-xl border-slate-200" autoComplete="off" />
-              <p className="text-[9px] text-slate-400">Auto-generated from full name</p>
+              <Label className="text-sm font-medium text-foreground">
+                System Username
+              </Label>
+
+              <Input
+                value={form.username}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    username:
+                      e.target.value,
+                  })
+                }
+                placeholder="autocare@john"
+                className="
+                  h-11 rounded-md
+                  border-input
+                  text-base
+                  focus-visible:ring-2
+                  focus-visible:ring-ring
+                  focus-visible:ring-offset-1
+                  md:h-9 md:text-sm
+                "
+                autoComplete="off"
+              />
+
+              <p className="text-xs text-muted-foreground">
+                Auto-generated from full name
+              </p>
             </div>
           </div>
+
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Organizational Role</Label>
-            <Select value={form.role} onValueChange={val => setForm({ ...form, role: val })}>
-              <SelectTrigger className="rounded-xl border-slate-200"><SelectValue placeholder="Select role" /></SelectTrigger>
-              <SelectContent>
-                {PREDEFINED_ROLES.map(role => (
-                  <SelectItem key={role} value={role}>{role}</SelectItem>
-                ))}
-                <SelectItem value="custom">+ Custom Role</SelectItem>
+            <Label className="text-sm font-medium text-foreground">
+              Organizational Role
+            </Label>
+
+            <Select
+              value={form.role}
+              onValueChange={(val) =>
+                setForm({
+                  ...form,
+                  role: val,
+                })
+              }
+            >
+              <SelectTrigger
+                className="
+                  h-11 rounded-md
+                  text-base
+                  focus-visible:ring-2
+                  focus-visible:ring-ring
+                  focus-visible:ring-offset-2
+                  md:h-9 md:text-sm
+                "
+              >
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+
+              <SelectContent className="rounded-lg">
+                {PREDEFINED_ROLES.map(
+                  (role) => (
+                    <SelectItem
+                      key={role}
+                      value={role}
+                    >
+                      {role}
+                    </SelectItem>
+                  )
+                )}
+
+                <SelectItem value="custom">
+                  + Custom Role
+                </SelectItem>
               </SelectContent>
             </Select>
-            {form.role === 'custom' && <Input value={form.customRole} onChange={e => setForm({ ...form, customRole: e.target.value })} placeholder="Enter custom role" className="mt-2 rounded-xl border-slate-200" />}
+
+            {form.role === 'custom' && (
+              <Input
+                value={form.customRole}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    customRole:
+                      e.target.value,
+                  })
+                }
+                placeholder="Enter custom role"
+                className="
+                  mt-2 h-11 rounded-md
+                  border-input
+                  text-base
+                  focus-visible:ring-2
+                  focus-visible:ring-ring
+                  focus-visible:ring-offset-1
+                  md:h-9 md:text-sm
+                "
+              />
+            )}
           </div>
         </div>
       </DataModal>
 
-      {/* Temp Password Dialog */}
+      {/* ============================================================
+          TEMP PASSWORD
+          ============================================================ */}
       {tempPassword && (
         <TempPasswordDialog
           open={tempDialogOpen}
           onOpenChange={setTempDialogOpen}
           tempPassword={tempPassword}
           staffName={tempStaffName}
-          onComplete={handleTempPasswordComplete}
+          onComplete={
+            handleTempPasswordComplete
+          }
         />
       )}
 
-      {/* Access Modals (assignment & edit) */}
+      {/* ============================================================
+          ACCESS MODALS
+          ============================================================ */}
       <AccessModals
         accessModalOpen={accessModalOpen}
-        setAccessModalOpen={setAccessModalOpen}
-        editAccessModalOpen={editAccessModalOpen}
-        setEditAccessModalOpen={setEditAccessModalOpen}
-        staffIdForAccess={selectedStaffId}
+        setAccessModalOpen={
+          setAccessModalOpen
+        }
+        editAccessModalOpen={
+          editAccessModalOpen
+        }
+        setEditAccessModalOpen={
+          setEditAccessModalOpen
+        }
+        staffIdForAccess={
+          selectedStaffId
+        }
         onAccessChanged={loadStaff}
         highlight={triggerHighlight}
       />

@@ -1,79 +1,214 @@
 'use client';
 
 import React, { useState } from 'react';
+
 import { Button } from '@/components/ui/button';
+
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import { Copy, Eye, EyeOff, ShieldCheck, CheckCircle2 } from 'lucide-react';
+
+import {
+  Copy,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  CheckCircle2,
+} from 'lucide-react';
 
 interface TempPasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tempPassword: string;
   staffName: string;
-  onComplete: () => void;   // will open access assignment
+  onComplete: () => void;
 }
 
 export default function TempPasswordDialog({
-  open, onOpenChange, tempPassword, staffName, onComplete,
+  open,
+  onOpenChange,
+  tempPassword,
+  staffName,
+  onComplete,
 }: TempPasswordDialogProps) {
-  const [show, setShow] = useState(false);
+  const [show, setShow] =
+    useState(false);
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(tempPassword);
-    alert('Password copied');  // replace with toast if desired
+    navigator.clipboard.writeText(
+      tempPassword
+    );
+
+    alert('Password copied');
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-[2rem] sm:max-w-md border-none shadow-2xl">
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <DialogContent
+        className="
+          rounded-xl
+          p-5 shadow-xl
+          sm:max-w-md
+          md:p-6
+        "
+      >
         <DialogHeader className="items-center text-center">
-          <div className="w-16 h-16 bg-green-50 rounded-3xl flex items-center justify-center mb-4">
-            <ShieldCheck className="w-8 h-8 text-green-500" />
+          <div
+            className="
+              mb-3 flex h-14 w-14
+              items-center justify-center
+              rounded-full
+              bg-emerald-500/10
+            "
+          >
+            <ShieldCheck className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <DialogTitle className="text-xl font-black text-slate-800">
+
+          <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
             Personnel Registered
           </DialogTitle>
-          <DialogDescription className="text-slate-400 text-sm">
-            System access has been provisioned for <strong>{staffName}</strong>.
+
+          <DialogDescription className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            System access has been
+            provisioned for{' '}
+            <strong className="text-foreground">
+              {staffName}
+            </strong>
+            .
           </DialogDescription>
         </DialogHeader>
 
-        <div className="bg-slate-900 p-6 rounded-[2rem] space-y-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full -mr-12 -mt-12 blur-2xl" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">
-            Temporary Password
-          </p>
-          <div className="flex items-center justify-center gap-3">
-            <code className="text-3xl font-mono font-black text-white tracking-tighter">
-              {show ? tempPassword : '••••••••'}
-            </code>
-            <div className="flex gap-1">
-              <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-white"
-                onClick={() => setShow(!show)}>
-                {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </Button>
-              <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-white"
-                onClick={copyToClipboard}>
-                <Copy className="w-4 h-4" />
-              </Button>
+        <div className="space-y-4">
+          <div
+            className="
+              relative overflow-hidden
+              rounded-lg
+              bg-foreground
+              p-4 text-background
+              md:p-5
+            "
+          >
+            <div
+              className="
+                pointer-events-none
+                absolute -right-12 -top-12
+                h-24 w-24 rounded-full
+                bg-primary/10 blur-2xl
+              "
+            />
+
+            <p className="text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-background/50">
+              Temporary password
+            </p>
+
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <code className="break-all text-center font-mono text-xl font-semibold tracking-tight md:text-2xl">
+                {show
+                  ? tempPassword
+                  : '••••••••'}
+              </code>
+
+              <div className="flex gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={
+                    show
+                      ? 'Hide password'
+                      : 'Show password'
+                  }
+                  className="
+                    h-10 w-10 rounded-md
+                    text-background/60
+                    hover:bg-background/10
+                    hover:text-background
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-ring
+                    focus-visible:ring-offset-2
+                    focus-visible:ring-offset-foreground
+                  "
+                  onClick={() =>
+                    setShow(!show)
+                  }
+                >
+                  {show ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Copy password"
+                  className="
+                    h-10 w-10 rounded-md
+                    text-background/60
+                    hover:bg-background/10
+                    hover:text-background
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-ring
+                    focus-visible:ring-offset-2
+                    focus-visible:ring-offset-foreground
+                  "
+                  onClick={
+                    copyToClipboard
+                  }
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl">
-          <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
-          <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-            Account created successfully. Provide these credentials to the staff member.
-            A password reset will be forced upon first login.
-          </p>
-        </div>
+          <div
+            className="
+              flex items-start gap-3
+              rounded-lg
+              border border-border
+              bg-muted/40
+              p-3.5
+            "
+          >
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
 
-        <Button className="w-full rounded-2xl h-12 font-black uppercase tracking-widest"
-          onClick={onComplete}>
-          Complete Onboarding
-        </Button>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Account created
+              successfully. Provide these
+              credentials to the staff
+              member. A password reset will
+              be forced upon first login.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            className="
+              h-11 w-full rounded-md
+              font-medium
+              focus-visible:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-ring
+              focus-visible:ring-offset-2
+              md:h-9
+            "
+            onClick={onComplete}
+          >
+            Complete Onboarding
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
