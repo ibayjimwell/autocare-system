@@ -8,7 +8,7 @@ export default function CustomersPage() {
   return (
     <PageContainer
       title="Customers"
-      subtitle="Manage online or walk‑in customers"
+      subtitle="Manage online or walk-in customers"
     >
       <CustomerList />
     </PageContainer>

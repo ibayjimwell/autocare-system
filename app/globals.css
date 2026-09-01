@@ -164,4 +164,9 @@
   html {
     @apply font-sans;
   }
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
