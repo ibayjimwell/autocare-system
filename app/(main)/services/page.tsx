@@ -15,16 +15,34 @@ export default function ServicesPage() {
       subtitle="Define and manage your professional service offerings"
       actions={
         <Button
+          type="button"
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl px-6 active:scale-95 transition-all"
+          className="
+            h-11 w-full rounded-md
+            px-4 text-base font-medium
+            shadow-sm
+            focus-visible:outline-none
+            focus-visible:ring-2
+            focus-visible:ring-ring
+            focus-visible:ring-offset-2
+            md:h-9 md:w-auto
+            md:px-3 md:text-sm
+          "
         >
-          <Plus className="w-4 h-4 mr-2" />
-          <span className="hidden sm:inline">Add Service Type</span>
-          <span className="sm:hidden">Add</span>
+          <Plus className="h-5 w-5 md:h-4 md:w-4" />
+          <span className="hidden sm:inline">
+            Add Service Type
+          </span>
+          <span className="sm:hidden">
+            Add Service
+          </span>
         </Button>
       }
     >
-      <ServiceList modalOpen={modalOpen} setModalOpen={setModalOpen} />
+      <ServiceList
+        modalOpen={modalOpen}
+        setModalOpen={setModalOpen}
+      />
     </PageContainer>
   );
 }
