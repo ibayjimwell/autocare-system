@@ -1,33 +1,36 @@
-// components/inventory/pos-history-modal.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import {
   Search,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   CalendarDays,
   Receipt,
 } from 'lucide-react';
+
 import { usePosHistory } from '@/hooks/inventory/use-pos-history';
 import { formatCurrency } from '@/app-utils/inventory/inventory';
 import { format, parseISO } from 'date-fns';
-import { cn } from '@/lib/utils';
 
 interface PosHistoryModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-export default function PosHistoryModal({ open, onClose }: PosHistoryModalProps) {
+export default function PosHistoryModal({
+  open,
+  onClose,
+}: PosHistoryModalProps) {
   const {
     transactions,
     loading,
@@ -43,143 +46,197 @@ export default function PosHistoryModal({ open, onClose }: PosHistoryModalProps)
     totalCount,
   } = usePosHistory();
 
-  // Group transactions by date (YYYY-MM-DD)
   const grouped = React.useMemo(() => {
     const map = new Map<string, any[]>();
+
     transactions.forEach((tx) => {
-      const date = tx.createdAt ? format(parseISO(tx.createdAt), 'yyyy-MM-dd') : 'Unknown';
-      if (!map.has(date)) map.set(date, []);
+      const date = tx.createdAt
+        ? format(parseISO(tx.createdAt), 'yyyy-MM-dd')
+        : 'Unknown';
+
+      if (!map.has(date)) {
+        map.set(date, []);
+      }
+
       map.get(date)!.push(tx);
     });
-    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+
+    return Array.from(map.entries()).sort((a, b) =>
+      b[0].localeCompare(a[0]),
+    );
   }, [transactions]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col rounded-3xl">
-        <DialogHeader>
-          <DialogTitle className="font-black flex items-center gap-2">
-            <Receipt className="w-5 h-5" /> Transaction History
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground">{totalCount} total transactions</p>
+      <DialogContent className="flex max-h-[95vh] flex-col rounded-xl sm:max-w-4xl">
+        <DialogHeader className="border-b border-border pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Receipt className="h-5 w-5" />
+            </div>
+
+            <div>
+              <DialogTitle className="text-xl font-semibold tracking-tight">
+                Transaction History
+              </DialogTitle>
+
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {totalCount} total transactions
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+        <div className="grid gap-3 py-2 lg:grid-cols-[1fr_auto]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
             <Input
               placeholder="Search by item name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 rounded-xl"
+              className="h-11 rounded-md pl-10 text-base md:h-9 md:text-sm"
             />
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <Input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="w-36 rounded-xl"
+              className="h-11 rounded-md text-base md:h-9 md:w-36 md:text-sm"
               title="From date"
             />
-            <span className="text-slate-400">–</span>
+
+            <span className="text-sm text-muted-foreground">–</span>
+
             <Input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="w-36 rounded-xl"
+              className="h-11 rounded-md text-base md:h-9 md:w-36 md:text-sm"
               title="To date"
             />
           </div>
         </div>
 
-        {/* Content */}
-        <ScrollArea className="flex-1 max-h-[60vh]">
+        <ScrollArea className="min-h-0 flex-1">
           {loading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-xl" />
+            <div className="space-y-4 py-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-28 animate-pulse rounded-lg bg-muted"
+                />
               ))}
             </div>
           ) : grouped.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">No transactions found.</div>
+            <div className="flex min-h-64 flex-col items-center justify-center text-center">
+              <Receipt className="h-7 w-7 text-muted-foreground" />
+
+              <p className="mt-3 text-sm font-semibold text-foreground">
+                No transactions found
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Try changing your search or date range.
+              </p>
+            </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-7 py-2">
               {grouped.map(([date, txs]) => (
-                <div key={date}>
-                  {/* Date header */}
-                  <div className="flex items-center gap-3 mb-3">
-                    <CalendarDays className="w-4 h-4 text-primary" />
-                    <h3 className="text-sm font-bold uppercase text-slate-500">
+                <section key={date}>
+                  <div className="mb-3 flex items-center gap-3">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       {format(parseISO(date), 'MMMM dd, yyyy')}
                     </h3>
-                    <div className="h-px flex-1 bg-slate-200" />
+
+                    <div className="h-px flex-1 bg-border" />
                   </div>
-                  <div className="space-y-3">
+
+                  <div className="space-y-2">
                     {txs.map((tx) => (
                       <div
                         key={tx.id}
-                        className="border rounded-xl p-4 bg-card hover:shadow-sm transition-shadow"
+                        className="rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-sm"
                       >
-                        <div className="flex justify-between items-start mb-2">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
-                            <p className="text-xs font-mono text-slate-400">
-                              #{tx.id.slice(0, 8)} –{' '}
+                            <p className="font-mono text-[11px] text-muted-foreground">
+                              #{tx.id.slice(0, 8)} ·{' '}
                               {format(parseISO(tx.createdAt), 'hh:mm a')}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-primary">
+
+                          <div className="sm:text-right">
+                            <p className="text-sm font-semibold text-primary">
                               Total: {formatCurrency(tx.totalAmount)}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">
-                              Paid: {formatCurrency(tx.paymentReceived)} | Change:{' '}
-                              {formatCurrency(tx.changeGiven)}
+
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">
+                              Paid: {formatCurrency(tx.paymentReceived)} ·
+                              Change: {formatCurrency(tx.changeGiven)}
                             </p>
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          {tx.items?.map((item: any, idx: number) => (
-                            <div key={idx} className="flex justify-between text-xs">
-                              <span>{item.quantity}x {item.name}</span>
-                              <span className="font-medium">
-                                {formatCurrency(parseFloat(item.sellingPrice) * item.quantity)}
-                              </span>
-                            </div>
-                          ))}
+
+                        <div className="mt-4 border-t border-border pt-3">
+                          <div className="space-y-2">
+                            {tx.items?.map((item: any, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between gap-4 text-xs"
+                              >
+                                <span className="min-w-0 truncate text-muted-foreground">
+                                  {item.quantity}x {item.name}
+                                </span>
+
+                                <span className="shrink-0 font-medium text-foreground">
+                                  {formatCurrency(
+                                    parseFloat(item.sellingPrice) *
+                                      item.quantity,
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
+                </section>
               ))}
             </div>
           )}
         </ScrollArea>
 
-        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-3 border-t">
-            <span className="text-xs text-slate-400">
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <span className="text-xs text-muted-foreground">
               Page {page} of {totalPages}
             </span>
+
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 disabled={page === 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-9 w-9 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="h-4 w-4" />
               </Button>
+
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 disabled={page === totalPages}
                 onClick={() => setPage((p) => p + 1)}
+                className="h-9 w-9 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
