@@ -1,21 +1,24 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import React, { useEffect, useState } from 'react';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
 import {
   CheckCircle2,
-  Settings,
-  PlayCircle,
-  Trash2,
+  Clock,
   FileText,
   Package,
   Pencil,
-  Clock,
-} from "lucide-react";
-import ConfirmationDialog from "@/components/shared/confimation-dialog";
+  PlayCircle,
+  Settings,
+  Trash2,
+} from 'lucide-react';
+
+import ConfirmationDialog from '@/components/shared/confimation-dialog';
 
 interface TaskCardProps {
   task: any;
@@ -36,14 +39,20 @@ export default function TaskCard({
 }: TaskCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
-  const [markDoneConfirmOpen, setMarkDoneConfirmOpen] = useState(false);
+  const [markDoneConfirmOpen, setMarkDoneConfirmOpen] =
+    useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   const duration = task.durationMinutes;
 
-  // Real‑time progress calculation (only when IN_PROGRESS and duration is set)
   useEffect(() => {
-    if (task.status !== 'IN_PROGRESS' || !task.startedAt || !duration) return;
+    if (
+      task.status !== 'IN_PROGRESS' ||
+      !task.startedAt ||
+      !duration
+    ) {
+      return;
+    }
 
     const startTime = new Date(task.startedAt).getTime();
     const durationMs = duration * 60 * 1000;
@@ -55,188 +64,245 @@ export default function TaskCard({
     };
 
     update();
+
     const interval = setInterval(update, 1000);
+
     return () => clearInterval(interval);
   }, [task.status, task.startedAt, duration]);
 
   const progressPercent = (() => {
     if (task.status === 'DONE') return 100;
     if (task.status === 'PENDING' || !duration) return 0;
-    return Math.min(100, Math.round((elapsed / (duration * 60 * 1000)) * 100));
+
+    return Math.min(
+      100,
+      Math.round(
+        (elapsed / (duration * 60 * 1000)) * 100
+      )
+    );
   })();
 
-  const isActive = task.status === "IN_PROGRESS";
-  const isDone = task.status === "DONE";
-
-  const statusConfig = {
-    PENDING: {
-      border: "border-l-muted-foreground/30",
-      bg: "bg-card",
-      icon: null,
-      label: "To Do",
-    },
-    IN_PROGRESS: {
-      border: "border-l-red-500",
-      bg: "bg-red-50/30",
-      icon: <Settings className="w-4 h-4 animate-spin text-red-500" />,
-      label: "Active",
-    },
-    DONE: {
-      border: "border-l-green-500",
-      bg: "bg-green-50/30",
-      icon: <CheckCircle2 className="w-4 h-4 text-green-500" />,
-      label: "Completed",
-    },
-  };
-
-  const currentStatus = statusConfig[task.status] || statusConfig.PENDING;
+  const isActive = task.status === 'IN_PROGRESS';
+  const isDone = task.status === 'DONE';
 
   return (
     <>
-      <Card
-        className={`group relative overflow-hidden transition-all duration-300 hover:shadow-md border border-border border-l-4 ${currentStatus.border} ${currentStatus.bg} rounded-xl`}
-      >
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex justify-between items-start gap-4">
-            <div className="flex flex-col gap-1.5 flex-1">
-              <div className="flex items-center gap-2">
-                {currentStatus.icon}
-                <h4
-                  className={`font-bold text-sm sm:text-base tracking-tight ${
-                    isDone ? "text-muted-foreground line-through" : "text-foreground"
-                  }`}
+      <Card className="overflow-hidden rounded-lg border border-border bg-card shadow-none transition-shadow hover:shadow-sm">
+        <CardContent className="p-0">
+          <div className="flex flex-col gap-4 p-4 sm:p-5">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <div
+                  className={[
+                    'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
+                    isDone
+                      ? 'bg-green-500/10 text-green-600'
+                      : isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground',
+                  ].join(' ')}
                 >
-                  {task.title}
-                </h4>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className="text-[10px] uppercase h-5 px-1.5">
-                  {currentStatus.label}
-                </Badge>
-                {duration && (
-                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {duration} min
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 shrink-0">
-              {!isDone && (
-                <div className="flex gap-2">
-                  {task.status === "PENDING" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setStartDialogOpen(true)}
-                      className="h-9 px-4 rounded-full border-primary/20 hover:bg-primary hover:text-white"
-                    >
-                      <PlayCircle className="w-4 h-4 mr-2" /> Start
-                    </Button>
-                  )}
-                  {task.status === "IN_PROGRESS" && (
-                    <Button
-                      size="sm"
-                      onClick={() => setMarkDoneConfirmOpen(true)}
-                      className="h-9 px-4 rounded-full bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      <CheckCircle2 className="w-4 h-4 mr-2" /> Finish
-                    </Button>
+                  {isDone ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : isActive ? (
+                    <Settings className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4" />
                   )}
                 </div>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onEdit}
-                className="h-9 w-9 rounded-full text-muted-foreground hover:text-primary"
-              >
-                <Pencil className="w-4 h-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setDeleteDialogOpen(true)}
-                className="h-9 w-9 rounded-full text-muted-foreground hover:text-red-500"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
 
-          {/* Progress Bar (only if duration is set) */}
-          {duration && (
-            <div className="mt-3 space-y-1">
-              <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
-                <span>Progress</span>
-                <span>{progressPercent}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="h-2 rounded-full bg-secondary transition-all duration-700"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
-          )}
+                <div className="min-w-0">
+                  <h3
+                    className={[
+                      'text-sm font-semibold leading-5',
+                      isDone
+                        ? 'text-muted-foreground line-through'
+                        : 'text-foreground',
+                    ].join(' ')}
+                  >
+                    {task.title}
+                  </h3>
 
-          {/* Findings */}
-          {task.findings && task.findings.length > 0 && (
-            <div className="mt-4 space-y-3">
-              <Separator className="bg-border/50" />
-              <div className="space-y-3">
-                {task.findings.map((f: any, idx: number) => (
-                  <div key={idx} className="bg-background/60 border rounded-lg p-3 space-y-2 shadow-sm">
-                    <div className="flex items-start gap-2">
-                      <FileText className="w-3.5 h-3.5 mt-0.5 text-primary/70" />
-                      <div className="flex-1">
-                        <p className="text-[11px] font-black uppercase text-muted-foreground tracking-widest mb-0.5">
-                          Finding Details
-                        </p>
-                        <p className="text-sm">{f.description}</p>
-                      </div>
-                    </div>
-                    {f.products?.length > 0 && (
-                      <div className="pl-5 pt-1 space-y-1.5">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase">
-                          <Package className="w-3 h-3" /> Materials Used
-                        </div>
-                        <div className="grid gap-1">
-                          {f.products.map((p: any, i: number) => (
-                            <div key={i} className="flex justify-between items-center text-xs bg-muted/30 px-2 py-1.5 rounded-md">
-                              <span className="flex items-center gap-2">
-                                <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[10px] font-bold">
-                                  {p.quantity}x
-                                </span>
-                                <span className="font-medium">{p.name}</span>
-                              </span>
-                              <span className="font-mono">₱{Number(p.priceAtTime).toFixed(2)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className="h-5 rounded-md px-1.5 text-[10px]"
+                    >
+                      {isDone
+                        ? 'Completed'
+                        : isActive
+                          ? 'In Progress'
+                          : 'Pending'}
+                    </Badge>
+
+                    {duration && (
+                      <Badge
+                        variant="secondary"
+                        className="h-5 rounded-md px-1.5 text-[10px]"
+                      >
+                        <Clock className="mr-1 h-3 w-3" />
+                        {duration} min
+                      </Badge>
                     )}
                   </div>
-                ))}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {!isDone && (
+                  <>
+                    {task.status === 'PENDING' && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStartDialogOpen(true)}
+                        className="h-11 rounded-md px-3 md:h-9"
+                      >
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                        Start
+                      </Button>
+                    )}
+
+                    {task.status === 'IN_PROGRESS' && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          setMarkDoneConfirmOpen(true)
+                        }
+                        className="h-11 rounded-md bg-green-600 px-3 text-white hover:bg-green-700 md:h-9"
+                      >
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Finish
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={onEdit}
+                  className="h-11 w-11 rounded-md md:h-9 md:w-9"
+                  aria-label="Edit task"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  className="h-11 w-11 rounded-md text-destructive hover:text-destructive md:h-9 md:w-9"
+                  aria-label="Delete task"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          )}
+
+            {/* Progress */}
+            {duration && (
+              <div className="rounded-md bg-muted/40 p-3">
+                <div className="mb-2 flex items-center justify-between text-[10px] font-medium text-muted-foreground">
+                  <span>Progress</span>
+                  <span>{progressPercent}%</span>
+                </div>
+
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-700"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Findings */}
+            {task.findings && task.findings.length > 0 && (
+              <>
+                <Separator />
+
+                <div className="space-y-3">
+                  {task.findings.map(
+                    (f: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="rounded-md border border-border bg-muted/20 p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              Finding
+                            </p>
+
+                            <p className="mt-1 text-xs leading-5 text-foreground">
+                              {f.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {f.products?.length > 0 && (
+                          <div className="mt-3 border-t border-border pt-3">
+                            <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              <Package className="h-3.5 w-3.5" />
+                              Materials Used
+                            </div>
+
+                            <div className="space-y-1.5">
+                              {f.products.map(
+                                (p: any, i: number) => (
+                                  <div
+                                    key={i}
+                                    className="flex items-center justify-between gap-3 rounded-md bg-background px-2.5 py-2"
+                                  >
+                                    <span className="min-w-0 truncate text-xs">
+                                      <span className="mr-2 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                        {p.quantity}x
+                                      </span>
+                                      {p.name}
+                                    </span>
+
+                                    <span className="shrink-0 font-mono text-xs">
+                                      ₱
+                                      {Number(
+                                        p.priceAtTime
+                                      ).toFixed(2)}
+                                    </span>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Dialogs */}
       <ConfirmationDialog
         open={startDialogOpen}
         onOpenChange={setStartDialogOpen}
         title="Start Operation"
         description={`Begin working on "${task.title}"?`}
         onConfirm={() => {
-          onUpdate(task.id, "IN_PROGRESS");
+          onUpdate(task.id, 'IN_PROGRESS');
           setStartDialogOpen(false);
         }}
         confirmText="Confirm Start"
       />
+
       <ConfirmationDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -249,13 +315,14 @@ export default function TaskCard({
         confirmText="Delete Task"
         variant="destructive"
       />
+
       <ConfirmationDialog
         open={markDoneConfirmOpen}
         onOpenChange={setMarkDoneConfirmOpen}
         title="Complete Task"
         description={`Mark "${task.title}" as completed?`}
         onConfirm={() => {
-          onUpdate(task.id, "DONE");
+          onUpdate(task.id, 'DONE');
           setMarkDoneConfirmOpen(false);
         }}
         confirmText="Mark as Completed"

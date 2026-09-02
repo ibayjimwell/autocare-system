@@ -349,195 +349,313 @@ export default function ServiceDetailPanel({
   const subtotal = servicePrice + findingsTotal;
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 animate-in fade-in duration-500">
-      {/* ----- Header ----- */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="flex items-start gap-3 min-w-0">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onBack}
-            className="rounded-full h-10 w-10 shrink-0 shadow-sm border-primary/20"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-bold tracking-tight truncate">
-                {appointment.customer?.fullname || "Customer"}
-              </h2>
-              <StatusBadge
-                status={appointment.status || "PENDING"}
-                className="px-3 py-1 text-xs font-semibold uppercase tracking-wider shrink-0"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
-                <Car className="w-4 h-4 text-primary" /> {appointment.vehicle?.plateNumber || "N/A"}
-              </span>
-              <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
-                <Wrench className="w-4 h-4 text-primary" />{" "}
-                {appointment.services?.map((s: any) => s.name).join(", ") || "Service"}
-              </span>
-              {appointment.appointmentDate && (
-                <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
-                  <Clock className="w-4 h-4 text-primary" /> {appointment.appointmentDate} • {appointment.appointmentTime}
-                </span>
-              )}
+  <div className="min-h-full bg-background">
+    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-3 sm:p-5 lg:p-8">
+      {/* -------------------------------------------------------
+       * WORK ORDER HEADER
+       * ----------------------------------------------------- */}
+      <section className="rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={onBack}
+              className="h-11 w-11 shrink-0 rounded-md md:h-9 md:w-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground md:text-xl lg:text-2xl">
+                  {appointment.customer?.fullname || 'Customer'}
+                </h1>
+
+                <StatusBadge
+                  status={appointment.status || 'PENDING'}
+                  className="shrink-0 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide"
+                />
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+                  <Car className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Vehicle
+                    </p>
+                    <p className="truncate text-xs font-semibold text-foreground">
+                      {appointment.vehicle?.plateNumber || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+                  <Wrench className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Service
+                    </p>
+                    <p className="truncate text-xs font-semibold text-foreground">
+                      {appointment.services
+                        ?.map((s: any) => s.name)
+                        .join(', ') || 'Service'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+                  <Clock className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Appointment
+                    </p>
+                    <p className="truncate text-xs font-semibold text-foreground">
+                      {appointment.appointmentDate || '—'}
+                      {appointment.appointmentTime
+                        ? ` • ${appointment.appointmentTime}`
+                        : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+                  <User className="h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Customer
+                    </p>
+                    <p className="truncate text-xs font-semibold text-foreground">
+                      {appointment.customer?.fullname || 'Customer'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {appointment.notes && (
-                <span className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md max-w-full truncate">
-                  <FileText className="w-4 h-4 text-primary shrink-0" />
-                  <span className="truncate">Note: {appointment.notes}</span>
-                </span>
+                <div className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {appointment.notes}
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           </div>
+
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:flex-col xl:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setGroupManagerOpen(true)}
+              className="h-11 rounded-md px-4 md:h-9"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Default Tasks
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDefaultFindingManagerOpen(true)}
+              className="h-11 rounded-md px-4 md:h-9"
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Default Findings
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* -------------------------------------------------------
+       * SERVICE JOURNEY
+       * ----------------------------------------------------- */}
+      <section className="rounded-xl border border-border bg-card shadow-sm">
+        <div className="border-b border-border px-4 py-3 sm:px-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Service Journey
+          </p>
         </div>
 
-        {/* Management buttons: Default Tasks & Default Findings */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setGroupManagerOpen(true)}
-            className="rounded-full"
-          >
-            <Settings className="w-4 h-4 mr-1" /> Manage Default Tasks
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setDefaultFindingManagerOpen(true)}
-            className="rounded-full"
-          >
-            <Settings className="w-4 h-4 mr-1" /> Manage Default Findings
-          </Button>
-        </div>
-      </div>
+        <div className="overflow-x-auto px-4 py-5 sm:px-6">
+          <div className="flex min-w-[620px] items-start">
+            {TRACKING_STATUSES.map((s, i) => {
+              const completed = currentStatusIdx > i;
+              const current = currentStatusIdx === i;
 
-      {/* ----- Stepper ----- */}
-      <div className="bg-card border shadow-sm rounded-2xl p-4 sm:p-6 overflow-hidden">
-        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">
-          Service Journey
-        </p>
-        <div className="relative flex items-center justify-between gap-1 sm:gap-2">
-          {TRACKING_STATUSES.map((s, i) => (
-            <React.Fragment key={s}>
-              <div className="flex flex-col items-center gap-1.5 relative z-10">
-                <div
-                  className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm text-sm font-bold ${
-                    currentStatusIdx > i
-                      ? "bg-primary text-white"
-                      : currentStatusIdx === i
-                      ? "bg-primary text-white ring-4 sm:ring-8 ring-primary/10 scale-110"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {currentStatusIdx > i ? (
-                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                  ) : (
-                    <span>{i + 1}</span>
+              return (
+                <React.Fragment key={s}>
+                  <div className="flex min-w-[100px] flex-col items-center">
+                    <div
+                      className={cn(
+                        'flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold transition-all',
+                        completed || current
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-muted text-muted-foreground',
+                        current && 'ring-4 ring-primary/10'
+                      )}
+                    >
+                      {completed ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        i + 1
+                      )}
+                    </div>
+
+                    <span
+                      className={cn(
+                        'mt-2 text-center text-[10px] font-semibold uppercase tracking-wide',
+                        current
+                          ? 'text-primary'
+                          : 'text-muted-foreground'
+                      )}
+                    >
+                      {STATUS_LABELS[s]}
+                    </span>
+                  </div>
+
+                  {i < TRACKING_STATUSES.length - 1 && (
+                    <div
+                      className={cn(
+                        'mt-5 h-px flex-1',
+                        currentStatusIdx > i
+                          ? 'bg-primary'
+                          : 'bg-border'
+                      )}
+                    />
                   )}
-                </div>
-                <span
-                  className={`text-[8px] sm:text-[10px] font-bold uppercase text-center ${
-                    currentStatusIdx === i ? "text-primary" : "text-muted-foreground"
-                  }`}
-                >
-                  {STATUS_LABELS[s]}
-                </span>
-              </div>
-              {i < TRACKING_STATUSES.length - 1 && (
-                <div
-                  className={`h-1 flex-1 mx-[-4px] sm:mx-[-8px] transition-colors duration-500 ${
-                    currentStatusIdx > i ? "bg-primary" : "bg-muted"
-                  }`}
-                />
-              )}
-            </React.Fragment>
-          ))}
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* ----- Tasks Column ----- */}
-        <div className={cn(
-          "space-y-6",
-          isInProgress ? "lg:col-span-12" : "lg:col-span-7"
-        )}>
-          <div className="bg-card border shadow-sm rounded-2xl p-4 sm:p-5 space-y-4">
-            <div className="flex items-center justify-between gap-2 border-b pb-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Wrench className="w-5 h-5 text-primary" />
-                </div>
+      {/* -------------------------------------------------------
+       * MAIN WORKSPACE
+       * ----------------------------------------------------- */}
+      <div
+        className={cn(
+          'grid gap-5',
+          isInspection
+            ? 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]'
+            : 'grid-cols-1'
+        )}
+      >
+        {/* TASK WORKSPACE */}
+        <section className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border p-4 sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Wrench className="h-5 w-5" />
+                </span>
+
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base">
-                    {isInspection ? "Inspection Checklist" : "Repair Operations"}
-                  </h3>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {isInspection
+                      ? 'Inspection Checklist'
+                      : 'Repair Operations'}
+                  </h2>
+
                   <p className="text-xs text-muted-foreground">
-                    {currentTasks.filter((t) => t.status === "DONE").length} of {currentTasks.length} tasks completed
+                    {
+                      currentTasks.filter(
+                        (t) => t.status === 'DONE'
+                      ).length
+                    }{' '}
+                    of {currentTasks.length} tasks completed
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Button
+                  type="button"
                   size="sm"
                   variant="outline"
                   onClick={() => setHistoryPickerOpen(true)}
-                  className="rounded-full"
+                  className="h-11 rounded-md md:h-9"
                 >
-                  <History className="w-4 h-4 mr-2" /> History Tasks
+                  <History className="mr-2 h-4 w-4" />
+                  History
                 </Button>
+
                 <Button
+                  type="button"
                   size="sm"
                   variant="outline"
                   onClick={() => setTaskPickerOpen(true)}
-                  className="rounded-full"
+                  className="h-11 rounded-md md:h-9"
                 >
-                  <Layers className="w-4 h-4 mr-2" /> Default Tasks
+                  <Layers className="mr-2 h-4 w-4" />
+                  Templates
                 </Button>
+
                 <Button
+                  type="button"
                   size="sm"
                   onClick={() => setAddTaskModalOpen(true)}
-                  className="rounded-full shadow-sm shrink-0"
+                  className="h-11 rounded-md md:h-9"
                 >
-                  <Plus className="w-4 h-4 mr-2" /> New Task
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Task
                 </Button>
               </div>
             </div>
+          </div>
 
-            {/* Overall Progress Bar */}
+          <div className="space-y-5 p-4 sm:p-5">
             {currentTasks.length > 0 && (
-              <div className="px-2">
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
                 <OverallProgressBar tasks={currentTasks} />
               </div>
             )}
 
-            {/* Task List or Skeletons */}
             {tasksLoading && currentTasks.length === 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <TaskCardSkeleton key={i} />
                 ))}
               </div>
             ) : tasksLoading && currentTasks.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {currentTasks.map((_, i) => (
                   <TaskCardSkeleton key={i} />
                 ))}
               </div>
             ) : currentTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 bg-muted/20 rounded-xl border border-dashed">
-                <div className="p-3 bg-background rounded-full shadow-sm">
-                  <AlertCircle className="w-6 h-6 text-muted-foreground" />
+              <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-background shadow-sm">
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <p className="text-sm text-muted-foreground max-w-[200px]">
-                  No tasks defined yet. Click "New Task" to get started.
+
+                <p className="mt-3 max-w-xs text-sm font-medium text-foreground">
+                  No tasks defined yet
                 </p>
+
+                <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
+                  Create a new task or add one from a default template
+                  to start this operation.
+                </p>
+
+                <Button
+                  type="button"
+                  onClick={() => setAddTaskModalOpen(true)}
+                  className="mt-4 h-11 rounded-md md:h-9"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Task
+                </Button>
               </div>
             ) : (
-              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-3">
                 {currentTasks.map((task) => (
                   <TaskCard
                     key={task.id}
@@ -552,115 +670,161 @@ export default function ServiceDetailPanel({
               </div>
             )}
 
-            {/* Action Buttons */}
             {isInspection && allTasksDone && !isCompleted && (
-              <div className="mt-4 flex justify-end">
+              <div className="flex justify-end border-t border-border pt-4">
                 <Button
+                  type="button"
                   onClick={handleInspectionDone}
-                  className="bg-green-600 hover:bg-green-700 text-white rounded-full px-6 sm:px-8"
+                  className="h-11 w-full rounded-md sm:w-auto sm:px-6 md:h-9"
                 >
-                  <CheckCircle2 className="w-4 h-4 mr-2" /> Done – Record Findings
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Done — Record Findings
                 </Button>
               </div>
             )}
+
             {isInProgress && allTasksDone && !isCompleted && (
-              <div className="mt-4 flex justify-end">
+              <div className="flex justify-end border-t border-border pt-4">
                 <Button
+                  type="button"
                   onClick={() => setDoneConfirmOpen(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white rounded-full px-6 sm:px-8"
+                  className="h-11 w-full rounded-md bg-green-600 text-white hover:bg-green-700 sm:w-auto sm:px-6 md:h-9"
                 >
-                  <CheckCircle2 className="w-4 h-4 mr-2" /> Complete Work
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Complete Work
                 </Button>
               </div>
             )}
           </div>
+        </section>
 
-          {/* Findings List (only for inspection) */}
-          {isInspection && (
-            <FindingsList
-              findings={findings}
-              appointmentId={appointment.id}
-              onFindingsUpdated={() => loadData(true)}
-            />
-          )}
-        </div>
-
-        {/* ----- Estimated Cost Sidebar (only for inspection) ----- */}
+        {/* ESTIMATE */}
         {isInspection && (
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-card border shadow-md rounded-2xl overflow-hidden flex flex-col h-full">
-              <div className="p-4 sm:p-5 border-b bg-muted/30 flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-primary shrink-0" />
-                <h3 className="font-bold text-sm sm:text-base">Estimated Cost</h3>
+          <aside className="lg:sticky lg:top-6 lg:self-start">
+            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Receipt className="h-4 w-4" />
+                  </span>
+
+                  <div>
+                    <h2 className="text-sm font-semibold">
+                      Estimated Cost
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      Current service estimate
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <ScrollArea className="flex-1 max-h-[400px] sm:max-h-[500px]">
-                <div className="p-4 sm:p-5 space-y-4">
-                  {/* Service Fee */}
-                  <div className="flex justify-between items-start text-sm">
+              <ScrollArea className="max-h-[520px]">
+                <div className="space-y-4 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="font-semibold truncate">
-                        {appointment.services?.map((s: any) => s.name).join(", ") || "Service"}
+                      <p className="truncate text-sm font-medium">
+                        {appointment.services
+                          ?.map((s: any) => s.name)
+                          .join(', ') || 'Service'}
                       </p>
-                      <p className="text-xs text-muted-foreground">Base Service(s)</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Base service
+                      </p>
                     </div>
-                    <span className="font-mono font-medium shrink-0 ml-4">
+
+                    <span className="shrink-0 font-mono text-sm font-medium">
                       ₱{servicePrice.toFixed(2)}
                     </span>
                   </div>
+
                   <Separator />
 
-                  {/* Findings */}
                   {findings.map((f) => (
-                    <div key={f.id} className="space-y-1">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">
+                    <div key={f.id} className="space-y-2">
+                      <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {f.description}
                       </p>
-                      {f.parts && f.parts.map((p, i) => (
-                        <div key={i} className="flex justify-between text-sm pl-4">
-                          <span className="truncate">
-                            {p.quantity}x {p.partName || "Part"} {p.isPms && "(PMS)"}
-                          </span>
-                          <span className="font-mono shrink-0 ml-4">
-                            {p.isPms ? "₱0.00" : `₱${(p.priceAtTime * p.quantity).toFixed(2)}`}
-                          </span>
-                        </div>
-                      ))}
+
+                      {f.parts &&
+                        f.parts.map((p, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2"
+                          >
+                            <span className="min-w-0 truncate text-xs">
+                              {p.quantity}x {p.partName || 'Part'}
+                              {p.isPms ? ' (PMS)' : ''}
+                            </span>
+
+                            <span className="shrink-0 font-mono text-xs">
+                              {p.isPms
+                                ? '₱0.00'
+                                : `₱${(
+                                    p.priceAtTime * p.quantity
+                                  ).toFixed(2)}`}
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   ))}
 
                   <Separator />
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-base sm:text-lg">Subtotal</span>
-                    <span className="text-xl sm:text-2xl font-black text-primary font-mono tracking-tighter">
-                      ₱{subtotal.toFixed(2)}
-                    </span>
+
+                  <div className="rounded-lg bg-primary/5 p-4">
+                    <div className="flex items-end justify-between gap-4">
+                      <span className="text-sm font-semibold">
+                        Subtotal
+                      </span>
+
+                      <span className="font-mono text-2xl font-bold tracking-tight text-primary">
+                        ₱{subtotal.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </ScrollArea>
 
-              <div className="p-4 sm:p-5 bg-primary/5 border-t">
+              <div className="border-t border-border p-4 sm:p-5">
                 {!isCompleted && (
                   <Button
+                    type="button"
                     onClick={() => setSendConfirmOpen(true)}
-                    className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl h-12 shadow-lg shadow-primary/20"
+                    className="h-11 w-full rounded-md md:h-9"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? "Submitting..." : "Submit to Billing"}
+                    {isSubmitting
+                      ? 'Submitting...'
+                      : 'Submit to Billing'}
                   </Button>
                 )}
+
                 {isCompleted && (
-                  <Button disabled className="w-full bg-green-600 text-white rounded-xl h-12">
+                  <Button
+                    type="button"
+                    disabled
+                    className="h-11 w-full rounded-md bg-green-600 text-white md:h-9"
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
                     Job Completed
                   </Button>
                 )}
               </div>
-            </div>
-          </div>
+            </section>
+          </aside>
         )}
       </div>
 
-      {/* Modals */}
+      {isInspection && (
+        <FindingsList
+          findings={findings}
+          appointmentId={appointment.id}
+          onFindingsUpdated={() => loadData(true)}
+        />
+      )}
+
+      {/* Existing modal components remain exactly wired to their
+          existing state and callbacks below. */}
       <AddTaskModal
         open={addTaskModalOpen}
         onOpenChange={setAddTaskModalOpen}
@@ -720,5 +884,6 @@ export default function ServiceDetailPanel({
         confirmText="Complete Job"
       />
     </div>
-  );
+  </div>
+);
 }
