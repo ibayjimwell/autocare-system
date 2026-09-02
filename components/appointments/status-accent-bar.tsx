@@ -3,11 +3,10 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
-// Solid visual accent mapping synchronized perfectly with the StatusBadge palette.
-// Unchanged — the colors are semantic status tokens shared across the system;
-// the parent card's overflow-hidden + rounded-xl now clips the bar to the
-// macOS squircle automatically.
-const BAR_COLOR_CONFIG: Record<string, string> = {
+const BAR_COLOR_CONFIG: Record<
+  string,
+  string
+> = {
   PENDING: 'bg-red-500',
   CONFIRMED: 'bg-red-600',
   UNDER_INSPECTION: 'bg-blue-500',
@@ -28,20 +27,24 @@ interface StatusAccentBarProps {
   className?: string;
 }
 
-export default function StatusAccentBar({ status, className }: StatusAccentBarProps) {
-  // Normalize lookup string to protect against uppercase/lowercase API drift
-  const lookupKey = (status || '').toUpperCase();
-  const barColorClass = BAR_COLOR_CONFIG[lookupKey] || 'bg-primary';
+export default function StatusAccentBar({
+  status,
+  className,
+}: StatusAccentBarProps) {
+  const lookupKey =
+    (status || '').toUpperCase();
+
+  const barColorClass =
+    BAR_COLOR_CONFIG[lookupKey] ||
+    'bg-primary';
 
   return (
     <div
       className={cn(
-        "absolute top-0 left-0 right-0 h-[3px] transition-opacity duration-200",
-        // Defaulted to reveal on parent card hover.
-        // Swap or remove 'opacity-0 group-hover:opacity-100' if you prefer it statically visible!
-        "opacity-100",
+        'absolute left-0 right-0 top-0 h-[3px]',
+        'opacity-100 transition-opacity duration-200',
         barColorClass,
-        className
+        className,
       )}
     />
   );
