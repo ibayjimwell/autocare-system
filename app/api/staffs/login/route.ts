@@ -75,6 +75,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ✅ CHECK OUTBOARDED
+if (staff.inBoarding === false) {
+  return NextResponse.json(
+    {
+      error: true,
+      errorType: "auth",
+      errorTitle: "Account deactivated",
+      errorMessage: "Your account has been outboarded. Please contact your administrator.",
+      errorLog: null,
+    },
+    { status: 403 },
+  );
+}
+
   if (!staff) {
     return NextResponse.json(
       {

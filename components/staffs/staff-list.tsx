@@ -72,6 +72,7 @@ import DataModal from '@/components/shared/data-modal';
 import ErrorHandler from '@/components/shared/error-handler';
 import TempPasswordDialog from './temp-password-dialog';
 import AccessModals from './access-modals';
+import StaffStatusConfirmationModal from './staff-status-confirmation-modal';
 import EmptyState from '@/components/shared/empty-state';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 
@@ -157,6 +158,19 @@ export default function StaffList() {
   const [tempDialogOpen, setTempDialogOpen] =
     useState(false);
 
+  // Onboard / outboard confirmation modal state
+  const [statusConfirmationOpen, setStatusConfirmationOpen] =
+    useState(false);
+
+  const [statusConfirmationAction, setStatusConfirmationAction] =
+    useState<'onboard' | 'outboard' | null>(null);
+
+  const [statusConfirmationStaff, setStatusConfirmationStaff] =
+    useState<any | null>(null);
+
+  const [statusConfirmationLoading, setStatusConfirmationLoading] =
+    useState(false);
+
   // When a new staff is created, open the temp password dialog and remember the staff ID
   useEffect(() => {
     if (tempPassword) {
@@ -165,17 +179,25 @@ export default function StaffList() {
     }
   }, [tempPassword, tempStaffId]);
 
-  // ----- Onboard handler (for offboarded staff) -----
-  const handleOnboard = async (staff: any) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to onboard ${staff.fullname}?`
-      )
-    ) {
-      return;
-    }
+  // ----- Open onboard confirmation modal -----
+  const handleOnboard = (staff: any) => {
+    setStatusConfirmationStaff(staff);
+    setStatusConfirmationAction('onboard');
+    setStatusConfirmationOpen(true);
+  };
 
+  // ----- Open outboard confirmation modal -----
+  const handleOutboard = (staff: any) => {
+    setStatusConfirmationStaff(staff);
+    setStatusConfirmationAction('outboard');
+    setStatusConfirmationOpen(true);
+  };
+
+  // ----- Execute confirmed onboard action -----
+  const executeOnboard = async (staff: any) => {
     try {
+      setStatusConfirmationLoading(true);
+
       const res = await staffApi.update(staff.id, {
         inBoarding: true,
       });
@@ -191,23 +213,23 @@ export default function StaffList() {
 
         await loadStaff();
         triggerHighlight(staff.id);
+
+        setStatusConfirmationOpen(false);
+        setStatusConfirmationStaff(null);
+        setStatusConfirmationAction(null);
       }
     } catch (err) {
       toast.error('Failed to onboard staff.');
+    } finally {
+      setStatusConfirmationLoading(false);
     }
   };
 
-  // ----- Outboard handler (for onboarded staff) -----
-  const handleOutboard = async (staff: any) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to outboard ${staff.fullname}?`
-      )
-    ) {
-      return;
-    }
-
+  // ----- Execute confirmed outboard action -----
+  const executeOutboard = async (staff: any) => {
     try {
+      setStatusConfirmationLoading(true);
+
       const res = await staffApi.update(staff.id, {
         inBoarding: false,
       });
@@ -223,9 +245,42 @@ export default function StaffList() {
 
         await loadStaff();
         triggerHighlight(staff.id);
+
+        setStatusConfirmationOpen(false);
+        setStatusConfirmationStaff(null);
+        setStatusConfirmationAction(null);
       }
     } catch (err) {
       toast.error('Failed to outboard staff.');
+    } finally {
+      setStatusConfirmationLoading(false);
+    }
+  };
+
+  // ----- Confirm the selected onboard / outboard action -----
+  const handleStatusConfirmation = async () => {
+    if (!statusConfirmationStaff || !statusConfirmationAction) {
+      return;
+    }
+
+    if (statusConfirmationAction === 'onboard') {
+      await executeOnboard(statusConfirmationStaff);
+      return;
+    }
+
+    await executeOutboard(statusConfirmationStaff);
+  };
+
+  const handleStatusConfirmationOpenChange = (open: boolean) => {
+    if (statusConfirmationLoading) {
+      return;
+    }
+
+    setStatusConfirmationOpen(open);
+
+    if (!open) {
+      setStatusConfirmationStaff(null);
+      setStatusConfirmationAction(null);
     }
   };
 
@@ -638,7 +693,7 @@ export default function StaffList() {
             />
 
             <Input
-              placeholder="Search by name, role, or username..."
+              placeholder="Search by name or username..."
               aria-label="Search staff"
               className="
                 h-11 rounded-md
@@ -698,12 +753,19 @@ export default function StaffList() {
                 {filteredAndSortedStaff.length} team members
               </span>
             </div>
+          </div>
+        </div>
 
+        <Popover
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+        >
+          <PopoverTrigger asChild>
             <Button
               type="button"
               variant="outline"
               className="
-                h-11 shrink-0 rounded-md
+                h-10 rounded-md
                 px-3 text-sm font-medium
                 focus-visible:outline-none
                 focus-visible:ring-2
@@ -712,249 +774,158 @@ export default function StaffList() {
                 md:h-9
               "
             >
-              <SlidersHorizontal className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                Customize
-              </span>
-            </Button>
+              <Filter className="h-4 w-4" />
+              Filters
 
-            <Button
-              type="button"
-              variant="outline"
-              className="
-                hidden h-9 shrink-0
-                rounded-md px-3
-                text-sm font-medium
-                lg:inline-flex
-                focus-visible:outline-none
-                focus-visible:ring-2
-                focus-visible:ring-ring
-                focus-visible:ring-offset-2
-              "
-            >
-              <Download className="h-4 w-4" />
-              Export
+              {hasActiveFilters && (
+                <span
+                  className="
+                    ml-1.5 h-1.5 w-1.5
+                    rounded-full bg-primary
+                  "
+                />
+              )}
             </Button>
+          </PopoverTrigger>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="More staff actions"
-              className="
-                hidden h-9 w-9 shrink-0
-                rounded-md lg:inline-flex
-                focus-visible:outline-none
-                focus-visible:ring-2
-                focus-visible:ring-ring
-                focus-visible:ring-offset-2
-              "
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Filter row */}
-        <div
-          className="
-            flex flex-wrap items-center gap-2
-            rounded-lg border border-border
-            bg-card p-2
-            md:bg-transparent
-            md:p-0
-          "
-        >
-          <Popover
-            open={filterOpen}
-            onOpenChange={setFilterOpen}
+          <PopoverContent
+            align="start"
+            sideOffset={8}
+            className="
+              w-[calc(100vw-2rem)] max-w-sm
+              rounded-lg
+              border-border
+              bg-popover/95
+              p-4 shadow-xl
+              backdrop-blur-xl
+            "
           >
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="
-                  h-10 rounded-md
-                  px-3 text-sm font-medium
-                  focus-visible:outline-none
-                  focus-visible:ring-2
-                  focus-visible:ring-ring
-                  focus-visible:ring-offset-2
-                  md:h-9
-                "
-              >
-                <Filter className="h-4 w-4" />
-                Filters
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Filter staff
+                  </h4>
 
-                {hasActiveFilters && (
-                  <span
-                    className="
-                      ml-1.5 h-1.5 w-1.5
-                      rounded-full bg-primary
-                    "
-                  />
-                )}
-              </Button>
-            </PopoverTrigger>
-
-            <PopoverContent
-              align="start"
-              sideOffset={8}
-              className="
-                w-[calc(100vw-2rem)] max-w-sm
-                rounded-lg
-                border-border
-                bg-popover/95
-                p-4 shadow-xl
-                backdrop-blur-xl
-              "
-            >
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground">
-                      Filter staff
-                    </h4>
-
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Refine the team directory.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetFilters}
-                    className="
-                      h-8 rounded-md
-                      px-2 text-xs
-                      focus-visible:outline-none
-                      focus-visible:ring-2
-                      focus-visible:ring-ring
-                      focus-visible:ring-offset-2
-                    "
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Reset
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    Role
-                  </Label>
-
-                  <Select
-                    value={roleFilter}
-                    onValueChange={setRoleFilter}
-                  >
-                    <SelectTrigger
-                      className="
-                        h-11 rounded-md
-                        text-base
-                        focus-visible:ring-2
-                        focus-visible:ring-ring
-                        focus-visible:ring-offset-2
-                        md:h-9 md:text-sm
-                      "
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-
-                    <SelectContent className="rounded-lg">
-                      <SelectItem value="ALL">
-                        All Roles
-                      </SelectItem>
-
-                      {PREDEFINED_ROLES.map(
-                        (role) => (
-                          <SelectItem
-                            key={role}
-                            value={role}
-                          >
-                            {role}
-                          </SelectItem>
-                        )
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Refine the team directory.
+                  </p>
                 </div>
 
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetFilters}
                   className="
-                    h-11 w-full rounded-md
-                    text-sm font-medium
+                    h-8 rounded-md
+                    px-2 text-xs
                     focus-visible:outline-none
                     focus-visible:ring-2
                     focus-visible:ring-ring
                     focus-visible:ring-offset-2
-                    md:h-9
                   "
-                  onClick={() =>
-                    setFilterOpen(false)
-                  }
                 >
-                  Apply Filters
+                  <X className="h-3.5 w-3.5" />
+                  Reset
                 </Button>
               </div>
-            </PopoverContent>
-          </Popover>
 
-          {roleFilter !== 'ALL' && (
-            <Badge
-              variant="secondary"
-              className="
-                h-8 rounded-full
-                px-2.5 text-[11px]
-                font-medium
-              "
-            >
-              Role: {roleFilter}
-            </Badge>
-          )}
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Role
+                </Label>
 
-          {statusTab !== 'ALL' && (
-            <Badge
-              variant="secondary"
-              className="
-                h-8 rounded-full
-                px-2.5 text-[11px]
-                font-medium
-              "
-            >
-              Status:{' '}
-              {
-                STATUS_TABS.find(
-                  (tab) =>
-                    tab.value === statusTab
-                )?.label
-              }
-            </Badge>
-          )}
+                <Select
+                  value={roleFilter}
+                  onValueChange={setRoleFilter}
+                >
+                  <SelectTrigger
+                    className="
+                      h-11 rounded-md
+                      text-base
+                      focus-visible:ring-2
+                      focus-visible:ring-ring
+                      focus-visible:ring-offset-2
+                      md:h-9 md:text-sm
+                    "
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
 
-          {hasActiveFilters && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={resetFilters}
-              className="
-                h-8 rounded-md px-2
-                text-xs text-muted-foreground
-                hover:text-foreground
-                focus-visible:outline-none
-                focus-visible:ring-2
-                focus-visible:ring-ring
-                focus-visible:ring-offset-2
-              "
-            >
-              Clear filters
-            </Button>
-          )}
-        </div>
+                  <SelectContent className="rounded-lg">
+                    <SelectItem value="ALL">
+                      All Roles
+                    </SelectItem>
+
+                    {PREDEFINED_ROLES.map(
+                      (role) => (
+                        <SelectItem
+                          key={role}
+                          value={role}
+                        >
+                          {role}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {roleFilter !== 'ALL' && (
+          <Badge
+            variant="secondary"
+            className="
+              h-8 rounded-full
+              px-2.5 text-[11px]
+              font-medium
+            "
+          >
+            Role: {roleFilter}
+          </Badge>
+        )}
+
+        {statusTab !== 'ALL' && (
+          <Badge
+            variant="secondary"
+            className="
+              h-8 rounded-full
+              px-2.5 text-[11px]
+              font-medium
+            "
+          >
+            Status:{' '}
+            {
+              STATUS_TABS.find(
+                (tab) =>
+                  tab.value === statusTab
+              )?.label
+            }
+          </Badge>
+        )}
+
+        {hasActiveFilters && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            className="
+              h-8 rounded-md px-2
+              text-xs text-muted-foreground
+              hover:text-foreground
+              focus-visible:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-ring
+              focus-visible:ring-offset-2
+            "
+          >
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {/* ============================================================
@@ -1993,7 +1964,7 @@ export default function StaffList() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-foreground">
-                Full Legal Name
+                Full Name
               </Label>
 
               <Input
@@ -2083,10 +2054,6 @@ export default function StaffList() {
                     </SelectItem>
                   )
                 )}
-
-                <SelectItem value="custom">
-                  + Custom Role
-                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -2130,6 +2097,27 @@ export default function StaffList() {
           }
         />
       )}
+
+      {/* ============================================================
+          ONBOARD / OUTBOARD CONFIRMATION MODAL
+          ============================================================ */}
+      <StaffStatusConfirmationModal
+        open={statusConfirmationOpen}
+        onOpenChange={
+          handleStatusConfirmationOpenChange
+        }
+        action={statusConfirmationAction}
+        staffName={
+          statusConfirmationStaff?.fullname ||
+          'this staff member'
+        }
+        onConfirm={
+          handleStatusConfirmation
+        }
+        isLoading={
+          statusConfirmationLoading
+        }
+      />
 
       {/* ============================================================
           ACCESS MODALS

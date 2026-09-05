@@ -20,6 +20,13 @@ export const MODULE_LABELS: Record<string, string> = {
   inventory: 'Inventory',
 };
 
-export const PREDEFINED_ROLES = ['Admin', 'Mechanic', 'Assistant', 'Cashier'];
+export const PREDEFINED_ROLES = [
+  'Admin', 
+  'Mechanic', 
+  'Assistant Mechanic', 
+  'Cashier',
+  'Tester',
+  'Developer'
+];
 
 export type SortField = 'fullname' | 'username' | 'role' | 'status' | 'accessCount' | 'currentModule' | 'createdAt';

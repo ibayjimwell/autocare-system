@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 4. Generate temporary password
-  const tempPlainPassword = generateTempPassword(rawData.username);
+  const tempPlainPassword = generateTempPassword(rawData.fullname);
   let hashedPassword: string;
   try {
     hashedPassword = await hashPassword(tempPlainPassword);

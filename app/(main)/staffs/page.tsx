@@ -7,7 +7,7 @@ import StaffList from '@/components/staffs/staff-list';
 export default function StaffPage() {
   return (
     <PageContainer
-      title="Staff management"
+    title="Staff management"
       subtitle="Manage your team members and their account permissions here."
     >
       <StaffList />
