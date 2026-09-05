@@ -11,6 +11,7 @@ const routeToPermission: Record<string, string> = {
   "/staffs": "staffs",
   "/service-tracking": "serviceTracking",
   "/payments": "payments",
+  "/inventory": "inventory",
 };
 
 export default withAuth(
@@ -34,13 +35,13 @@ export default withAuth(
       return NextResponse.redirect(loginUrl);
     }
 
-    // 4. Check module access permissions
+    // 4. Check module access permissions – use token.access (fresh from session callback)
     const matchedRoute = Object.keys(routeToPermission).find((route) =>
       pathname.startsWith(route)
     );
     if (matchedRoute) {
       const requiredPermission = routeToPermission[matchedRoute];
-      const userAccess = token.access;
+      const userAccess = token.access as Record<string, boolean> | null | undefined;
       if (!userAccess || userAccess[requiredPermission] !== true) {
         const unauthorizedUrl = new URL("/unauthorized", req.url);
         return NextResponse.redirect(unauthorizedUrl);
@@ -54,7 +55,6 @@ export default withAuth(
       authorized: ({ req, token }) => {
         const pathname = req.nextUrl.pathname;
 
-        // Allow API routes and public pages without a token
         if (
           pathname.startsWith("/api") ||
           pathname === "/login" ||
@@ -63,7 +63,6 @@ export default withAuth(
           return true;
         }
 
-        // All other pages need a valid token
         return !!token;
       },
     },

@@ -17,11 +17,13 @@ export const authOptions: AuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) {
-          throw new Error(JSON.stringify({
-            errorType: "fve",
-            errorTitle: "Missing credentials",
-            errorMessage: "Username and password are required.",
-          }));
+          throw new Error(
+            JSON.stringify({
+              errorType: "fve",
+              errorTitle: "Missing credentials",
+              errorMessage: "Username and password are required.",
+            })
+          );
         }
 
         // 1. Call your internal login API
@@ -37,11 +39,13 @@ export const authOptions: AuthOptions = {
         const data = await res.json();
 
         if (!res.ok || data.error) {
-          throw new Error(JSON.stringify({
-            errorType: data.errorType || "auth",
-            errorTitle: data.errorTitle || "Authentication failed",
-            errorMessage: data.errorMessage || "Invalid username or password",
-          }));
+          throw new Error(
+            JSON.stringify({
+              errorType: data.errorType || "auth",
+              errorTitle: data.errorTitle || "Authentication failed",
+              errorMessage: data.errorMessage || "Invalid username or password",
+            })
+          );
         }
 
         // 2. Fetch access permissions for this staff
@@ -63,7 +67,7 @@ export const authOptions: AuthOptions = {
           username: data.data.username,
           role: data.data.role,
           requiresPasswordChange: data.requiresPasswordChange || false,
-          access,   // includes dashboard, customers, appointments, etc.
+          access, // includes dashboard, customers, appointments, etc.
         };
       },
     }),
@@ -90,7 +94,34 @@ export const authOptions: AuthOptions = {
         session.user.username = token.username as string;
         session.user.role = token.role as string;
         session.user.requiresPasswordChange = token.requiresPasswordChange as boolean;
-        session.user.access = token.access as any;
+
+        // ✅ Fetch fresh access from the database
+        try {
+          const staffId = token.id as string;
+          const [accessRecord] = await Database.select()
+            .from(StaffAccess)
+            .where(eq(StaffAccess.staffId, staffId))
+            .limit(1);
+
+          // Convert the access record to an object of booleans
+          const access = accessRecord
+            ? {
+                dashboard: accessRecord.dashboard ?? false,
+                customers: accessRecord.customers ?? false,
+                appointments: accessRecord.appointments ?? false,
+                services: accessRecord.services ?? false,
+                staffs: accessRecord.staffs ?? false,
+                serviceTracking: accessRecord.serviceTracking ?? false,
+                payments: accessRecord.payments ?? false,
+                inventory: accessRecord.inventory ?? false,
+              }
+            : {};
+          session.user.access = access;
+        } catch (err) {
+          console.error("Failed to fetch fresh access for session:", err);
+          // Fallback to token's access if DB fetch fails
+          session.user.access = token.access as any;
+        }
       }
       return session;
     },
