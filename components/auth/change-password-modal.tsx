@@ -42,35 +42,53 @@ export default function ChangePasswordModal({
   const [error, setError] = useState<string | null>(null);
 
   const [passwordStrength, setPasswordStrength] = useState<{
-    score: 0 | 1 | 2 | 3 | 4 | 5;
+    score: number;
     message: string;
+    isValid: boolean;
+    errors: string[];
   }>({
     score: 0,
     message: "Very Weak",
+    isValid: false,
+    errors: [],
   });
 
   const evaluateStrength = (password: string) => {
-    let score = 0;
+    const errors: string[] = [];
 
-    if (password.length >= 8) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[a-z]/.test(password)) score++;
-    if (/[0-9]/.test(password)) score++;
-    if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score++;
+    if (password.length < 8) {
+      errors.push("At least 8 characters");
+    }
+    if (!/[A-Z]/.test(password)) {
+      errors.push("Uppercase letter");
+    }
+    if (!/[a-z]/.test(password)) {
+      errors.push("Lowercase letter");
+    }
+    if (!/[0-9]/.test(password)) {
+      errors.push("Number");
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      errors.push("Special character (!@#$%^&* etc.)");
+    }
 
-    // 0–5
-    const levels = [
-      "Very Weak",
-      "Weak",
-      "Fair",
-      "Good",
-      "Strong",
-      "Very Strong",
-    ];
+    const metCriteria = 5 - errors.length;
+    const isValid = errors.length === 0;
+
+    // Score 0–5 (number of satisfied criteria)
+    let message = "";
+    if (metCriteria === 0) message = "Very Weak";
+    else if (metCriteria <= 1) message = "Weak";
+    else if (metCriteria <= 2) message = "Fair";
+    else if (metCriteria <= 3) message = "Good";
+    else if (metCriteria <= 4) message = "Strong";
+    else message = "Very Strong";
 
     return {
-      score: score as 0 | 1 | 2 | 3 | 4 | 5,
-      message: levels[score],
+      score: metCriteria,
+      message,
+      isValid,
+      errors,
     };
   };
 
@@ -81,6 +99,8 @@ export default function ChangePasswordModal({
       setPasswordStrength({
         score: 0,
         message: "Very Weak",
+        isValid: false,
+        errors: [],
       });
     }
   }, [newPassword]);
@@ -100,8 +120,13 @@ export default function ChangePasswordModal({
     setError(null);
     setIsLoading(true);
 
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters.");
+    // Validate password strength before sending
+    const strength = evaluateStrength(newPassword);
+    if (!strength.isValid) {
+      setError(
+        "Password must meet all requirements: " +
+          strength.errors.join(", ")
+      );
       setIsLoading(false);
       return;
     }
@@ -143,13 +168,12 @@ export default function ChangePasswordModal({
     }
   };
 
-  const strengthColor = (score: number) => {
-    if (score <= 1) return "bg-red-500";
-    if (score === 2) return "bg-orange-500";
-    if (score === 3) return "bg-yellow-500";
+  const strengthColor = (score: number, isValid: boolean) => {
+    if (!isValid) return "bg-red-500";
     if (score >= 4) return "bg-green-500";
-
-    return "bg-gray-200";
+    if (score >= 3) return "bg-yellow-500";
+    if (score >= 2) return "bg-orange-500";
+    return "bg-red-500";
   };
 
   return (
@@ -166,10 +190,7 @@ export default function ChangePasswordModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form
-          onSubmit={handleSubmit}
-          className="mt-4 space-y-5"
-        >
+        <form onSubmit={handleSubmit} className="mt-4 space-y-5">
           {/* New Password */}
           <div className="space-y-2">
             <Label
@@ -185,23 +206,15 @@ export default function ChangePasswordModal({
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter new password"
                 value={newPassword}
-                onChange={(e) =>
-                  setNewPassword(e.target.value)
-                }
+                onChange={(e) => setNewPassword(e.target.value)}
                 className="h-11 rounded-md border-input bg-card pr-11 text-base shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:h-10 md:text-sm"
                 autoFocus
               />
 
               <button
                 type="button"
-                onClick={() =>
-                  setShowPassword((prev) => !prev)
-                }
-                aria-label={
-                  showPassword
-                    ? "Hide password"
-                    : "Show password"
-                }
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
                 className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:h-8 md:w-8"
               >
                 {showPassword ? (
@@ -223,7 +236,7 @@ export default function ChangePasswordModal({
                   </span>
 
                   <span>
-                    {passwordStrength.score >= 4 ? (
+                    {passwordStrength.isValid ? (
                       <CheckCircle className="inline h-4 w-4 text-green-500" />
                     ) : (
                       <XCircle className="inline h-4 w-4 text-red-500" />
@@ -234,19 +247,35 @@ export default function ChangePasswordModal({
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${strengthColor(
-                      passwordStrength.score
+                      passwordStrength.score,
+                      passwordStrength.isValid
                     )}`}
                     style={{
-                      width: `${
-                        (passwordStrength.score / 5) * 100
-                      }%`,
+                      width: `${(passwordStrength.score / 5) * 100}%`,
                     }}
                   />
                 </div>
 
+                {/* Missing criteria list */}
+                {!passwordStrength.isValid && passwordStrength.errors.length > 0 && (
+                  <ul className="mt-1 space-y-0.5 text-xs leading-5 text-red-500">
+                    {passwordStrength.errors.map((err, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="mt-0.5">•</span>
+                        <span>Missing: {err}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {passwordStrength.isValid && (
+                  <p className="text-xs leading-5 text-green-600">
+                    ✓ All requirements met
+                  </p>
+                )}
+
                 <p className="text-xs leading-5 text-muted-foreground">
-                  At least 8 characters, include uppercase,
-                  lowercase, number, and special character.
+                  At least 8 characters, include uppercase, lowercase, number, and special character.
                 </p>
               </div>
             )}
@@ -266,9 +295,7 @@ export default function ChangePasswordModal({
               type={showPassword ? "text" : "password"}
               placeholder="Confirm new password"
               value={confirmPassword}
-              onChange={(e) =>
-                setConfirmPassword(e.target.value)
-              }
+              onChange={(e) => setConfirmPassword(e.target.value)}
               className="h-11 rounded-md border-input bg-card text-base shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:h-10 md:text-sm"
             />
           </div>

@@ -76,6 +76,28 @@ export default function LoginForm({
     const trimmedUsername = username.trim();
     const trimmedPassword = password.trim();
 
+    if (!trimmedUsername) {
+      setErrorProps({
+        type: "fve",
+        title: "Missing username",
+        message: "Username is required.",
+      });
+
+      setIsLoading(false);
+      return;
+    }
+
+    if (!trimmedPassword) {
+      setErrorProps({
+        type: "fve",
+        title: "Missing password",
+        message: "Password is required.",
+      });
+
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const result = await signIn("credentials", {
         username: trimmedUsername,
@@ -84,15 +106,38 @@ export default function LoginForm({
       });
 
       if (result?.error) {
-        let parsedError;
+        let parsedError: {
+          errorType: string;
+          errorTitle: string;
+          errorMessage: string;
+        };
 
         try {
-          parsedError = JSON.parse(result.error);
+          const parsed = JSON.parse(result.error);
+
+          parsedError = {
+            errorType:
+              typeof parsed?.errorType === "string"
+                ? parsed.errorType
+                : "auth",
+
+            errorTitle:
+              typeof parsed?.errorTitle === "string"
+                ? parsed.errorTitle
+                : "Login failed",
+
+            errorMessage:
+              typeof parsed?.errorMessage === "string"
+                ? parsed.errorMessage
+                : "Username or password is incorrect.",
+          };
         } catch {
           parsedError = {
-            errorType: "fve",
+            errorType: "auth",
             errorTitle: "Login failed",
-            errorMessage: result.error,
+            errorMessage:
+              result.error ||
+              "Username or password is incorrect.",
           };
         }
 
@@ -105,26 +150,28 @@ export default function LoginForm({
         return;
       }
 
-      // Successful login – check if password change is required
       const session = await getSession();
 
       if (session?.user?.requiresPasswordChange) {
         setChangePasswordUsername(session.user.username);
         setShowChangePasswordModal(true);
-
-        // Do not redirect yet – force password change
         return;
       }
 
-      // Normal login – redirect to home
       router.push("/");
       router.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      let errorMessage =
+        "Something went wrong. Please try again.";
+
+      if (err instanceof Error && err.message) {
+        errorMessage = err.message;
+      }
+
       setErrorProps({
         type: "se",
         title: "Unexpected error",
-        message:
-          err.message || "Something went wrong. Please try again.",
+        message: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -135,11 +182,9 @@ export default function LoginForm({
     setShowChangePasswordModal(false);
     setChangePasswordSuccess(true);
 
-    // Clear password field so user can log in with new password
     setPassword("");
     setShowPassword(false);
 
-    // Show success message on the login form
     setErrorProps({
       type: "success",
       title: "Password changed",
@@ -151,12 +196,8 @@ export default function LoginForm({
   return (
     <main className="min-h-svh w-full overflow-x-hidden bg-background">
       <div className="mx-auto flex min-h-svh w-full max-w-[1920px] flex-col lg:h-svh lg:min-h-0 lg:flex-row">
-        {/* ============================================================
-            LOGIN / AUTHENTICATION SIDE
-        ============================================================ */}
         <section className="flex w-full shrink-0 items-center justify-center px-5 py-7 sm:px-8 md:px-10 lg:h-svh lg:w-[43%] lg:px-8 lg:py-5 xl:w-[40%] 2xl:w-[38%]">
           <div className="w-full max-w-[410px]">
-            {/* Brand */}
             <div className="mb-4 flex items-center justify-center lg:mb-4 lg:justify-start">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
@@ -175,7 +216,6 @@ export default function LoginForm({
               </div>
             </div>
 
-            {/* Login Card */}
             <Card className="rounded-xl border border-border bg-card text-card-foreground shadow-sm">
               <CardHeader className="space-y-2 px-5 pb-4 pt-5 sm:px-6 sm:pt-6">
                 <CardTitle className="text-[26px] font-semibold leading-tight tracking-tight text-foreground">
@@ -189,7 +229,6 @@ export default function LoginForm({
 
               <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* Username */}
                   <div className="space-y-1.5">
                     <Label
                       htmlFor="username"
@@ -216,14 +255,15 @@ export default function LoginForm({
                         onFocus={() => setFocusField("user")}
                         onBlur={() => setFocusField(null)}
                         value={username}
-                        onChange={(e) => setUsername(e.target.value)}
+                        onChange={(e) =>
+                          setUsername(e.target.value)
+                        }
                         autoComplete="username"
                         disabled={showChangePasswordModal}
                       />
                     </div>
                   </div>
 
-                  {/* Password */}
                   <div className="space-y-1.5">
                     <Label
                       htmlFor="password"
@@ -251,7 +291,9 @@ export default function LoginForm({
                         onFocus={() => setFocusField("pass")}
                         onBlur={() => setFocusField(null)}
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) =>
+                          setPassword(e.target.value)
+                        }
                         autoComplete="current-password"
                         disabled={showChangePasswordModal}
                       />
@@ -278,7 +320,6 @@ export default function LoginForm({
                     </div>
                   </div>
 
-                  {/* Error */}
                   {errorProps && (
                     <ErrorHandler
                       type={errorProps.type}
@@ -287,7 +328,6 @@ export default function LoginForm({
                     />
                   )}
 
-                  {/* Success */}
                   {changePasswordSuccess && (
                     <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2.5 text-center text-sm text-green-700">
                       Password changed successfully! Please log in with
@@ -295,11 +335,12 @@ export default function LoginForm({
                     </div>
                   )}
 
-                  {/* Submit */}
                   <Button
                     type="submit"
                     className="h-11 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:h-10"
-                    disabled={isLoading || showChangePasswordModal}
+                    disabled={
+                      isLoading || showChangePasswordModal
+                    }
                   >
                     {isLoading ? (
                       <>
@@ -317,7 +358,6 @@ export default function LoginForm({
               </CardContent>
             </Card>
 
-            {/* Footer */}
             <div className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground lg:justify-start">
               <ShieldCheck className="h-3.5 w-3.5" />
               Secure staff access
@@ -325,13 +365,7 @@ export default function LoginForm({
           </div>
         </section>
 
-        {/* ============================================================
-            AUTOMOTIVE SERVICE CENTER SIDE
-        ============================================================ */}
         <section className="relative flex w-full flex-1 items-center overflow-hidden bg-primary px-5 py-8 sm:px-8 md:px-10 lg:h-svh lg:min-h-0 lg:px-8 lg:py-5 xl:px-12">
-          {/* ========================================================
-              BACKGROUND DECORATION
-          ======================================================== */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute -right-24 -top-24 h-[320px] w-[320px] rounded-full border border-white/10 lg:h-[380px] lg:w-[380px]" />
 
@@ -342,18 +376,7 @@ export default function LoginForm({
             <div className="absolute left-[35%] top-0 h-40 w-40 rounded-full bg-white/5 blur-3xl" />
           </div>
 
-          {/* ========================================================
-              CONTENT CONTAINER
-
-              Important:
-              This container is constrained by the viewport on
-              desktop so the right-side marketing composition can
-              never make the page taller than the screen.
-          ======================================================== */}
           <div className="relative z-10 mx-auto flex w-full max-w-[820px] flex-col justify-center lg:max-h-[calc(100svh-2.5rem)]">
-            {/* ======================================================
-                MARKETING COPY
-            ====================================================== */}
             <div className="w-full max-w-2xl text-center lg:text-left">
               <div className="mb-2.5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-medium text-white/90 backdrop-blur-md sm:text-[11px]">
                 <Wrench className="h-3.5 w-3.5" />
@@ -375,9 +398,6 @@ export default function LoginForm({
               </p>
             </div>
 
-            {/* ======================================================
-                AUTOMOTIVE WORKSHOP ILLUSTRATION
-            ====================================================== */}
             <div className="relative mt-5 w-full sm:mt-6 lg:mt-5">
               <div
                 className="
@@ -392,19 +412,15 @@ export default function LoginForm({
                   shadow-2xl
                 "
               >
-                {/* Workshop ceiling */}
                 <div className="absolute inset-x-0 top-0 h-14 border-b border-white/10 bg-black/10 sm:h-16">
                   <div className="absolute left-[8%] top-4 h-1.5 w-[25%] rounded-full bg-white/20" />
                   <div className="absolute right-[10%] top-4 h-1.5 w-[24%] rounded-full bg-white/20" />
-
                   <div className="absolute left-[8%] top-11 h-px w-[84%] bg-white/10" />
                 </div>
 
-                {/* Workshop pillars */}
                 <div className="absolute bottom-0 left-[7%] top-14 w-4 bg-black/15 sm:w-5" />
                 <div className="absolute bottom-0 right-[7%] top-14 w-4 bg-black/15 sm:w-5" />
 
-                {/* Wall panels */}
                 <div className="absolute inset-x-[9%] top-[18%] h-[25%] border-y border-white/10">
                   <div className="grid h-full grid-cols-4">
                     <div className="border-r border-white/10" />
@@ -414,56 +430,35 @@ export default function LoginForm({
                   </div>
                 </div>
 
-                {/* Floor */}
                 <div className="absolute inset-x-0 bottom-0 h-[34%] bg-black/15">
                   <div className="absolute bottom-[30%] left-0 right-0 h-px bg-white/10" />
-
                   <div className="absolute bottom-0 left-1/2 h-full w-px -translate-x-1/2 bg-white/5" />
                 </div>
 
-                {/* Service lift */}
                 <div className="absolute bottom-[28%] left-[11%] h-[88px] w-2.5 rounded-full bg-white/15 sm:h-[110px] sm:w-3" />
-
                 <div className="absolute bottom-[28%] right-[20%] h-[88px] w-2.5 rounded-full bg-white/15 sm:h-[110px] sm:w-3" />
-
                 <div className="absolute bottom-[27%] left-[7%] h-2.5 w-[57%] rounded-full bg-white/15 sm:h-3" />
 
-                {/* ==================================================
-                    CAR
-                ================================================== */}
                 <div className="absolute bottom-[24%] left-[15%] w-[60%] sm:bottom-[23%] sm:left-[18%] sm:w-[53%]">
-                  {/* Car shadow */}
                   <div className="absolute -bottom-3 left-[7%] right-[3%] h-4 rounded-full bg-black/30 blur-md" />
 
-                  {/* Car body */}
                   <div className="relative h-[65px] rounded-[24px_28px_14px_14px] border border-white/20 bg-white/95 shadow-xl sm:h-[82px] sm:rounded-[28px_32px_16px_16px]">
-                    {/* Hood */}
                     <div className="absolute right-[-1px] top-[18px] h-[30px] w-[19%] rounded-r-[25px] bg-white/95 sm:top-[22px] sm:h-[34px]" />
 
-                    {/* Roof */}
                     <div className="absolute left-[20%] top-[-25px] h-[47px] w-[48%] rounded-[48px_60px_8px_8px] border border-white/20 bg-white/95 sm:top-[-30px] sm:h-[55px] sm:rounded-[55px_70px_8px_8px]">
-                      {/* Windows */}
                       <div className="absolute left-[9%] top-[6px] h-[27px] w-[35%] rounded-[24px_4px_4px_4px] bg-slate-700/80 sm:top-[7px] sm:h-[31px]" />
-
                       <div className="absolute right-[7%] top-[6px] h-[27px] w-[40%] rounded-[4px_24px_4px_4px] bg-slate-700/80 sm:top-[7px] sm:h-[31px]" />
                     </div>
 
-                    {/* Door seams */}
                     <div className="absolute bottom-0 left-[39%] top-[24px] w-px bg-slate-300" />
                     <div className="absolute bottom-0 left-[64%] top-[24px] w-px bg-slate-300" />
 
-                    {/* Handles */}
                     <div className="absolute left-[46%] top-[31px] h-1 w-3.5 rounded-full bg-slate-400 sm:top-[36px] sm:w-4" />
-
                     <div className="absolute left-[69%] top-[31px] h-1 w-3.5 rounded-full bg-slate-400 sm:top-[36px] sm:w-4" />
 
-                    {/* Headlight */}
                     <div className="absolute right-2 top-[25px] h-3 w-4 rounded-full bg-primary/80 sm:top-[30px] sm:w-5" />
-
-                    {/* Rear light */}
                     <div className="absolute left-1 top-[25px] h-3 w-3.5 rounded-full bg-red-500/80 sm:top-[30px] sm:w-4" />
 
-                    {/* Wheels */}
                     <div className="absolute -bottom-6 left-[13%] flex h-12 w-12 items-center justify-center rounded-full border-4 border-slate-800 bg-slate-950 shadow-lg sm:-bottom-7 sm:h-16 sm:w-16">
                       <div className="h-4 w-4 rounded-full bg-slate-400/80 sm:h-5 sm:w-5" />
                     </div>
@@ -474,16 +469,11 @@ export default function LoginForm({
                   </div>
                 </div>
 
-                {/* ==================================================
-                    MECHANIC
-                ================================================== */}
                 <div className="absolute bottom-[25%] right-[7%] h-[125px] w-[90px] sm:h-[165px] sm:w-[115px]">
-                  {/* Head */}
                   <div className="absolute left-[31%] top-0 h-8 w-8 rounded-full bg-[#dca67a] sm:h-11 sm:w-11">
                     <div className="absolute -top-1 left-[-2px] h-3.5 w-[calc(100%+4px)] rounded-full bg-slate-900 sm:h-4" />
                   </div>
 
-                  {/* Body / uniform */}
                   <div className="absolute left-[22%] top-9 h-[60px] w-[58%] rounded-[16px_16px_8px_8px] bg-slate-900 sm:top-12 sm:h-[78px] sm:rounded-[18px_18px_9px_9px]">
                     <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/10" />
 
@@ -496,37 +486,24 @@ export default function LoginForm({
                     </div>
                   </div>
 
-                  {/* Left arm */}
                   <div className="absolute left-[6%] top-[48px] h-10 w-4 rotate-[25deg] rounded-full bg-slate-900 sm:top-[62px] sm:h-14 sm:w-6" />
-
-                  {/* Right arm */}
                   <div className="absolute right-[1%] top-[47px] h-10 w-4 -rotate-[30deg] rounded-full bg-slate-900 sm:top-[62px] sm:h-14 sm:w-6" />
 
-                  {/* Wrench */}
                   <div className="absolute right-[-4%] top-[27px] rotate-[40deg] text-white/90 sm:top-[33px]">
                     <Wrench className="h-8 w-8 stroke-[1.7] sm:h-11 sm:w-11" />
                   </div>
 
-                  {/* Legs */}
                   <div className="absolute bottom-0 left-[28%] h-12 w-5 rounded-b-xl bg-slate-800 sm:h-20 sm:w-7" />
-
                   <div className="absolute bottom-0 right-[22%] h-12 w-5 rounded-b-xl bg-slate-800 sm:h-20 sm:w-7" />
                 </div>
 
-                {/* ==================================================
-                    TOOLBOX
-                ================================================== */}
                 <div className="absolute bottom-[15%] right-[7%] hidden h-[52px] w-[78px] rounded-lg border border-white/15 bg-white/10 sm:block">
                   <div className="absolute left-1/2 top-[-7px] h-4 w-8 -translate-x-1/2 rounded-t-md border border-white/20 bg-white/10" />
-
                   <div className="absolute inset-x-2 top-3 h-1 bg-white/10" />
                   <div className="absolute inset-x-2 top-6 h-1 bg-white/10" />
                   <div className="absolute inset-x-2 top-9 h-1 bg-white/10" />
                 </div>
 
-                {/* ==================================================
-                    SERVICE BADGE
-                ================================================== */}
                 <div className="absolute left-3 top-3 rounded-xl border border-white/15 bg-black/20 p-2 backdrop-blur-md sm:left-5 sm:top-5 sm:p-3">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-primary sm:h-8 sm:w-8">
@@ -547,12 +524,6 @@ export default function LoginForm({
               </div>
             </div>
 
-            {/* ======================================================
-                SERVICE HIGHLIGHTS
-
-                Hidden on shorter desktop viewports so this content
-                can never force the page below the viewport.
-            ====================================================== */}
             <div
               className="
                 mt-4
@@ -609,9 +580,6 @@ export default function LoginForm({
               </div>
             </div>
 
-            {/* ======================================================
-                INDICATORS
-            ====================================================== */}
             <div
               className="
                 mt-4
@@ -631,7 +599,6 @@ export default function LoginForm({
         </section>
       </div>
 
-      {/* Change Password Modal */}
       <ChangePasswordModal
         open={showChangePasswordModal}
         onOpenChange={setShowChangePasswordModal}
