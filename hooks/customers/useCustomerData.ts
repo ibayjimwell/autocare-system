@@ -97,58 +97,121 @@ export function useCustomerData() {
   const [presenceNow, setPresenceNow] =
     useState(Date.now());
 
+  /*
+   * Fetch the complete customer collection.
+   *
+   * showLoading:
+   * true  -> display the normal initial/loading state
+   * false -> perform a silent realtime refresh
+   */
   const loadCustomers =
-    useCallback(async () => {
-      setLoading(true);
-      setApiError(null);
+    useCallback(
+      async (
+        showLoading = true
+      ) => {
+        if (showLoading) {
+          setLoading(true);
+        }
 
-      try {
-        const res =
-          await customersApi.list();
+        setApiError(null);
 
-        if (res.error) {
+        try {
+          const res =
+            await customersApi.list();
+
+          if (res.error) {
+            setApiError({
+              type:
+                res.errorType ||
+                'fe',
+
+              title:
+                res.errorTitle ||
+                'Error',
+
+              message:
+                res.errorMessage ||
+                'Failed to load customers.',
+            });
+
+            /*
+             * Only clear existing data for a normal explicit load.
+             *
+             * If a silent realtime refresh fails, keeping the previous
+             * list is preferable to making the UI suddenly appear empty.
+             */
+            if (showLoading) {
+              setCustomers([]);
+            }
+
+            return;
+          }
+
+          /*
+           * Replace the entire customer array with the latest API
+           * representation.
+           *
+           * This guarantees fields such as:
+           *
+           * - isPhoneVerified
+           * - deactivated
+           * - isOnline
+           * - lastSeenAt
+           * - createdAt
+           * - updatedAt
+           *
+           * all use the same application-side naming/casing.
+           */
+          setCustomers(
+            Array.isArray(
+              res.data
+            )
+              ? res.data
+              : []
+          );
+
+          /*
+           * A successful sync means an old API error is no longer
+           * relevant.
+           */
+          setApiError(null);
+        } catch (err: any) {
           setApiError({
-            type:
-              res.errorType ||
-              'fe',
-
+            type: 'se',
             title:
-              res.errorTitle ||
-              'Error',
-
+              'Unexpected Error',
             message:
-              res.errorMessage ||
-              'Failed to load customers.',
+              err?.message ||
+              'Something went wrong.',
           });
 
-          setCustomers([]);
-        } else {
-          setCustomers(
-            res.data || []
-          );
+          /*
+           * During silent realtime synchronization we intentionally
+           * preserve the existing visible data instead of replacing
+           * it with an empty list.
+           */
+        } finally {
+          if (showLoading) {
+            setLoading(false);
+          }
         }
-      } catch (err: any) {
-        setApiError({
-          type: 'se',
-          title:
-            'Unexpected Error',
-          message:
-            err?.message ||
-            'Something went wrong.',
-        });
-      } finally {
-        setLoading(false);
-      }
-    }, []);
+      },
+      []
+    );
 
+  /*
+   * Initial customer load.
+   */
   useEffect(() => {
     void loadCustomers();
-  }, [loadCustomers]);
+  }, [
+    loadCustomers,
+  ]);
 
   /*
    * Force a lightweight rerender periodically so a customer whose
    * heartbeat becomes stale changes from Online to Offline without
-   * waiting for another database event.
+   * requiring another database event.
    */
   useEffect(() => {
     const interval =
@@ -159,99 +222,50 @@ export function useCustomerData() {
       }, 15000);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(
+        interval
+      );
     };
   }, []);
 
+  /*
+   * Realtime handler.
+   *
+   * Any database change causes a silent full synchronization.
+   *
+   * This is intentionally different from directly merging
+   * payload.new because Supabase's raw Postgres payload can use
+   * database column names while the application API uses the
+   * transformed/camelCase representation.
+   */
   const handleRealtimeChange =
     useCallback(
       (
-        payload: RealtimePostgresChangesPayload<any>
+        payload?: RealtimePostgresChangesPayload<any>
       ) => {
+        console.log(
+          '🔄 [Customer Module] Realtime synchronization triggered:',
+          payload?.eventType
+        );
+
         setPresenceNow(
           Date.now()
         );
 
-        setCustomers(
-          (currentCustomers) => {
-            switch (
-              payload.eventType
-            ) {
-              case 'INSERT': {
-                const inserted =
-                  payload.new;
-
-                if (
-                  !inserted?.id
-                ) {
-                  return currentCustomers;
-                }
-
-                const alreadyExists =
-                  currentCustomers.some(
-                    (customer) =>
-                      customer.id ===
-                      inserted.id
-                  );
-
-                if (
-                  alreadyExists
-                ) {
-                  return currentCustomers;
-                }
-
-                return [
-                  ...currentCustomers,
-                  inserted,
-                ];
-              }
-
-              case 'UPDATE': {
-                const updated =
-                  payload.new;
-
-                if (
-                  !updated?.id
-                ) {
-                  return currentCustomers;
-                }
-
-                return currentCustomers.map(
-                  (customer) =>
-                    customer.id ===
-                    updated.id
-                      ? {
-                          ...customer,
-                          ...updated,
-                        }
-                      : customer
-                );
-              }
-
-              case 'DELETE': {
-                const deleted =
-                  payload.old;
-
-                if (
-                  !deleted?.id
-                ) {
-                  return currentCustomers;
-                }
-
-                return currentCustomers.filter(
-                  (customer) =>
-                    customer.id !==
-                    deleted.id
-                );
-              }
-
-              default:
-                return currentCustomers;
-            }
-          }
+        /*
+         * Silent refresh:
+         *
+         * - no loading spinner
+         * - no replacement with stale/partial realtime payload
+         * - latest database state becomes the source of truth
+         */
+        void loadCustomers(
+          false
         );
       },
-      []
+      [
+        loadCustomers,
+      ]
     );
 
   useRealtimeCustomerMonitor({
@@ -259,6 +273,16 @@ export function useCustomerData() {
       handleRealtimeChange,
   });
 
+  /*
+   * Deactivate customer.
+   *
+   * The API operation itself remains unchanged.
+   * The realtime event generated by the database will synchronize
+   * all subscribed customer screens.
+   *
+   * We still explicitly refresh here so the initiating client does
+   * not depend solely on realtime delivery.
+   */
   const deactivateCustomer =
     async (
       id: string
@@ -274,9 +298,14 @@ export function useCustomerData() {
         );
       }
 
-      await loadCustomers();
+      await loadCustomers(
+        false
+      );
     };
 
+  /*
+   * Reactivate customer.
+   */
   const reactivateCustomer =
     async (
       id: string
@@ -292,16 +321,21 @@ export function useCustomerData() {
         );
       }
 
-      await loadCustomers();
+      await loadCustomers(
+        false
+      );
     };
 
   return {
     customers,
     loading,
     apiError,
+
     loadCustomers,
+
     deactivateCustomer,
     reactivateCustomer,
+
     presenceNow,
   };
 }

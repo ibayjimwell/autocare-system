@@ -10,7 +10,8 @@ export const customersApi = {
       ? `${API_BASE}/api/customers?search=${encodeURIComponent(search)}`
       : `${API_BASE}/api/customers`;
 
-    const res = await fetch(url);
+    const res =
+      await fetch(url);
 
     return res.json();
   },
@@ -86,7 +87,9 @@ export const customersApi = {
             'Content-Type':
               'application/json',
           },
-          body: JSON.stringify(data),
+          body: JSON.stringify(
+            data
+          ),
         }
       );
 

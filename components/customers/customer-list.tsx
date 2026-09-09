@@ -28,8 +28,11 @@ import {
   Plus,
   ShieldCheck,
   CircleCheck,
+  CircleX,
   Wifi,
   WifiOff,
+  AlertTriangle,
+  LockKeyhole,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -61,6 +64,15 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
 import { cn } from '@/lib/utils';
 
 import {
@@ -81,6 +93,11 @@ import { toast } from 'sonner';
 
 interface CustomerListProps {}
 
+type PhoneVerificationFilter =
+  | 'ALL'
+  | 'verified'
+  | 'not_verified';
+
 export default function CustomerList(
   {}: CustomerListProps
 ) {
@@ -99,6 +116,14 @@ export default function CustomerList(
 
   const [statusFilter, setStatusFilter] =
     useState<string>('ALL');
+
+  const [
+    phoneVerificationFilter,
+    setPhoneVerificationFilter,
+  ] =
+    useState<PhoneVerificationFilter>(
+      'ALL'
+    );
 
   const [dateFrom, setDateFrom] =
     useState<string>('');
@@ -134,6 +159,23 @@ export default function CustomerList(
     setEditingCustomer,
   ] = useState<any>(null);
 
+  /*
+   * Customer edit consent state.
+   *
+   * The Edit action no longer opens CustomerFormModal immediately.
+   * It first opens the consent dialog. The actual edit modal only
+   * opens after the user explicitly confirms responsibility.
+   */
+  const [
+    editConsentOpen,
+    setEditConsentOpen,
+  ] = useState(false);
+
+  const [
+    pendingEditCustomer,
+    setPendingEditCustomer,
+  ] = useState<any>(null);
+
   const [
     statusDialog,
     setStatusDialog,
@@ -160,6 +202,9 @@ export default function CustomerList(
         ...customers,
       ];
 
+      /*
+       * Search
+       */
       if (search.trim()) {
         const term =
           search.toLowerCase();
@@ -187,6 +232,9 @@ export default function CustomerList(
         );
       }
 
+      /*
+       * Presence / account status
+       */
       if (
         statusFilter ===
         'online'
@@ -225,6 +273,32 @@ export default function CustomerList(
         );
       }
 
+      /*
+       * Phone verification status
+       */
+      if (
+        phoneVerificationFilter ===
+        'verified'
+      ) {
+        data = data.filter(
+          (c) =>
+            c.isPhoneVerified ===
+            true
+        );
+      } else if (
+        phoneVerificationFilter ===
+        'not_verified'
+      ) {
+        data = data.filter(
+          (c) =>
+            c.isPhoneVerified !==
+            true
+        );
+      }
+
+      /*
+       * Created date range
+       */
       if (dateFrom) {
         const from =
           new Date(
@@ -262,6 +336,9 @@ export default function CustomerList(
           );
       }
 
+      /*
+       * Sorting
+       */
       data.sort((a, b) => {
         let valA: any;
         let valB: any;
@@ -349,10 +426,10 @@ export default function CustomerList(
               'deactivated'
                 ? 2
                 : getCustomerStatus(
-                    a,
-                    presenceNow
-                  ) ===
-                  'online'
+                      a,
+                      presenceNow
+                    ) ===
+                    'online'
                   ? 0
                   : 1;
 
@@ -364,10 +441,10 @@ export default function CustomerList(
               'deactivated'
                 ? 2
                 : getCustomerStatus(
-                    b,
-                    presenceNow
-                  ) ===
-                  'online'
+                      b,
+                      presenceNow
+                    ) ===
+                    'online'
                   ? 0
                   : 1;
 
@@ -403,6 +480,7 @@ export default function CustomerList(
       customers,
       search,
       statusFilter,
+      phoneVerificationFilter,
       dateFrom,
       dateTo,
       sortField,
@@ -430,6 +508,7 @@ export default function CustomerList(
   }, [
     search,
     statusFilter,
+    phoneVerificationFilter,
     dateFrom,
     dateTo,
     sortField,
@@ -483,12 +562,18 @@ export default function CustomerList(
         'ALL'
       );
 
+      setPhoneVerificationFilter(
+        'ALL'
+      );
+
       setDateFrom('');
       setDateTo('');
     };
 
   const hasActiveFilters =
     statusFilter !==
+      'ALL' ||
+    phoneVerificationFilter !==
       'ALL' ||
     Boolean(dateFrom) ||
     Boolean(dateTo);
@@ -561,6 +646,91 @@ export default function CustomerList(
       }
     };
 
+  /*
+   * Step 1:
+   * User clicks Edit.
+   *
+   * We intentionally do NOT open the customer form here.
+   * Instead, we remember which customer the user intends to edit
+   * and display the responsibility/consent dialog.
+   */
+  const handleEditClick = (
+    customer: any
+  ) => {
+    setPendingEditCustomer(
+      customer
+    );
+
+    setEditConsentOpen(
+      true
+    );
+  };
+
+  /*
+   * Step 2:
+   * User explicitly confirms the responsibility.
+   *
+   * Only here do we open the existing CustomerFormModal.
+   * Existing edit functionality remains untouched after this point.
+   */
+  const handleEditConsentConfirm =
+    () => {
+      if (
+        !pendingEditCustomer
+      ) {
+        setEditConsentOpen(
+          false
+        );
+
+        return;
+      }
+
+      setEditingCustomer(
+        pendingEditCustomer
+      );
+
+      setEditConsentOpen(
+        false
+      );
+
+      setModalOpen(
+        true
+      );
+    };
+
+  /*
+   * Step 3:
+   * User cancels the consent.
+   * Nothing is edited and the existing form stays closed.
+   */
+  const handleEditConsentCancel =
+    () => {
+      setEditConsentOpen(
+        false
+      );
+
+      setPendingEditCustomer(
+        null
+      );
+    };
+
+  /*
+   * Phone verification summary
+   */
+  const PhoneVerifiedCount =
+    customers.filter(
+      (customer) =>
+        customer.isPhoneVerified ===
+        true
+    ).length;
+
+  const PhoneNotVerifiedCount =
+    customers.filter(
+      (customer) =>
+        customer.isPhoneVerified !==
+        true
+    ).length;
+
   if (selectedCustomer) {
     return (
       <CustomerDetail
@@ -578,6 +748,9 @@ export default function CustomerList(
     );
   }
 
+  /*
+   * Customer account presence badge
+   */
   const StatusPill = ({
     customer,
   }: {
@@ -675,6 +848,71 @@ export default function CustomerList(
         <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
 
         Offline
+      </Badge>
+    );
+  };
+
+  /*
+   * Phone verification badge
+   */
+  const PhoneVerificationBadge = ({
+    customer,
+  }: {
+    customer: any;
+  }) => {
+    const verified =
+      customer?.isPhoneVerified ===
+      true;
+
+    if (verified) {
+      return (
+        <Badge
+          variant="outline"
+          className="
+            inline-flex
+            shrink-0
+            items-center
+            gap-1
+            rounded-full
+            border
+            border-emerald-500/20
+            bg-emerald-500/10
+            px-2
+            py-0.5
+            text-[10px]
+            font-semibold
+            text-emerald-600
+            dark:text-emerald-400
+          "
+        >
+          <CircleCheck className="h-3 w-3" />
+          Verified
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge
+        variant="outline"
+        className="
+          inline-flex
+          shrink-0
+          items-center
+          gap-1
+          rounded-full
+          border
+          border-amber-500/20
+          bg-amber-500/10
+          px-2
+          py-0.5
+          text-[10px]
+          font-semibold
+          text-amber-600
+          dark:text-amber-400
+        "
+      >
+        <CircleX className="h-3 w-3" />
+        Not verified
       </Badge>
     );
   };
@@ -886,6 +1124,20 @@ export default function CustomerList(
             >
               Deactivated {DeactivatedCount}
             </Badge>
+
+            <Badge
+              variant="secondary"
+              className="rounded-full px-2.5 py-1 text-[11px]"
+            >
+              Phone Verified {PhoneVerifiedCount}
+            </Badge>
+
+            <Badge
+              variant="secondary"
+              className="rounded-full px-2.5 py-1 text-[11px]"
+            >
+              Phone Not Verified {PhoneNotVerifiedCount}
+            </Badge>
           </div>
         </div>
       </div>
@@ -1041,6 +1293,7 @@ export default function CustomerList(
                     </Button>
                   </div>
 
+                  {/* Account status */}
                   <div className="space-y-2">
                     <Label className="text-xs font-medium text-muted-foreground">
                       Status
@@ -1089,6 +1342,54 @@ export default function CustomerList(
                     </Select>
                   </div>
 
+                  {/* Phone verification */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      Phone verification
+                    </Label>
+
+                    <Select
+                      value={
+                        phoneVerificationFilter
+                      }
+                      onValueChange={(value) =>
+                        setPhoneVerificationFilter(
+                          value as PhoneVerificationFilter
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        className="
+                          h-11
+                          rounded-md
+                          text-base
+                          focus-visible:ring-2
+                          focus-visible:ring-ring
+                          focus-visible:ring-offset-2
+                          md:h-9
+                          md:text-sm
+                        "
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+
+                      <SelectContent className="rounded-lg">
+                        <SelectItem value="ALL">
+                          All phone statuses
+                        </SelectItem>
+
+                        <SelectItem value="verified">
+                          Phone Verified
+                        </SelectItem>
+
+                        <SelectItem value="not_verified">
+                          Phone Not Verified
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date range */}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label
@@ -1180,6 +1481,7 @@ export default function CustomerList(
           </div>
         </div>
 
+        {/* Active filters */}
         {(hasActiveFilters ||
           search) && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted/20 px-3 py-2 md:px-4">
@@ -1210,6 +1512,25 @@ export default function CustomerList(
                       'offline'
                     ? 'Offline'
                     : 'Deactivated'}
+              </Badge>
+            )}
+
+            {phoneVerificationFilter !==
+              'ALL' && (
+              <Badge
+                variant="secondary"
+                className="
+                  rounded-full
+                  px-2.5
+                  py-1
+                  text-[11px]
+                "
+              >
+                Phone:{' '}
+                {phoneVerificationFilter ===
+                'verified'
+                  ? 'Verified'
+                  : 'Not Verified'}
               </Badge>
             )}
 
@@ -1348,7 +1669,6 @@ export default function CustomerList(
           "
         >
           <CardContent className="p-0">
-
             {/* ========================================================
                 MOBILE
                 ======================================================== */}
@@ -1415,6 +1735,7 @@ export default function CustomerList(
                           </div>
 
                           <div className="mt-3 space-y-2">
+                            {/* Email */}
                             <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
                               <Mail className="h-4 w-4 shrink-0" />
 
@@ -1425,37 +1746,24 @@ export default function CustomerList(
                               </span>
                             </span>
 
-                            <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-                              <Phone className="h-4 w-4 shrink-0" />
+                            {/* Phone */}
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
 
-                              <span className="truncate">
+                              <span className="min-w-0 truncate text-sm text-muted-foreground">
                                 {
                                   c.phone
                                 }
                               </span>
 
-                              {c.isPhoneVerified && (
-                                <Badge
-                                  variant="outline"
-                                  className="
-                                    shrink-0
-                                    rounded-full
-                                    border-emerald-500/20
-                                    bg-emerald-500/10
-                                    px-2
-                                    py-0.5
-                                    text-[10px]
-                                    font-semibold
-                                    text-emerald-600
-                                    dark:text-emerald-400
-                                  "
-                                >
-                                  <CircleCheck className="mr-1 h-3 w-3" />
-                                  Verified
-                                </Badge>
-                              )}
-                            </span>
+                              <PhoneVerificationBadge
+                                customer={
+                                  c
+                                }
+                              />
+                            </div>
 
+                            {/* Created */}
                             <span className="flex items-center gap-2 text-xs text-muted-foreground">
                               <CalendarDays className="h-3.5 w-3.5 shrink-0" />
                               Created{' '}
@@ -1499,15 +1807,11 @@ export default function CustomerList(
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => {
-                            setEditingCustomer(
+                          onClick={() =>
+                            handleEditClick(
                               c
-                            );
-
-                            setModalOpen(
-                              true
-                            );
-                          }}
+                            )
+                          }
                           aria-label={`Edit ${c.fullname}`}
                           className="
                             h-11
@@ -1621,7 +1925,7 @@ export default function CustomerList(
               </div>
 
               <div className="overflow-x-auto">
-                <Table className="min-w-[1140px]">
+                <Table className="min-w-[1200px]">
                   <TableHeader>
                     <TableRow className="border-border bg-muted/35 hover:bg-muted/35">
                       <TableHead className="h-11 w-[235px] px-4 text-xs text-muted-foreground lg:px-5">
@@ -1636,7 +1940,7 @@ export default function CustomerList(
                         </SortableHeader>
                       </TableHead>
 
-                      <TableHead className="h-11 w-[210px] px-4 text-xs text-muted-foreground lg:px-5">
+                      <TableHead className="h-11 w-[260px] px-4 text-xs text-muted-foreground lg:px-5">
                         <SortableHeader field="phone">
                           Phone
                         </SortableHeader>
@@ -1677,6 +1981,7 @@ export default function CustomerList(
                             hover:bg-muted/20
                           "
                         >
+                          {/* Name */}
                           <TableCell className="px-4 py-2.5 lg:px-5">
                             <div className="flex items-center gap-3">
                               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
@@ -1702,6 +2007,7 @@ export default function CustomerList(
                             </div>
                           </TableCell>
 
+                          {/* Email */}
                           <TableCell className="px-4 py-2.5 lg:px-5">
                             <div className="flex min-w-0 items-center gap-2">
                               <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
@@ -1714,39 +2020,28 @@ export default function CustomerList(
                             </div>
                           </TableCell>
 
+                          {/* Phone + verification */}
                           <TableCell className="px-4 py-2.5 lg:px-5">
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
                               <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
 
-                              <span className="block max-w-[120px] truncate text-sm text-muted-foreground">
-                                {
-                                  c.phone
+                              <div className="min-w-0 flex-1">
+                                <span className="block max-w-[150px] truncate text-sm text-muted-foreground">
+                                  {
+                                    c.phone
+                                  }
+                                </span>
+                              </div>
+
+                              <PhoneVerificationBadge
+                                customer={
+                                  c
                                 }
-                              </span>
-
-                              {c.isPhoneVerified && (
-                                <Badge
-                                  variant="outline"
-                                  className="
-                                    shrink-0
-                                    rounded-full
-                                    border-emerald-500/20
-                                    bg-emerald-500/10
-                                    px-2
-                                    py-0.5
-                                    text-[10px]
-                                    font-semibold
-                                    text-emerald-600
-                                    dark:text-emerald-400
-                                  "
-                                >
-                                  <CircleCheck className="mr-1 h-3 w-3" />
-                                  Verified
-                                </Badge>
-                              )}
+                              />
                             </div>
                           </TableCell>
 
+                          {/* Created */}
                           <TableCell className="whitespace-nowrap px-4 py-2.5 text-sm text-muted-foreground lg:px-5">
                             <div className="flex flex-col">
                               <span>
@@ -1767,6 +2062,7 @@ export default function CustomerList(
                             </div>
                           </TableCell>
 
+                          {/* Updated */}
                           <TableCell className="whitespace-nowrap px-4 py-2.5 text-sm text-muted-foreground lg:px-5">
                             <div className="flex flex-col">
                               <span>
@@ -1787,6 +2083,7 @@ export default function CustomerList(
                             </div>
                           </TableCell>
 
+                          {/* Status */}
                           <TableCell className="px-4 py-2.5 lg:px-5">
                             <StatusPill
                               customer={
@@ -1795,6 +2092,7 @@ export default function CustomerList(
                             />
                           </TableCell>
 
+                          {/* Actions */}
                           <TableCell className="px-4 py-2.5 lg:px-5">
                             <div className="flex items-center justify-end gap-1">
                               <Button
@@ -1827,15 +2125,11 @@ export default function CustomerList(
                                 type="button"
                                 variant="outline"
                                 size="icon"
-                                onClick={() => {
-                                  setEditingCustomer(
+                                onClick={() =>
+                                  handleEditClick(
                                     c
-                                  );
-
-                                  setModalOpen(
-                                    true
-                                  );
-                                }}
+                                  )
+                                }
                                 aria-label={`Edit ${c.fullname}`}
                                 className="
                                   h-8
@@ -2085,6 +2379,130 @@ export default function CustomerList(
           </CardContent>
         </Card>
       )}
+
+      {/* ================================================================
+          CUSTOMER EDIT CONSENT
+          ================================================================ */}
+      <Dialog
+        open={editConsentOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleEditConsentCancel();
+          } else {
+            setEditConsentOpen(
+              true
+            );
+          }
+        }}
+      >
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-xl border-border bg-card p-0 shadow-xl">
+          <DialogHeader className="px-5 pt-5">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+
+            <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+              Customer Information Consent
+            </DialogTitle>
+
+            <DialogDescription className="pt-1 text-sm leading-5 text-muted-foreground">
+              You are responsible for editing this customer information.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mx-5 mt-2 rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-start gap-3">
+              <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  Please confirm before continuing.
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  By continuing, you acknowledge that you are responsible
+                  for the accuracy and appropriateness of any changes made
+                  to the selected customer&apos;s information.
+                </p>
+
+                {pendingEditCustomer && (
+                  <div className="mt-3 rounded-md border border-border bg-background px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Customer
+                    </p>
+
+                    <p className="mt-0.5 truncate text-sm font-medium text-foreground">
+                      {
+                        pendingEditCustomer.fullname
+                      }
+                    </p>
+
+                    {pendingEditCustomer.email && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {
+                          pendingEditCustomer.email
+                        }
+                      </p>
+                    )}
+
+                    {pendingEditCustomer.phone && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+
+                        <p className="truncate text-xs text-muted-foreground">
+                          {
+                            pendingEditCustomer.phone
+                          }
+                        </p>
+
+                        <PhoneVerificationBadge
+                          customer={
+                            pendingEditCustomer
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col gap-2 px-5 pb-5 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={
+                handleEditConsentCancel
+              }
+              className="
+                h-11
+                w-full
+                rounded-md
+                sm:w-auto
+              "
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              onClick={
+                handleEditConsentConfirm
+              }
+              className="
+                h-11
+                w-full
+                rounded-md
+                sm:w-auto
+              "
+            >
+              <ShieldCheck className="h-4 w-4" />
+              I Understand & Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ================================================================
           CUSTOMER FORM
