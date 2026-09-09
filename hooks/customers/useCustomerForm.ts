@@ -1,8 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import {
+  useState,
+} from 'react';
 
-import { toast } from 'sonner';
+import {
+  toast,
+} from 'sonner';
 
 import {
   customersApi,
@@ -10,33 +14,44 @@ import {
 
 import {
   validateEmail,
-  validatePhone,
   generateTempPassword,
 } from '@/app-utils/customers/helpers';
+
+import {
+  normalizePhilippinePhone,
+  isValidPhilippinePhone,
+} from '@/utils/phone';
 
 export function useCustomerForm(
   onSuccess: () => void
 ) {
-  const [form, setForm] =
-    useState({
-      fullname: '',
-      email: '',
-      phone: '',
-    });
+  const [
+    form,
+    setForm,
+  ] = useState({
+    fullname: '',
+    email: '',
+    phone: '',
+  });
 
   const [
     editingCustomer,
     setEditingCustomer,
   ] = useState<any>(null);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
   const [
     formErrors,
     setFormErrors,
   ] = useState<
-    Record<string, string>
+    Record<
+      string,
+      string | undefined
+    >
   >({});
 
   const [
@@ -100,7 +115,10 @@ export function useCustomerForm(
 
   const validateForm =
     (): boolean => {
-      const errors: any = {};
+      const errors: Record<
+        string,
+        string
+      > = {};
 
       if (
         !form.fullname.trim()
@@ -123,18 +141,23 @@ export function useCustomerForm(
           'Please enter a valid email address.';
       }
 
+      const normalizedPhone =
+        normalizePhilippinePhone(
+          form.phone
+        );
+
       if (
         !form.phone.trim()
       ) {
         errors.phone =
           'Phone number is required.';
       } else if (
-        !validatePhone(
-          form.phone.trim()
+        !isValidPhilippinePhone(
+          normalizedPhone
         )
       ) {
         errors.phone =
-          'Phone must be 7-15 digits, optional leading +.';
+          'Enter a valid Philippine mobile number, e.g. 09157803417 or +639157803417.';
       }
 
       setFormErrors(
@@ -160,24 +183,28 @@ export function useCustomerForm(
       setApiError(null);
 
       try {
+        const normalizedPhone =
+          normalizePhilippinePhone(
+            form.phone
+          );
+
         const payload = {
           fullname:
             form.fullname.trim(),
 
           email:
-            form.email.trim(),
+            form.email
+              .trim()
+              .toLowerCase(),
 
+          /*
+           * Always send normalized
+           * international format.
+           */
           phone:
-            form.phone.trim(),
+            normalizedPhone,
         };
 
-        /*
-         * Existing customer update.
-         *
-         * After the API updates the database, Supabase Realtime
-         * broadcasts the UPDATE event and every subscribed customer
-         * module performs a fresh synchronization.
-         */
         if (
           editingCustomer
         ) {
@@ -210,61 +237,57 @@ export function useCustomerForm(
           );
 
           onSuccess();
-        } else {
-          /*
-           * Existing customer creation.
-           *
-           * The database INSERT causes a realtime INSERT event,
-           * which will update all customer-list instances.
-           */
-          const tempPw =
-            generateTempPassword(
-              form.fullname.trim()
-            );
 
-          const res =
-            await customersApi.create(
-              {
-                ...payload,
-                password:
-                  tempPw,
-                tempPassword:
-                  true,
-              }
-            );
-
-          if (res.error) {
-            setApiError({
-              type:
-                res.errorType ||
-                'fve',
-
-              title:
-                res.errorTitle ||
-                'Error',
-
-              message:
-                res.errorMessage ||
-                'Operation failed.',
-            });
-
-            return;
-          }
-
-          toast.success(
-            'Customer created.'
-          );
-
-          setTempPassword(
-            tempPw
-          );
-
-          setShowTempDialog(
-            true
-          );
-
-          onSuccess();
+          return;
         }
+
+        const tempPw =
+          generateTempPassword(
+            form.fullname.trim()
+          );
+
+        const res =
+          await customersApi.create({
+            ...payload,
+
+            password:
+              tempPw,
+
+            tempPassword:
+              true,
+          });
+
+        if (res.error) {
+          setApiError({
+            type:
+              res.errorType ||
+              'fve',
+
+            title:
+              res.errorTitle ||
+              'Error',
+
+            message:
+              res.errorMessage ||
+              'Operation failed.',
+          });
+
+          return;
+        }
+
+        toast.success(
+          'Customer created.'
+        );
+
+        setTempPassword(
+          tempPw
+        );
+
+        setShowTempDialog(
+          true
+        );
+
+        onSuccess();
       } catch (err: any) {
         setApiError({
           type: 'se',

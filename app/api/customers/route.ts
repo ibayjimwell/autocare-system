@@ -1,32 +1,41 @@
-import { Database } from "@/lib/drizzle";
-import { Customers } from "@/database/models/customers/customers.model";
-import { NextRequest, NextResponse } from "next/server";
+import { Database } from '@/lib/drizzle';
+import { Customers } from '@/database/models/customers/customers.model';
+import { NextRequest, NextResponse } from 'next/server';
+
 import {
   getFormDataEntries,
   hashPassword,
-} from "@/utils/shared";
+} from '@/utils/shared';
+
 import {
   validateCustomerData,
-} from "@/utils/customers";
-import { eq } from "drizzle-orm";
+} from '@/utils/customers';
+
+import {
+  normalizePhilippinePhone,
+} from '@/utils/phone';
+
+import { eq } from 'drizzle-orm';
+
 import {
   customersTriggers,
 } from '@/triggers/customers';
 
 // ------------------------------------------------------------------
-// POST /api/customers – Create a new customer (Sign-up)
+// POST /api/customers
+// Create a new customer
 // ------------------------------------------------------------------
 export async function POST(
   req: NextRequest
 ) {
   let rawData: any;
 
+  // ---------------------------------------------------------------
   // 1. Parse form data
+  // ---------------------------------------------------------------
   try {
     rawData =
-      await getFormDataEntries(
-        req
-      );
+      await getFormDataEntries(req);
 
     console.log(
       '[POST /api/customers] Parsed rawData:',
@@ -45,11 +54,11 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: "fe",
+        errorType: 'fe',
         errorTitle:
-          "Form data error",
+          'Form data error',
         errorMessage:
-          "Could not read submitted form data.",
+          'Could not read submitted form data.',
         errorLog:
           e instanceof Error
             ? e.message
@@ -61,15 +70,32 @@ export async function POST(
     );
   }
 
-  // 2. Validate input
+  // ---------------------------------------------------------------
+  // 2. Normalize phone BEFORE validation
+  // ---------------------------------------------------------------
+  const normalizedPhone =
+    normalizePhilippinePhone(
+      rawData.phone
+    );
+
+  rawData.phone =
+    normalizedPhone;
+
+  console.log(
+    '[POST /api/customers] Normalized phone:',
+    normalizedPhone
+  );
+
+  // ---------------------------------------------------------------
+  // 3. Validate customer data
+  // ---------------------------------------------------------------
   const validationErrors =
     validateCustomerData(
       rawData
     );
 
   if (
-    validationErrors.length >
-    0
+    validationErrors.length > 0
   ) {
     console.warn(
       '[POST /api/customers] Validation errors:',
@@ -79,13 +105,11 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: "fve",
+        errorType: 'fve',
         errorTitle:
-          "Creating failed",
+          'Creating failed',
         errorMessage:
-          validationErrors.join(
-            " "
-          ),
+          validationErrors.join(' '),
         errorLog:
           validationErrors,
       },
@@ -95,46 +119,60 @@ export async function POST(
     );
   }
 
-  // 3. Check email uniqueness
-  const emailToCheck =
-    rawData.email.trim();
+  // ---------------------------------------------------------------
+  // 4. Normalize standard values
+  // ---------------------------------------------------------------
+  const fullname =
+    rawData.fullname.trim();
 
+  const email =
+    rawData.email
+      .trim()
+      .toLowerCase();
+
+  const phone =
+    normalizedPhone;
+
+  // ---------------------------------------------------------------
+  // 5. Check email uniqueness
+  // ---------------------------------------------------------------
   console.log(
     '[POST /api/customers] Checking email uniqueness:',
-    emailToCheck
+    email
   );
 
   try {
     const existingEmail =
-      await Database.select()
+      await Database.select({
+        id: Customers.id,
+      })
         .from(Customers)
         .where(
           eq(
             Customers.email,
-            emailToCheck
+            email
           )
         )
         .limit(1);
 
     console.log(
-      '[POST /api/customers] Email check result:',
-      existingEmail.length
+      '[POST /api/customers] Email check:',
+      existingEmail.length > 0
         ? 'DUPLICATE'
         : 'OK'
     );
 
     if (
-      existingEmail.length >
-      0
+      existingEmail.length > 0
     ) {
       return NextResponse.json(
         {
           error: true,
-          errorType: "fve",
+          errorType: 'fve',
           errorTitle:
-            "Duplicate email",
+            'Duplicate email',
           errorMessage:
-            `Email "${emailToCheck}" is already registered.`,
+            `Email "${email}" is already registered.`,
           errorLog: null,
         },
         {
@@ -151,11 +189,11 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: "dbe",
+        errorType: 'dbe',
         errorTitle:
-          "Database error",
+          'Database error',
         errorMessage:
-          "Unable to verify email.",
+          'Unable to verify email.',
         errorLog:
           e instanceof Error
             ? e.message
@@ -167,46 +205,46 @@ export async function POST(
     );
   }
 
-  // 4. Check phone uniqueness
-  const phoneToCheck =
-    rawData.phone.trim();
-
+  // ---------------------------------------------------------------
+  // 6. Check normalized phone uniqueness
+  // ---------------------------------------------------------------
   console.log(
     '[POST /api/customers] Checking phone uniqueness:',
-    phoneToCheck
+    phone
   );
 
   try {
     const existingPhone =
-      await Database.select()
+      await Database.select({
+        id: Customers.id,
+      })
         .from(Customers)
         .where(
           eq(
             Customers.phone,
-            phoneToCheck
+            phone
           )
         )
         .limit(1);
 
     console.log(
-      '[POST /api/customers] Phone check result:',
-      existingPhone.length
+      '[POST /api/customers] Phone check:',
+      existingPhone.length > 0
         ? 'DUPLICATE'
         : 'OK'
     );
 
     if (
-      existingPhone.length >
-      0
+      existingPhone.length > 0
     ) {
       return NextResponse.json(
         {
           error: true,
-          errorType: "fve",
+          errorType: 'fve',
           errorTitle:
-            "Duplicate phone",
+            'Duplicate phone',
           errorMessage:
-            `Phone "${phoneToCheck}" is already registered.`,
+            `Phone "${phone}" is already registered.`,
           errorLog: null,
         },
         {
@@ -223,11 +261,11 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: "dbe",
+        errorType: 'dbe',
         errorTitle:
-          "Database error",
+          'Database error',
         errorMessage:
-          "Unable to verify phone.",
+          'Unable to verify phone.',
         errorLog:
           e instanceof Error
             ? e.message
@@ -239,7 +277,9 @@ export async function POST(
     );
   }
 
-  // 5. Hash password
+  // ---------------------------------------------------------------
+  // 7. Hash password
+  // ---------------------------------------------------------------
   let hashedPassword: string;
 
   try {
@@ -256,11 +296,11 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: "se",
+        errorType: 'se',
         errorTitle:
-          "Password hashing failed",
+          'Password hashing failed',
         errorMessage:
-          "Internal error while securing password.",
+          'Internal error while securing password.',
         errorLog:
           e instanceof Error
             ? e.message
@@ -272,21 +312,26 @@ export async function POST(
     );
   }
 
-  // 6. Insert customer
+  // ---------------------------------------------------------------
+  // 8. Insert customer
+  // ---------------------------------------------------------------
   try {
     const [newCustomer] =
       await Database.insert(
         Customers
       )
         .values({
-          fullname:
-            rawData.fullname.trim(),
+          fullname,
 
-          email:
-            emailToCheck,
+          email,
 
-          phone:
-            phoneToCheck,
+          /*
+           * ALWAYS store canonical phone.
+           *
+           * Example:
+           * +639157803417
+           */
+          phone,
 
           password:
             hashedPassword,
@@ -294,6 +339,19 @@ export async function POST(
           tempPassword:
             rawData.tempPassword ??
             true,
+
+          /*
+           * New customers still require
+           * phone verification.
+           */
+          isPhoneVerified:
+            false,
+
+          deactivated:
+            false,
+
+          isOnline:
+            false,
         })
         .returning();
 
@@ -307,19 +365,23 @@ export async function POST(
       ...customerWithoutPassword
     } = newCustomer;
 
-    customersTriggers.onNew({
-      fullname:
-        customerWithoutPassword.fullname,
+    customersTriggers
+      .onNew({
+        fullname:
+          customerWithoutPassword.fullname,
 
-      email:
-        customerWithoutPassword.email,
-    }).catch(console.error);
+        email:
+          customerWithoutPassword.email,
+      })
+      .catch(
+        console.error
+      );
 
     return NextResponse.json(
       {
         error: false,
         message:
-          "Customer registered successfully.",
+          'Customer registered successfully.',
         data:
           customerWithoutPassword,
       },
@@ -336,11 +398,11 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: "dbe",
+        errorType: 'dbe',
         errorTitle:
-          "Database insertion failed",
+          'Database insertion failed',
         errorMessage:
-          "Could not save customer.",
+          'Could not save customer.',
         errorLog:
           e instanceof Error
             ? e.message
@@ -354,13 +416,15 @@ export async function POST(
 }
 
 // ------------------------------------------------------------------
-// GET /api/customers – Retrieve all customers (without passwords)
+// GET /api/customers
+// Retrieve all customers
 // ------------------------------------------------------------------
 export async function GET() {
   try {
     const customers =
       await Database.select({
-        id: Customers.id,
+        id:
+          Customers.id,
 
         fullname:
           Customers.fullname,
@@ -371,11 +435,6 @@ export async function GET() {
         phone:
           Customers.phone,
 
-        /*
-         * IMPORTANT:
-         * Return the phone verification state so the
-         * Customer Module can display and filter it.
-         */
         isPhoneVerified:
           Customers.isPhoneVerified,
 
@@ -388,11 +447,6 @@ export async function GET() {
         updatedAt:
           Customers.updatedAt,
 
-        /*
-         * Existing presence fields are included so the
-         * realtime/presence UI continues to have the same
-         * information available.
-         */
         isOnline:
           Customers.isOnline,
 
@@ -408,7 +462,7 @@ export async function GET() {
       {
         error: false,
         message:
-          "Customers retrieved successfully.",
+          'Customers retrieved successfully.',
         data: customers,
       },
       {
@@ -419,11 +473,11 @@ export async function GET() {
     return NextResponse.json(
       {
         error: true,
-        errorType: "dbe",
+        errorType: 'dbe',
         errorTitle:
-          "Database query error",
+          'Database query error',
         errorMessage:
-          "Unable to fetch customers.",
+          'Unable to fetch customers.',
         errorLog:
           e instanceof Error
             ? e.message

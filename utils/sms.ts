@@ -1,34 +1,118 @@
 // utils/sms.ts
+
 import HttpSms from 'httpsms';
 
-// Get your API key from https://httpsms.com/settings
-const API_KEY = process.env.HTTPSMS_API_KEY!;
+import {
+  normalizePhilippinePhone,
+  isValidPhilippinePhone,
+} from '@/utils/phone';
 
-// The phone number registered in your httpSMS Android app
-// (the "from" number – this must match the SIM in your Android phone)
-const FROM_NUMBER = process.env.HTTPSMS_FROM_NUMBER!;
+// ------------------------------------------------------------------
+// httpSMS configuration
+// ------------------------------------------------------------------
 
-// Initialize the httpSMS client
-const client = new HttpSms(API_KEY);
+const API_KEY =
+  process.env.HTTPSMS_API_KEY;
 
-export async function sendSMS(to: string, message: string) {
+const FROM_NUMBER =
+  process.env.HTTPSMS_FROM_NUMBER;
+
+if (!API_KEY) {
+  console.warn(
+    '[httpSMS] HTTPSMS_API_KEY is not configured.'
+  );
+}
+
+if (!FROM_NUMBER) {
+  console.warn(
+    '[httpSMS] HTTPSMS_FROM_NUMBER is not configured.'
+  );
+}
+
+const client =
+  new HttpSms(API_KEY!);
+
+// ------------------------------------------------------------------
+// Send SMS
+// ------------------------------------------------------------------
+export async function sendSMS(
+  to: string,
+  message: string
+) {
+  const normalizedTo =
+    normalizePhilippinePhone(to);
+
+  if (
+    !isValidPhilippinePhone(
+      normalizedTo
+    )
+  ) {
+    throw new Error(
+      `Invalid Philippine phone number: ${to}`
+    );
+  }
+
+  if (!message || message.trim() === '') {
+    throw new Error(
+      'SMS message cannot be empty.'
+    );
+  }
+
+  if (!API_KEY) {
+    throw new Error(
+      'HTTPSMS_API_KEY is not configured.'
+    );
+  }
+
+  if (!FROM_NUMBER) {
+    throw new Error(
+      'HTTPSMS_FROM_NUMBER is not configured.'
+    );
+  }
+
   try {
-    // Send the SMS via the Android gateway
-    const result = await client.messages.postSend({
-      content: message,
-      from: FROM_NUMBER,   // The phone number of your Android phone
-      to: to,              // The recipient's phone number
-    });
+    console.log(
+      `[httpSMS] Sending SMS to ${normalizedTo}`
+    );
 
-    console.log(`✅ SMS sent to ${to}, message ID: ${result.id}`);
+    const result =
+      await client.messages.postSend({
+        content:
+          message.trim(),
+
+        from:
+          FROM_NUMBER,
+
+        /*
+         * httpSMS receives:
+         *
+         * +639157803417
+         */
+        to:
+          normalizedTo,
+      });
+
+    console.log(
+      `[httpSMS] SMS sent successfully. recipient=${normalizedTo}, messageId=${result.id}`
+    );
+
     return result;
   } catch (error) {
-    console.error('❌ SMS send error:', error);
+    console.error(
+      `[httpSMS] Failed to send SMS to ${normalizedTo}:`,
+      error
+    );
 
-    // For development, log the OTP instead of failing
-    console.log(`📱 OTP for ${to}: ${message}`);
+    /*
+     * Development logging only.
+     *
+     * Do not rely on this as a production
+     * SMS delivery mechanism.
+     */
+    console.log(
+      `[httpSMS] OTP/message for ${normalizedTo}: ${message}`
+    );
 
-    // Re-throw so the caller can handle it
     throw error;
   }
 }
