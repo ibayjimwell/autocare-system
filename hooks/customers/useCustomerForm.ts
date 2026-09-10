@@ -37,7 +37,9 @@ export function useCustomerForm(
   const [
     editingCustomer,
     setEditingCustomer,
-  ] = useState<any>(null);
+  ] = useState<any>(
+    null
+  );
 
   const [
     saving,
@@ -64,12 +66,20 @@ export function useCustomerForm(
   const [
     showTempDialog,
     setShowTempDialog,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
 
   const [
     apiError,
     setApiError,
-  ] = useState<any>(null);
+  ] = useState<any>(
+    null
+  );
+
+  // ---------------------------------------------------------------
+  // Reset form
+  // ---------------------------------------------------------------
 
   const resetForm = () => {
     setForm({
@@ -79,8 +89,13 @@ export function useCustomerForm(
     });
 
     setFormErrors({});
+
     setApiError(null);
   };
+
+  // ---------------------------------------------------------------
+  // Open create
+  // ---------------------------------------------------------------
 
   const openCreate = () => {
     setEditingCustomer(
@@ -89,6 +104,10 @@ export function useCustomerForm(
 
     resetForm();
   };
+
+  // ---------------------------------------------------------------
+  // Open edit
+  // ---------------------------------------------------------------
 
   const openEdit = (
     customer: any
@@ -101,17 +120,28 @@ export function useCustomerForm(
       fullname:
         customer.fullname ||
         '',
+
+      /*
+       * Database NULL becomes
+       * an empty string for the form.
+       */
       email:
         customer.email ||
         '',
+
       phone:
         customer.phone ||
         '',
     });
 
     setFormErrors({});
+
     setApiError(null);
   };
+
+  // ---------------------------------------------------------------
+  // Validate form
+  // ---------------------------------------------------------------
 
   const validateForm =
     (): boolean => {
@@ -120,6 +150,10 @@ export function useCustomerForm(
         string
       > = {};
 
+      // -----------------------------------------------------------
+      // Full Name
+      // -----------------------------------------------------------
+
       if (
         !form.fullname.trim()
       ) {
@@ -127,19 +161,30 @@ export function useCustomerForm(
           'Full name is required.';
       }
 
+      // -----------------------------------------------------------
+      // Email
+      //
+      // OPTIONAL
+      // -----------------------------------------------------------
+
       if (
-        !form.email.trim()
+        form.email.trim()
       ) {
-        errors.email =
-          'Email is required.';
-      } else if (
-        !validateEmail(
-          form.email.trim()
-        )
-      ) {
-        errors.email =
-          'Please enter a valid email address.';
+        if (
+          !validateEmail(
+            form.email.trim()
+          )
+        ) {
+          errors.email =
+            'Please enter a valid email address.';
+        }
       }
+
+      // -----------------------------------------------------------
+      // Phone
+      //
+      // REQUIRED
+      // -----------------------------------------------------------
 
       const normalizedPhone =
         normalizePhilippinePhone(
@@ -171,6 +216,10 @@ export function useCustomerForm(
       );
     };
 
+  // ---------------------------------------------------------------
+  // Save customer
+  // ---------------------------------------------------------------
+
   const handleSave =
     async () => {
       if (
@@ -180,34 +229,59 @@ export function useCustomerForm(
       }
 
       setSaving(true);
+
       setApiError(null);
 
       try {
+        // ---------------------------------------------------------
+        // Normalize phone
+        // ---------------------------------------------------------
+
         const normalizedPhone =
           normalizePhilippinePhone(
             form.phone
           );
 
-        const payload = {
-          fullname:
-            form.fullname.trim(),
+        // ---------------------------------------------------------
+        // Normalize email
+        //
+        // Empty input becomes null
+        // internally.
+        // ---------------------------------------------------------
 
-          email:
-            form.email
-              .trim()
-              .toLowerCase(),
+        const normalizedEmail =
+          form.email.trim()
+            ? form.email
+                .trim()
+                .toLowerCase()
+            : null;
 
-          /*
-           * Always send normalized
-           * international format.
-           */
-          phone:
-            normalizedPhone,
-        };
+        // ---------------------------------------------------------
+        // UPDATE EXISTING CUSTOMER
+        // ---------------------------------------------------------
 
         if (
           editingCustomer
         ) {
+          /*
+           * JSON request:
+           *
+           * null stays null.
+           *
+           * This allows an existing email
+           * to be removed.
+           */
+          const payload = {
+            fullname:
+              form.fullname.trim(),
+
+            email:
+              normalizedEmail,
+
+            phone:
+              normalizedPhone,
+          };
+
           const res =
             await customersApi.update(
               editingCustomer.id,
@@ -233,7 +307,8 @@ export function useCustomerForm(
           }
 
           toast.success(
-            'Customer updated.'
+            res.message ||
+              'Customer updated.'
           );
 
           onSuccess();
@@ -241,21 +316,60 @@ export function useCustomerForm(
           return;
         }
 
+        // ---------------------------------------------------------
+        // CREATE NEW CUSTOMER
+        // ---------------------------------------------------------
+
         const tempPw =
           generateTempPassword(
             form.fullname.trim()
           );
 
+        /*
+         * IMPORTANT:
+         *
+         * customersApi.create()
+         * sends FormData.
+         *
+         * FormData converts:
+         *
+         * null
+         * ↓
+         * "null"
+         *
+         * Therefore empty email MUST be
+         * sent as an empty string here.
+         *
+         * The backend converts:
+         *
+         * ""
+         * ↓
+         * null
+         *
+         * before database insertion.
+         */
+        const createPayload = {
+          fullname:
+            form.fullname.trim(),
+
+          email:
+            normalizedEmail ||
+            '',
+
+          phone:
+            normalizedPhone,
+
+          password:
+            tempPw,
+
+          tempPassword:
+            true,
+        };
+
         const res =
-          await customersApi.create({
-            ...payload,
-
-            password:
-              tempPw,
-
-            tempPassword:
-              true,
-          });
+          await customersApi.create(
+            createPayload
+          );
 
         if (res.error) {
           setApiError({
@@ -279,6 +393,10 @@ export function useCustomerForm(
           'Customer created.'
         );
 
+        // ---------------------------------------------------------
+        // Show generated temporary password
+        // ---------------------------------------------------------
+
         setTempPassword(
           tempPw
         );
@@ -288,13 +406,23 @@ export function useCustomerForm(
         );
 
         onSuccess();
-      } catch (err: any) {
+      } catch (
+        err: any
+      ) {
+        console.error(
+          '[useCustomerForm] Save customer error:',
+          err
+        );
+
         setApiError({
-          type: 'se',
+          type:
+            'se',
+
           title:
             'Unexpected Error',
+
           message:
-            err.message ||
+            err?.message ||
             'Something went wrong.',
         });
       } finally {
@@ -307,6 +435,7 @@ export function useCustomerForm(
     setForm,
 
     editingCustomer,
+
     saving,
 
     formErrors,
@@ -317,9 +446,11 @@ export function useCustomerForm(
 
     openCreate,
     openEdit,
+
     handleSave,
 
     tempPassword,
+
     showTempDialog,
     setShowTempDialog,
   };

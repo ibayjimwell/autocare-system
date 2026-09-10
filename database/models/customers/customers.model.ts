@@ -18,16 +18,24 @@ export const Customers = pgTable(
       length: 255,
     }).notNull(),
 
+    /*
+     * Email is OPTIONAL.
+     *
+     * NULL is allowed.
+     *
+     * If an email is provided, it remains unique.
+     *
+     * PostgreSQL allows multiple NULL values
+     * in a UNIQUE column, which is what we want.
+     */
     email: varchar('email', {
       length: 255,
-    })
-      .unique()
-      .notNull(),
+    }).unique(),
 
     /*
-     * IMPORTANT:
+     * Phone is REQUIRED.
      *
-     * Phones are stored in canonical Philippine
+     * Always stored in canonical Philippine
      * international format:
      *
      * +639XXXXXXXXX
@@ -45,11 +53,15 @@ export const Customers = pgTable(
       length: 255,
     }).notNull(),
 
-    deactivated: boolean('deactivated')
+    deactivated: boolean(
+      'deactivated'
+    )
       .default(false)
       .notNull(),
 
-    tempPassword: boolean('temp_password')
+    tempPassword: boolean(
+      'temp_password'
+    )
       .default(true)
       .notNull(),
 
@@ -65,7 +77,9 @@ export const Customers = pgTable(
      * true  = mobile app currently active
      * false = mobile app not active
      */
-    isOnline: boolean('is_online')
+    isOnline: boolean(
+      'is_online'
+    )
       .default(false)
       .notNull(),
 

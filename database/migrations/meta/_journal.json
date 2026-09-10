@@ -225,6 +225,13 @@
       "when": 1788694412952,
       "tag": "0031_grey_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789036414451,
+      "tag": "0032_cultured_legion",
+      "breakpoints": true
     }
   ]
 }

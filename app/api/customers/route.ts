@@ -1,6 +1,13 @@
 import { Database } from '@/lib/drizzle';
-import { Customers } from '@/database/models/customers/customers.model';
-import { NextRequest, NextResponse } from 'next/server';
+
+import {
+  Customers,
+} from '@/database/models/customers/customers.model';
+
+import {
+  NextRequest,
+  NextResponse,
+} from 'next/server';
 
 import {
   getFormDataEntries,
@@ -15,11 +22,68 @@ import {
   normalizePhilippinePhone,
 } from '@/utils/phone';
 
-import { eq } from 'drizzle-orm';
+import {
+  eq,
+} from 'drizzle-orm';
 
 import {
   customersTriggers,
 } from '@/triggers/customers';
+
+// ------------------------------------------------------------------
+// Normalize optional email.
+//
+// IMPORTANT:
+//
+// FormData converts:
+//   null      -> "null"
+//   undefined -> "undefined"
+//
+// Both must be treated as no email.
+//
+// Returns:
+//   null                    when email is not provided
+//   lowercase email string  when email exists
+// ------------------------------------------------------------------
+function normalizeOptionalEmail(
+  value: unknown
+): string | null {
+  // Actual null / undefined
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  // Non-string values are not valid email values.
+  if (
+    typeof value !== 'string'
+  ) {
+    return null;
+  }
+
+  const normalized =
+    value
+      .trim()
+      .toLowerCase();
+
+  /*
+   * FormData can turn JavaScript null
+   * into the literal string "null".
+   *
+   * Treat those values as empty.
+   */
+  if (
+    normalized === '' ||
+    normalized === 'null' ||
+    normalized === 'undefined'
+  ) {
+    return null;
+  }
+
+  return normalized;
+}
 
 // ------------------------------------------------------------------
 // POST /api/customers
@@ -35,7 +99,9 @@ export async function POST(
   // ---------------------------------------------------------------
   try {
     rawData =
-      await getFormDataEntries(req);
+      await getFormDataEntries(
+        req
+      );
 
     console.log(
       '[POST /api/customers] Parsed rawData:',
@@ -54,7 +120,8 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: 'fe',
+        errorType:
+          'fe',
         errorTitle:
           'Form data error',
         errorMessage:
@@ -72,6 +139,13 @@ export async function POST(
 
   // ---------------------------------------------------------------
   // 2. Normalize phone BEFORE validation
+  //
+  // Phone is REQUIRED.
+  //
+  // Example:
+  // 09157803413
+  //      ↓
+  // +639157803413
   // ---------------------------------------------------------------
   const normalizedPhone =
     normalizePhilippinePhone(
@@ -81,13 +155,42 @@ export async function POST(
   rawData.phone =
     normalizedPhone;
 
+  // ---------------------------------------------------------------
+  // 3. Normalize OPTIONAL email BEFORE validation
+  //
+  // IMPORTANT:
+  //
+  // If FormData sent:
+  //
+  // "null"
+  //
+  // this becomes:
+  //
+  // null
+  //
+  // before validateCustomerData() is called.
+  // ---------------------------------------------------------------
+  const normalizedEmail =
+    normalizeOptionalEmail(
+      rawData.email
+    );
+
+  rawData.email =
+    normalizedEmail;
+
   console.log(
-    '[POST /api/customers] Normalized phone:',
-    normalizedPhone
+    '[POST /api/customers] Normalized values:',
+    {
+      phone:
+        normalizedPhone,
+
+      email:
+        normalizedEmail,
+    }
   );
 
   // ---------------------------------------------------------------
-  // 3. Validate customer data
+  // 4. Validate customer data
   // ---------------------------------------------------------------
   const validationErrors =
     validateCustomerData(
@@ -95,7 +198,8 @@ export async function POST(
     );
 
   if (
-    validationErrors.length > 0
+    validationErrors.length >
+    0
   ) {
     console.warn(
       '[POST /api/customers] Validation errors:',
@@ -105,11 +209,14 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: 'fve',
+        errorType:
+          'fve',
         errorTitle:
           'Creating failed',
         errorMessage:
-          validationErrors.join(' '),
+          validationErrors.join(
+            ' '
+          ),
         errorLog:
           validationErrors,
       },
@@ -120,103 +227,128 @@ export async function POST(
   }
 
   // ---------------------------------------------------------------
-  // 4. Normalize standard values
+  // 5. Normalize standard values
   // ---------------------------------------------------------------
   const fullname =
     rawData.fullname.trim();
 
+  /*
+   * Email is OPTIONAL.
+   *
+   * When absent:
+   *
+   * email = null
+   */
   const email =
-    rawData.email
-      .trim()
-      .toLowerCase();
+    normalizedEmail;
 
+  /*
+   * Phone is REQUIRED and already
+   * normalized.
+   */
   const phone =
     normalizedPhone;
 
   // ---------------------------------------------------------------
-  // 5. Check email uniqueness
+  // 6. Check email uniqueness
+  //
+  // Only perform this query when
+  // an email was actually provided.
   // ---------------------------------------------------------------
-  console.log(
-    '[POST /api/customers] Checking email uniqueness:',
-    email
-  );
+  if (email) {
+    try {
+      console.log(
+        '[POST /api/customers] Checking email uniqueness:',
+        email
+      );
 
-  try {
-    const existingEmail =
-      await Database.select({
-        id: Customers.id,
-      })
-        .from(Customers)
-        .where(
-          eq(
-            Customers.email,
-            email
+      const existingEmail =
+        await Database.select({
+          id:
+            Customers.id,
+        })
+          .from(Customers)
+          .where(
+            eq(
+              Customers.email,
+              email
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-    console.log(
-      '[POST /api/customers] Email check:',
-      existingEmail.length > 0
-        ? 'DUPLICATE'
-        : 'OK'
-    );
+      console.log(
+        '[POST /api/customers] Email check:',
+        existingEmail.length >
+          0
+          ? 'DUPLICATE'
+          : 'OK'
+      );
 
-    if (
-      existingEmail.length > 0
-    ) {
+      if (
+        existingEmail.length >
+        0
+      ) {
+        return NextResponse.json(
+          {
+            error: true,
+            errorType:
+              'fve',
+            errorTitle:
+              'Duplicate email',
+            errorMessage:
+              `Email "${email}" is already registered.`,
+            errorLog:
+              null,
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+    } catch (e) {
+      console.error(
+        '[POST /api/customers] Email check error:',
+        e
+      );
+
       return NextResponse.json(
         {
           error: true,
-          errorType: 'fve',
+          errorType:
+            'dbe',
           errorTitle:
-            'Duplicate email',
+            'Database error',
           errorMessage:
-            `Email "${email}" is already registered.`,
-          errorLog: null,
+            'Unable to verify email.',
+          errorLog:
+            e instanceof Error
+              ? e.message
+              : String(e),
         },
         {
-          status: 409,
+          status: 500,
         }
       );
     }
-  } catch (e) {
-    console.error(
-      '[POST /api/customers] Email check error:',
-      e
-    );
-
-    return NextResponse.json(
-      {
-        error: true,
-        errorType: 'dbe',
-        errorTitle:
-          'Database error',
-        errorMessage:
-          'Unable to verify email.',
-        errorLog:
-          e instanceof Error
-            ? e.message
-            : String(e),
-      },
-      {
-        status: 500,
-      }
+  } else {
+    console.log(
+      '[POST /api/customers] Email is optional. Skipping email uniqueness check.'
     );
   }
 
   // ---------------------------------------------------------------
-  // 6. Check normalized phone uniqueness
+  // 7. Check normalized phone uniqueness
   // ---------------------------------------------------------------
-  console.log(
-    '[POST /api/customers] Checking phone uniqueness:',
-    phone
-  );
-
   try {
+    console.log(
+      '[POST /api/customers] Checking phone uniqueness:',
+      phone
+    );
+
     const existingPhone =
       await Database.select({
-        id: Customers.id,
+        id:
+          Customers.id,
       })
         .from(Customers)
         .where(
@@ -229,23 +361,27 @@ export async function POST(
 
     console.log(
       '[POST /api/customers] Phone check:',
-      existingPhone.length > 0
+      existingPhone.length >
+        0
         ? 'DUPLICATE'
         : 'OK'
     );
 
     if (
-      existingPhone.length > 0
+      existingPhone.length >
+      0
     ) {
       return NextResponse.json(
         {
           error: true,
-          errorType: 'fve',
+          errorType:
+            'fve',
           errorTitle:
             'Duplicate phone',
           errorMessage:
             `Phone "${phone}" is already registered.`,
-          errorLog: null,
+          errorLog:
+            null,
         },
         {
           status: 409,
@@ -261,7 +397,8 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: 'dbe',
+        errorType:
+          'dbe',
         errorTitle:
           'Database error',
         errorMessage:
@@ -278,7 +415,7 @@ export async function POST(
   }
 
   // ---------------------------------------------------------------
-  // 7. Hash password
+  // 8. Hash password
   // ---------------------------------------------------------------
   let hashedPassword: string;
 
@@ -296,7 +433,8 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: 'se',
+        errorType:
+          'se',
         errorTitle:
           'Password hashing failed',
         errorMessage:
@@ -313,23 +451,33 @@ export async function POST(
   }
 
   // ---------------------------------------------------------------
-  // 8. Insert customer
+  // 9. Insert customer
   // ---------------------------------------------------------------
   try {
-    const [newCustomer] =
+    const [
+      newCustomer,
+    ] =
       await Database.insert(
         Customers
       )
         .values({
           fullname,
 
+          /*
+           * Optional email.
+           *
+           * This will be:
+           *
+           * null
+           *
+           * when no email was provided.
+           */
           email,
 
           /*
-           * ALWAYS store canonical phone.
+           * ALWAYS canonical:
            *
-           * Example:
-           * +639157803417
+           * +639XXXXXXXXX
            */
           phone,
 
@@ -341,8 +489,8 @@ export async function POST(
             true,
 
           /*
-           * New customers still require
-           * phone verification.
+           * New customer must verify
+           * their phone.
            */
           isPhoneVerified:
             false,
@@ -357,25 +505,47 @@ export async function POST(
 
     console.log(
       '[POST /api/customers] Customer created:',
-      newCustomer.id
+      {
+        id:
+          newCustomer.id,
+
+        fullname:
+          newCustomer.fullname,
+
+        email:
+          newCustomer.email,
+
+        phone:
+          newCustomer.phone,
+      }
     );
 
+    // -------------------------------------------------------------
+    // Remove password before response
+    // -------------------------------------------------------------
     const {
       password,
       ...customerWithoutPassword
     } = newCustomer;
 
-    customersTriggers
-      .onNew({
-        fullname:
-          customerWithoutPassword.fullname,
+    // -------------------------------------------------------------
+    // Trigger notification only when email exists
+    // -------------------------------------------------------------
+    if (
+      customerWithoutPassword.email
+    ) {
+      customersTriggers
+        .onNew({
+          fullname:
+            customerWithoutPassword.fullname,
 
-        email:
-          customerWithoutPassword.email,
-      })
-      .catch(
-        console.error
-      );
+          email:
+            customerWithoutPassword.email,
+        })
+        .catch(
+          console.error
+        );
+    }
 
     return NextResponse.json(
       {
@@ -398,7 +568,8 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-        errorType: 'dbe',
+        errorType:
+          'dbe',
         errorTitle:
           'Database insertion failed',
         errorMessage:
@@ -470,10 +641,16 @@ export async function GET() {
       }
     );
   } catch (e) {
+    console.error(
+      '[GET /api/customers] Database query error:',
+      e
+    );
+
     return NextResponse.json(
       {
         error: true,
-        errorType: 'dbe',
+        errorType:
+          'dbe',
         errorTitle:
           'Database query error',
         errorMessage:

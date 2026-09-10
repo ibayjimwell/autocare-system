@@ -1,9 +1,24 @@
 import { Database } from "@/lib/drizzle";
-import { Customers } from "@/database/models/customers/customers.model";
-import { Vehicles } from "@/database/models/customers/vehicles.model";
-import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
-import { isValidUUID } from "./shared";
+
+import {
+  Customers,
+} from "@/database/models/customers/customers.model";
+
+import {
+  Vehicles,
+} from "@/database/models/customers/vehicles.model";
+
+import {
+  eq,
+} from "drizzle-orm";
+
+import {
+  NextResponse,
+} from "next/server";
+
+import {
+  isValidUUID,
+} from "./shared";
 
 import {
   normalizePhilippinePhone,
@@ -11,22 +26,19 @@ import {
 } from "./phone";
 
 /**
- * Validates the customer data object for creation.
+ * Validates customer data for creation.
  *
- * Phone numbers may be entered in common Philippine formats:
+ * Required:
+ * - fullname
+ * - phone
+ * - password
  *
- * 09157803417
- * 9157803417
- * 639157803417
- * +639157803417
- * +63 915 780 3417
+ * Optional:
+ * - email
  *
- * The actual canonical database format should be:
+ * Phone is normalized into:
  *
- * +639157803417
- *
- * @param data - The customer data to validate.
- * @returns An array of validation errors, or an empty array if valid.
+ * +639XXXXXXXXX
  */
 export function validateCustomerData(
   data: any
@@ -34,7 +46,7 @@ export function validateCustomerData(
   const errors: string[] = [];
 
   // ---------------------------------------------------------------
-  // Full Name
+  // Full name
   // ---------------------------------------------------------------
   if (
     !data.fullname ||
@@ -48,27 +60,43 @@ export function validateCustomerData(
 
   // ---------------------------------------------------------------
   // Email
+  //
+  // OPTIONAL
   // ---------------------------------------------------------------
   if (
-    !data.email ||
-    typeof data.email !== "string" ||
-    data.email.trim().length === 0
+    data.email !== undefined &&
+    data.email !== null
   ) {
-    errors.push(
-      "Email is required and must be a non-empty string."
-    );
-  } else if (
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-      data.email.trim()
-    )
-  ) {
-    errors.push(
-      "Email must be a valid email address."
-    );
+    if (
+      typeof data.email !== "string"
+    ) {
+      errors.push(
+        "Email must be a string."
+      );
+    } else {
+      const email =
+        data.email.trim();
+
+      /*
+       * Empty email is allowed.
+       */
+      if (
+        email.length > 0 &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+          email
+        )
+      ) {
+        errors.push(
+          "Email must be a valid email address."
+        );
+      }
+    }
   }
 
   // ---------------------------------------------------------------
   // Phone
+  //
+  // REQUIRED
   // ---------------------------------------------------------------
   if (
     !data.phone ||
@@ -114,19 +142,18 @@ export function validateCustomerData(
 /**
  * Validates customer update data.
  *
- * Only these fields are allowed:
- *
+ * Allowed:
  * - fullname
  * - email
  * - phone
  *
- * Phone numbers are automatically normalized into canonical
- * Philippine international format:
+ * Email is optional.
  *
- * +639XXXXXXXXX
+ * Sending:
  *
- * @param data - The update data.
- * @returns An object containing validation errors and sanitized data.
+ * email: ""
+ *
+ * explicitly clears the email and stores NULL.
  */
 export function validateCustomerUpdate(
   data: any
@@ -143,10 +170,9 @@ export function validateCustomerUpdate(
     "phone",
   ];
 
-  // ---------------------------------------------------------------
-  // Validate allowed fields
-  // ---------------------------------------------------------------
-  for (const field of allowed) {
+  for (
+    const field of allowed
+  ) {
     if (
       data[field] === undefined
     ) {
@@ -154,41 +180,49 @@ export function validateCustomerUpdate(
     }
 
     // -------------------------------------------------------------
-    // All allowed fields must be strings
-    // -------------------------------------------------------------
-    if (
-      typeof data[field] !==
-      "string"
-    ) {
-      errors.push(
-        `"${field}" must be a string.`
-      );
-
-      continue;
-    }
-
-    const trimmed =
-      data[field].trim();
-
-    // -------------------------------------------------------------
-    // Empty value
-    // -------------------------------------------------------------
-    if (
-      trimmed.length === 0
-    ) {
-      errors.push(
-        `"${field}" cannot be empty.`
-      );
-
-      continue;
-    }
-
-    // -------------------------------------------------------------
-    // Email validation
+    // Email
     // -------------------------------------------------------------
     if (
       field === "email"
     ) {
+      if (
+        data[field] === null
+      ) {
+        updateData.email =
+          null;
+
+        continue;
+      }
+
+      if (
+        typeof data[field] !==
+        "string"
+      ) {
+        errors.push(
+          `"${field}" must be a string or null.`
+        );
+
+        continue;
+      }
+
+      const trimmed =
+        data[field].trim();
+
+      /*
+       * Empty email means:
+       *
+       * remove email
+       * store NULL
+       */
+      if (
+        trimmed.length === 0
+      ) {
+        updateData.email =
+          null;
+
+        continue;
+      }
+
       if (
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
           trimmed
@@ -208,11 +242,35 @@ export function validateCustomerUpdate(
     }
 
     // -------------------------------------------------------------
-    // Phone validation + normalization
+    // Phone
     // -------------------------------------------------------------
     if (
       field === "phone"
     ) {
+      if (
+        typeof data[field] !==
+        "string"
+      ) {
+        errors.push(
+          `"${field}" must be a string.`
+        );
+
+        continue;
+      }
+
+      const trimmed =
+        data[field].trim();
+
+      if (
+        trimmed.length === 0
+      ) {
+        errors.push(
+          `"${field}" cannot be empty.`
+        );
+
+        continue;
+      }
+
       const normalizedPhone =
         normalizePhilippinePhone(
           trimmed
@@ -230,17 +288,6 @@ export function validateCustomerUpdate(
         continue;
       }
 
-      /*
-       * IMPORTANT:
-       *
-       * The update payload already contains the canonical format.
-       *
-       * Example:
-       *
-       * 09157803417
-       *      ↓
-       * +639157803417
-       */
       updateData.phone =
         normalizedPhone;
 
@@ -253,6 +300,30 @@ export function validateCustomerUpdate(
     if (
       field === "fullname"
     ) {
+      if (
+        typeof data[field] !==
+        "string"
+      ) {
+        errors.push(
+          `"${field}" must be a string.`
+        );
+
+        continue;
+      }
+
+      const trimmed =
+        data[field].trim();
+
+      if (
+        trimmed.length === 0
+      ) {
+        errors.push(
+          `"${field}" cannot be empty.`
+        );
+
+        continue;
+      }
+
       updateData.fullname =
         trimmed;
 
@@ -267,20 +338,7 @@ export function validateCustomerUpdate(
 }
 
 /**
- * Normalizes a customer phone number into the canonical
- * Philippine international format.
- *
- * Canonical format:
- *
- * +639XXXXXXXXX
- *
- * Examples:
- *
- * 09157803417       -> +639157803417
- * 9157803417        -> +639157803417
- * 639157803417      -> +639157803417
- * +639157803417     -> +639157803417
- * +63 915 780 3417 -> +639157803417
+ * Normalize a customer phone number.
  */
 export function normalizeCustomerPhone(
   phone: unknown
@@ -291,11 +349,7 @@ export function normalizeCustomerPhone(
 }
 
 /**
- * Checks whether a customer phone number is a valid
- * Philippine mobile number.
- *
- * This accepts common user-entered formats because the
- * value is normalized before validation.
+ * Validate a customer phone number.
  */
 export function validateCustomerPhone(
   phone: unknown
@@ -318,9 +372,6 @@ export function validateVehicleData(
 ): string[] {
   const errors: string[] = [];
 
-  // ---------------------------------------------------------------
-  // Plate Number
-  // ---------------------------------------------------------------
   if (
     !data.plateNumber ||
     typeof data.plateNumber !==
@@ -334,9 +385,6 @@ export function validateVehicleData(
     );
   }
 
-  // ---------------------------------------------------------------
-  // Make
-  // ---------------------------------------------------------------
   if (
     !data.make ||
     typeof data.make !==
@@ -348,9 +396,6 @@ export function validateVehicleData(
     );
   }
 
-  // ---------------------------------------------------------------
-  // Model
-  // ---------------------------------------------------------------
   if (
     !data.model ||
     typeof data.model !==
@@ -362,9 +407,6 @@ export function validateVehicleData(
     );
   }
 
-  // ---------------------------------------------------------------
-  // Year
-  // ---------------------------------------------------------------
   if (
     data.year &&
     (
@@ -372,7 +414,8 @@ export function validateVehicleData(
         "number" ||
       data.year < 1900 ||
       data.year >
-        new Date().getFullYear() + 1
+        new Date().getFullYear() +
+          1
     )
   ) {
     errors.push(
@@ -385,20 +428,6 @@ export function validateVehicleData(
 
 /**
  * Validates vehicle update.
- *
- * Allows partial updates of:
- *
- * - plateNumber
- * - make
- * - model
- * - year
- *
- * Year is optional and accepts:
- *
- * - null
- * - undefined
- * - empty string
- * - valid year number
  */
 export function validateVehicleUpdate(
   data: any
@@ -416,27 +445,18 @@ export function validateVehicleUpdate(
     "year",
   ];
 
-  for (const field of allowed) {
+  for (
+    const field of allowed
+  ) {
     if (
       data[field] === undefined
     ) {
       continue;
     }
 
-    // -------------------------------------------------------------
-    // Year
-    // -------------------------------------------------------------
     if (
       field === "year"
     ) {
-      /*
-       * Year is optional.
-       *
-       * Allow:
-       * null
-       * undefined
-       * empty string
-       */
       if (
         data[field] === null ||
         data[field] ===
@@ -470,13 +490,6 @@ export function validateVehicleUpdate(
       continue;
     }
 
-    // -------------------------------------------------------------
-    // String fields:
-    //
-    // plateNumber
-    // make
-    // model
-    // -------------------------------------------------------------
     if (
       typeof data[field] !==
       "string"
@@ -512,7 +525,7 @@ export function validateVehicleUpdate(
 }
 
 /**
- * Checks if a customer exists by ID.
+ * Checks whether a customer exists by ID.
  */
 export async function customerExists(
   customerId: string
@@ -536,17 +549,11 @@ export async function customerExists(
 }
 
 /**
- * Validates customer ID and returns an error response
- * if invalid or not found.
- *
- * Returns null if valid.
+ * Validates customer ID.
  */
 export async function validateCustomerId(
   customerId: string
 ): Promise<NextResponse | null> {
-  // ---------------------------------------------------------------
-  // Validate UUID format
-  // ---------------------------------------------------------------
   if (
     !isValidUUID(
       customerId
@@ -555,12 +562,14 @@ export async function validateCustomerId(
     return NextResponse.json(
       {
         error: true,
-        errorType: "fve",
+        errorType:
+          "fve",
         errorTitle:
           "Invalid customer ID",
         errorMessage:
           "Customer ID must be a valid UUID.",
-        errorLog: null,
+        errorLog:
+          null,
       },
       {
         status: 422,
@@ -568,9 +577,6 @@ export async function validateCustomerId(
     );
   }
 
-  // ---------------------------------------------------------------
-  // Verify customer exists
-  // ---------------------------------------------------------------
   try {
     const exists =
       await customerExists(
@@ -581,12 +587,14 @@ export async function validateCustomerId(
       return NextResponse.json(
         {
           error: true,
-          errorType: "auth",
+          errorType:
+            "auth",
           errorTitle:
             "Customer not found",
           errorMessage:
             "No customer with the given ID exists.",
-          errorLog: null,
+          errorLog:
+            null,
         },
         {
           status: 404,
@@ -597,7 +605,8 @@ export async function validateCustomerId(
     return NextResponse.json(
       {
         error: true,
-        errorType: "dbe",
+        errorType:
+          "dbe",
         errorTitle:
           "Database error",
         errorMessage:
