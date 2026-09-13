@@ -1,8 +1,9 @@
 'use client';
 
 import React, {
-  useState,
   useEffect,
+  useMemo,
+  useState,
 } from 'react';
 
 import {
@@ -12,301 +13,744 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
+import {
+  Input,
+} from '@/components/ui/input';
+
+import {
+  Button,
+} from '@/components/ui/button';
+
+import {
+  Badge,
+} from '@/components/ui/badge';
 
 import {
   Search,
   Car,
   CheckCircle,
-  X,
 } from 'lucide-react';
 
-import { cn } from '@/lib/utils';
+import {
+  cn,
+} from '@/lib/utils';
 
-interface Vehicle {
+/* ================================================================
+   VEHICLE TYPE
+================================================================ */
+
+export interface Vehicle {
   id: string;
+
   make: string;
+
   model: string;
+
   year: number;
+
   plateNumber: string;
 }
 
+/* ================================================================
+   PROPS
+================================================================ */
+
 interface VehiclePickerModalProps {
   open: boolean;
+
   onOpenChange: (
     open: boolean,
   ) => void;
+
   vehicles: Vehicle[];
+
+  loading?: boolean;
+
   onSelect: (
     vehicle: Vehicle,
   ) => void;
+
   selectedVehicleId?: string;
+
   customerName?: string;
 }
+
+/* ================================================================
+   SKELETON CARD
+================================================================ */
+
+function VehicleSkeletonCard() {
+  return (
+    <div
+      className="
+        animate-pulse
+        rounded-lg
+        border
+        border-border
+        bg-card
+        p-4
+      "
+      aria-hidden="true"
+    >
+      <div
+        className="
+          flex
+          items-start
+          gap-3
+        "
+      >
+        <div
+          className="
+            h-10
+            w-10
+            shrink-0
+            rounded-full
+            bg-muted
+          "
+        />
+
+        <div
+          className="
+            min-w-0
+            flex-1
+            space-y-2
+          "
+        >
+          <div
+            className="
+              h-4
+              w-3/5
+              rounded
+              bg-muted
+            "
+          />
+
+          <div
+            className="
+              flex
+              gap-2
+            "
+          >
+            <div
+              className="
+                h-5
+                w-12
+                rounded
+                bg-muted
+              "
+            />
+
+            <div
+              className="
+                h-5
+                w-20
+                rounded
+                bg-muted
+              "
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   SKELETON LIST
+================================================================ */
+
+function VehiclePickerSkeleton() {
+  return (
+    <div
+      className="
+        grid
+        grid-cols-1
+        gap-3
+        sm:grid-cols-2
+      "
+      aria-label="Loading vehicles"
+    >
+      {Array.from({
+        length: 6,
+      }).map(
+        (
+          _,
+          index,
+        ) => (
+          <VehicleSkeletonCard
+            key={
+              index
+            }
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   EMPTY STATE
+================================================================ */
+
+function VehicleEmptyState({
+  customerName,
+  hasSearch,
+}: {
+  customerName?: string;
+
+  hasSearch: boolean;
+}) {
+  return (
+    <div
+      className="
+        flex
+        min-h-60
+        flex-col
+        items-center
+        justify-center
+        px-4
+        text-center
+      "
+    >
+      <div
+        className="
+          mb-4
+          flex
+          h-14
+          w-14
+          items-center
+          justify-center
+          rounded-full
+          bg-muted
+        "
+      >
+        <Car
+          className="
+            h-7
+            w-7
+            text-muted-foreground/60
+          "
+        />
+      </div>
+
+      <p
+        className="
+          text-sm
+          font-semibold
+          text-muted-foreground
+        "
+      >
+        {hasSearch
+          ? 'No matching vehicles'
+          : 'No vehicles found'}
+      </p>
+
+      <p
+        className="
+          mt-1
+          max-w-sm
+          text-xs
+          leading-5
+          text-muted-foreground
+        "
+      >
+        {hasSearch
+          ? 'Try adjusting your search term.'
+          : customerName
+            ? 'This customer has no registered vehicles.'
+            : 'Please select a customer first.'}
+      </p>
+    </div>
+  );
+}
+
+/* ================================================================
+   COMPONENT
+================================================================ */
 
 export default function VehiclePickerModal({
   open,
   onOpenChange,
   vehicles,
+  loading = false,
   onSelect,
   selectedVehicleId,
   customerName,
 }: VehiclePickerModalProps) {
-  const [search, setSearch] =
-    useState('');
-
   const [
-    filteredVehicles,
-    setFilteredVehicles,
-  ] =
-    useState<Vehicle[]>(vehicles);
+    search,
+    setSearch,
+  ] = useState('');
+
+  /* ==============================================================
+     RESET SEARCH
+  ============================================================== */
 
   useEffect(() => {
-    const term =
-      search.toLowerCase().trim();
-
-    if (!term) {
-      setFilteredVehicles(
-        vehicles,
-      );
-    } else {
-      setFilteredVehicles(
-        vehicles.filter(
-          (v) =>
-            v.make
-              .toLowerCase()
-              .includes(term) ||
-            v.model
-              .toLowerCase()
-              .includes(term) ||
-            v.plateNumber
-              .toLowerCase()
-              .includes(term) ||
-            String(v.year).includes(
-              term,
-            ),
-        ),
-      );
+    if (!open) {
+      setSearch('');
     }
-  }, [search, vehicles]);
+  }, [
+    open,
+  ]);
 
-  const handleSelect = (
-    vehicle: Vehicle,
-  ) => {
-    onSelect(vehicle);
-    onOpenChange(false);
-    setSearch('');
-  };
+  /* ==============================================================
+     FILTER
+  ============================================================== */
+
+  const filteredVehicles =
+    useMemo(() => {
+      const term =
+        search
+          .toLowerCase()
+          .trim();
+
+      if (!term) {
+        return vehicles;
+      }
+
+      return vehicles.filter(
+        (
+          vehicle,
+        ) =>
+          vehicle.make
+            .toLowerCase()
+            .includes(term) ||
+          vehicle.model
+            .toLowerCase()
+            .includes(term) ||
+          vehicle.plateNumber
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            vehicle.year,
+          ).includes(term),
+      );
+    }, [
+      search,
+      vehicles,
+    ]);
+
+  /* ==============================================================
+     SELECT
+  ============================================================== */
+
+  const handleSelect =
+    (
+      vehicle: Vehicle,
+    ) => {
+      onSelect(
+        vehicle,
+      );
+
+      onOpenChange(
+        false,
+      );
+
+      setSearch('');
+    };
+
+  /* ==============================================================
+     RENDER
+  ============================================================== */
 
   return (
     <Dialog
-      open={open}
+      open={
+        open
+      }
       onOpenChange={
         onOpenChange
       }
     >
       <DialogContent
+        /*
+         * IMPORTANT:
+         *
+         * There is deliberately no manually-created close button.
+         * DialogContent supplies the single X.
+         */
         className="
-          flex max-h-[100dvh]
-          flex-col gap-0 overflow-hidden
-          rounded-none p-0
+          flex
+          h-[calc(100dvh-1rem)]
+          max-h-[calc(100dvh-1rem)]
+          w-[calc(100vw-1rem)]
+          max-w-none
+          flex-col
+          gap-0
+          overflow-hidden
+          rounded-xl
+          p-0
+
+          sm:h-auto
           sm:max-h-[92vh]
+          sm:w-full
           sm:max-w-2xl
-          sm:rounded-xl
         "
       >
+        {/* ========================================================
+            HEADER
+        ========================================================= */}
+
         <DialogHeader
           className="
-            shrink-0 space-y-3
-            border-b border-border
+            shrink-0
+            space-y-3
+            border-b
+            border-border
             bg-background/80
-            p-4 backdrop-blur-xl
-            sm:bg-card sm:backdrop-blur-none
+            p-4
+            pr-14
+            backdrop-blur-xl
+
+            sm:bg-card
+            sm:backdrop-blur-none
+
             md:p-5
+            md:pr-14
           "
         >
-          <div className="flex items-center justify-between gap-3">
-            <DialogTitle className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-lg font-semibold tracking-tight">
-              <Car className="h-5 w-5 shrink-0 text-primary" />
-
-              <span>Select Vehicle</span>
-
-              {customerName && (
-                <span className="text-sm font-normal text-muted-foreground">
-                  for {customerName}
-                </span>
-              )}
-            </DialogTitle>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                onOpenChange(false)
-              }
-              aria-label="Close"
+          <DialogTitle
+            className="
+              flex
+              min-w-0
+              items-center
+              gap-x-2
+              gap-y-1
+              text-lg
+              font-semibold
+              tracking-tight
+            "
+          >
+            <Car
               className="
-                h-11 w-11 shrink-0 rounded-md
-                focus-visible:outline-none
-                focus-visible:ring-2
-                focus-visible:ring-ring
-                focus-visible:ring-offset-2
-                md:h-9 md:w-9
+                h-5
+                w-5
+                shrink-0
+                text-primary
               "
-            >
-              <X className="h-5 w-5 md:h-4 md:w-4" />
-            </Button>
-          </div>
+            />
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground md:h-4 md:w-4" />
+            <span className="truncate">
+              Select Vehicle
+            </span>
+
+            {customerName && (
+              <span
+                className="
+                  min-w-0
+                  truncate
+                  text-sm
+                  font-normal
+                  text-muted-foreground
+                "
+              >
+                for {customerName}
+              </span>
+            )}
+          </DialogTitle>
+
+          {/* ======================================================
+              SEARCH
+          ======================================================= */}
+
+          <div
+            className="
+              relative
+            "
+          >
+            <Search
+              className="
+                pointer-events-none
+                absolute
+                left-3
+                top-1/2
+                h-5
+                w-5
+                -translate-y-1/2
+                text-muted-foreground
+
+                md:h-4
+                md:w-4
+              "
+            />
 
             <Input
               placeholder="Search by make, model, plate, or year..."
-              value={search}
-              onChange={(e) =>
+              value={
+                search
+              }
+              onChange={(
+                event,
+              ) =>
                 setSearch(
-                  e.target.value,
+                  event.target.value,
                 )
               }
               className="
-                h-11 rounded-md pl-11
+                h-11
+                rounded-md
+                pl-11
                 text-base
+
                 focus-visible:ring-2
                 focus-visible:ring-ring
-                md:h-9 md:pl-10 md:text-sm
+
+                md:h-9
+                md:pl-10
+                md:text-sm
               "
               autoFocus
             />
           </div>
         </DialogHeader>
 
-        <ScrollArea className="min-h-0 flex-1 p-4 md:p-5">
-          {vehicles.length === 0 ? (
-            <div className="flex min-h-60 flex-col items-center justify-center text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                <Car className="h-7 w-7 text-muted-foreground/60" />
-              </div>
+        {/* ========================================================
+            SCROLLABLE CONTENT
+        ========================================================= */}
 
-              <p className="text-sm font-semibold text-muted-foreground">
-                No vehicles found
-              </p>
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-x-hidden
+            overflow-y-auto
+            overscroll-contain
+            p-4
+            [scrollbar-gutter:stable]
+            [-webkit-overflow-scrolling:touch]
 
-              <p className="mt-1 text-xs text-muted-foreground">
-                {customerName
-                  ? 'This customer has no registered vehicles.'
-                  : 'Please select a customer first.'}
-              </p>
-            </div>
+            md:p-5
+          "
+        >
+          {loading ? (
+            <VehiclePickerSkeleton />
           ) : filteredVehicles.length ===
             0 ? (
-            <div className="flex min-h-60 flex-col items-center justify-center text-center">
-              <p className="text-sm font-semibold text-muted-foreground">
-                No matching vehicles
-              </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                Try adjusting your search
-                term.
-              </p>
-            </div>
+            <VehicleEmptyState
+              customerName={
+                customerName
+              }
+              hasSearch={
+                search.trim().length >
+                0
+              }
+            />
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div
+              className="
+                grid
+                grid-cols-1
+                gap-3
+                sm:grid-cols-2
+              "
+            >
               {filteredVehicles.map(
-                (vehicle) => (
-                  <button
-                    type="button"
-                    key={vehicle.id}
-                    onClick={() =>
-                      handleSelect(
-                        vehicle,
-                      )
-                    }
-                    className={cn(
-                      `
-                        relative rounded-lg border
-                        p-4 text-left
-                        transition-colors
-                        focus-visible:outline-none
-                        focus-visible:ring-2
-                        focus-visible:ring-ring
-                        focus-visible:ring-offset-2
-                      `,
-                      selectedVehicleId ===
+                (
+                  vehicle,
+                ) => {
+                  const isSelected =
+                    selectedVehicleId ===
+                    vehicle.id;
+
+                  return (
+                    <button
+                      type="button"
+                      key={
                         vehicle.id
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary/25'
-                        : 'border-border hover:border-primary/40 hover:bg-accent/50',
-                    )}
-                  >
-                    {selectedVehicleId ===
-                      vehicle.id && (
-                      <CheckCircle className="absolute right-3 top-3 h-5 w-5 text-primary" />
-                    )}
+                      }
+                      disabled={
+                        loading
+                      }
+                      onClick={() =>
+                        handleSelect(
+                          vehicle,
+                        )
+                      }
+                      className={cn(
+                        `
+                          relative
+                          w-full
+                          rounded-lg
+                          border
+                          p-4
+                          text-left
+                          transition-colors
 
-                    <div className="flex items-start gap-3 pr-6">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <Car className="h-5 w-5" />
-                      </div>
+                          focus-visible:outline-none
+                          focus-visible:ring-2
+                          focus-visible:ring-ring
+                          focus-visible:ring-offset-2
+                        `,
+                        isSelected
+                          ? `
+                            border-primary
+                            bg-primary/5
+                            ring-1
+                            ring-primary/25
+                          `
+                          : `
+                            border-border
+                            hover:border-primary/40
+                            hover:bg-accent/50
+                          `,
+                      )}
+                    >
+                      {/* ==========================================
+                          SELECTED
+                      =========================================== */}
 
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {vehicle.make}{' '}
-                          {vehicle.model}
-                        </p>
+                      {isSelected && (
+                        <CheckCircle
+                          className="
+                            absolute
+                            right-3
+                            top-3
+                            h-5
+                            w-5
+                            text-primary
+                          "
+                        />
+                      )}
 
-                        <div className="mt-1.5 flex flex-wrap gap-2">
-                          <Badge
-                            variant="outline"
+                      {/* ==========================================
+                          CONTENT
+                      =========================================== */}
+
+                      <div
+                        className="
+                          flex
+                          items-start
+                          gap-3
+                          pr-6
+                        "
+                      >
+                        <div
+                          className="
+                            flex
+                            h-10
+                            w-10
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-full
+                            bg-primary/10
+                            text-primary
+                          "
+                        >
+                          <Car
                             className="
-                              rounded-md text-[10px]
-                              font-medium text-muted-foreground
+                              h-5
+                              w-5
                             "
-                          >
-                            {vehicle.year}
-                          </Badge>
+                          />
+                        </div>
 
-                          <Badge
-                            variant="outline"
+                        <div
+                          className="
+                            min-w-0
+                            flex-1
+                          "
+                        >
+                          <p
                             className="
-                              rounded-md
-                              border-primary/25
-                              bg-primary/5 text-[10px]
-                              font-semibold uppercase tracking-wide
-                              text-primary
+                              truncate
+                              text-sm
+                              font-semibold
+                              text-foreground
                             "
                           >
                             {
-                              vehicle.plateNumber
+                              vehicle.make
+                            }{' '}
+                            {
+                              vehicle.model
                             }
-                          </Badge>
+                          </p>
+
+                          <div
+                            className="
+                              mt-1.5
+                              flex
+                              flex-wrap
+                              gap-2
+                            "
+                          >
+                            <Badge
+                              variant="outline"
+                              className="
+                                rounded-md
+                                text-[10px]
+                                font-medium
+                                text-muted-foreground
+                              "
+                            >
+                              {
+                                vehicle.year
+                              }
+                            </Badge>
+
+                            <Badge
+                              variant="outline"
+                              className="
+                                rounded-md
+                                border-primary/25
+                                bg-primary/5
+                                text-[10px]
+                                font-semibold
+                                uppercase
+                                tracking-wide
+                                text-primary
+                              "
+                            >
+                              {
+                                vehicle.plateNumber
+                              }
+                            </Badge>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </button>
-                ),
+                    </button>
+                  );
+                },
               )}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
-        <div className="shrink-0 border-t border-border p-3 md:p-4">
+        {/* ========================================================
+            FOOTER
+        ========================================================= */}
+
+        <div
+          className="
+            shrink-0
+            border-t
+            border-border
+            p-3
+            md:p-4
+          "
+        >
           <Button
             type="button"
             variant="ghost"
             onClick={() =>
-              onOpenChange(false)
+              onOpenChange(
+                false,
+              )
             }
             className="
-              h-11 w-full rounded-md
-              text-sm font-medium
+              h-11
+              w-full
+              rounded-md
+              text-sm
+              font-medium
+
               focus-visible:outline-none
               focus-visible:ring-2
               focus-visible:ring-ring
               focus-visible:ring-offset-2
+
               md:h-9
             "
           >

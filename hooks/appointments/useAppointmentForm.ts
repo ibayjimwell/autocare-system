@@ -35,6 +35,10 @@ import {
   appointmentsApi,
 } from '@/lib/appointments/appointments';
 
+/* ========================================================================
+   HOOK
+======================================================================== */
+
 export function useAppointmentForm(
   customers: any[],
   onSuccess: () => void,
@@ -113,6 +117,34 @@ export function useAppointmentForm(
   );
 
   /* ==============================================================
+     LOADING STATE
+  ============================================================== */
+
+  /*
+   * Customer data itself is supplied by the parent component.
+   *
+   * This hook owns vehicle loading because vehicles are fetched
+   * after a customer is selected.
+   */
+  const [
+    loadingVehicles,
+    setLoadingVehicles,
+  ] = useState(
+    false,
+  );
+
+  /*
+   * Available appointment slots are fetched whenever the
+   * appointment date or selected services change.
+   */
+  const [
+    loadingAvailableSlots,
+    setLoadingAvailableSlots,
+  ] = useState(
+    false,
+  );
+
+  /* ==============================================================
      FORM
   ============================================================== */
 
@@ -148,9 +180,6 @@ export function useAppointmentForm(
     watch,
     setValue,
     reset,
-    formState: {
-      errors,
-    },
   } =
     form;
 
@@ -159,10 +188,15 @@ export function useAppointmentForm(
       'customerId',
     );
 
+  const watchVehicleId =
+    watch(
+      'vehicleId',
+    );
+
   const watchServices =
     watch(
       'services',
-    );
+    ) || [];
 
   const watchDate =
     watch(
@@ -170,10 +204,55 @@ export function useAppointmentForm(
     );
 
   /* ==============================================================
+     KEEP SELECTED CUSTOMER SYNCHRONIZED
+     
+     The customer picker can explicitly call:
+     
+       setSelectedCustomer(customer)
+     
+     This effect also keeps the selected object synchronized with
+     the customerId currently stored inside react-hook-form.
+  ============================================================== */
+
+  useEffect(() => {
+    if (
+      !watchCustomerId
+    ) {
+      setSelectedCustomer(
+        null,
+      );
+
+      return;
+    }
+
+    const foundCustomer =
+      customers.find(
+        (
+          customer: any,
+        ) =>
+          customer?.id ===
+          watchCustomerId,
+      );
+
+    setSelectedCustomer(
+      foundCustomer ||
+        null,
+    );
+  }, [
+    watchCustomerId,
+    customers,
+  ]);
+
+  /* ==============================================================
      FETCH VEHICLES WHEN CUSTOMER CHANGES
   ============================================================== */
 
   useEffect(() => {
+    /*
+     * No customer selected.
+     *
+     * Clear all vehicle-related state immediately.
+     */
     if (
       !watchCustomerId
     ) {
@@ -185,8 +264,17 @@ export function useAppointmentForm(
         null,
       );
 
-      setSelectedCustomer(
-        null,
+      setValue(
+        'vehicleId',
+        '',
+        {
+          shouldValidate:
+            true,
+        },
+      );
+
+      setLoadingVehicles(
+        false,
       );
 
       return;
@@ -197,6 +285,37 @@ export function useAppointmentForm(
 
     const loadCustomerVehicles =
       async () => {
+        /*
+         * Clear stale vehicle data immediately while the
+         * new customer's vehicles are being fetched.
+         */
+        setLoadingVehicles(
+          true,
+        );
+
+        setVehicles(
+          [],
+        );
+
+        /*
+         * Prevent the previous customer's selected vehicle
+         * from temporarily appearing for the new customer.
+         */
+        setSelectedVehicle(
+          null,
+        );
+
+        setValue(
+          'vehicleId',
+          '',
+          {
+            shouldValidate:
+              true,
+            shouldDirty:
+              false,
+          },
+        );
+
         try {
           const res =
             await vehiclesApi.list(
@@ -210,49 +329,70 @@ export function useAppointmentForm(
           }
 
           const data =
-            res.error
+            res?.error
               ? []
-              : res.data ||
+              : res?.data ||
                 [];
 
           setVehicles(
-            data,
+            Array.isArray(
+              data,
+            )
+              ? data
+              : [],
           );
 
           /* ======================================================
-             CHECK CURRENT VEHICLE
+             FIND CURRENT VEHICLE
           ======================================================= */
 
+          /*
+           * Normally this will be empty because changing the
+           * customer clears the vehicle selection.
+           *
+           * The check remains here so the hook stays safe if the
+           * parent/form restores an existing vehicle value.
+           */
           const currentVehicleId =
             watch(
               'vehicleId',
             );
 
           if (
-            currentVehicleId &&
-            !data.some(
-              (
-                vehicle: any,
-              ) =>
-                vehicle.id ===
-                currentVehicleId,
-            )
+            currentVehicleId
           ) {
-            setSelectedVehicle(
-              null,
-            );
+            const currentVehicle =
+              data.find(
+                (
+                  vehicle: any,
+                ) =>
+                  vehicle?.id ===
+                  currentVehicleId,
+              );
 
-            setValue(
-              'vehicleId',
-              '',
-            );
+            if (
+              currentVehicle
+            ) {
+              setSelectedVehicle(
+                currentVehicle,
+              );
+            } else {
+              setSelectedVehicle(
+                null,
+              );
+
+              setValue(
+                'vehicleId',
+                '',
+              );
+            }
           }
 
           /* ======================================================
-             FIND SELECTED CUSTOMER
+             FIND CUSTOMER
           ======================================================= */
 
-          const found =
+          const foundCustomer =
             customers.find(
               (
                 customer: any,
@@ -261,17 +401,10 @@ export function useAppointmentForm(
                 watchCustomerId,
             );
 
-          if (
-            found
-          ) {
-            setSelectedCustomer(
-              found,
-            );
-          } else {
-            setSelectedCustomer(
+          setSelectedCustomer(
+            foundCustomer ||
               null,
-            );
-          }
+          );
         } catch (
           error: any
         ) {
@@ -290,10 +423,27 @@ export function useAppointmentForm(
             [],
           );
 
+          setSelectedVehicle(
+            null,
+          );
+
+          setValue(
+            'vehicleId',
+            '',
+          );
+
           toast.error(
             error?.message ||
               'Failed to load customer vehicles.',
           );
+        } finally {
+          if (
+            !cancelled
+          ) {
+            setLoadingVehicles(
+              false,
+            );
+          }
         }
       };
 
@@ -302,8 +452,8 @@ export function useAppointmentForm(
     return () => {
       cancelled = true;
     };
-    // customers intentionally participates in the lookup because
-    // the selected customer object comes from this collection.
+    // customers intentionally participates because the selected
+    // customer object comes from this collection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     watchCustomerId,
@@ -319,79 +469,152 @@ export function useAppointmentForm(
   ============================================================== */
 
   useEffect(() => {
+    /*
+     * No valid date/services:
+     * there is nothing to fetch.
+     */
     if (
-      watchDate &&
-      watchServices.length >
+      !watchDate ||
+      watchServices.length ===
         0
     ) {
-      let cancelled =
-        false;
+      setAvailableSlots(
+        [],
+      );
 
-      const loadAvailableSlots =
-        async () => {
-          try {
-            const dateStr =
-              format(
-                watchDate,
-                'yyyy-MM-dd',
-              );
+      setLoadingAvailableSlots(
+        false,
+      );
 
-            const res =
-              await appointmentsApi.getAvailableSlots(
-                dateStr,
-                watchServices,
-              );
+      /*
+       * Reset any previously selected appointment time because
+       * the current time selection is no longer based on a valid
+       * date/service combination.
+       */
+      setValue(
+        'appointmentTime',
+        '',
+      );
 
-            if (
-              cancelled
-            ) {
-              return;
-            }
+      setCustomTime(
+        '',
+      );
 
-            setAvailableSlots(
-              res.error
-                ? []
-                : res.data ||
-                    [],
-            );
-          } catch (
-            error: any
-          ) {
-            if (
-              cancelled
-            ) {
-              return;
-            }
+      setCustomTimeChecked(
+        null,
+      );
 
-            console.error(
-              '[useAppointmentForm] Failed to load available slots:',
-              error,
-            );
+      setSelectedSlotType(
+        'preset',
+      );
 
-            setAvailableSlots(
-              [],
-            );
-
-            toast.error(
-              error?.message ||
-                'Failed to load available appointment slots.',
-            );
-          }
-        };
-
-      void loadAvailableSlots();
-
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
-    setAvailableSlots(
-      [],
-    );
+    let cancelled =
+      false;
+
+    const loadAvailableSlots =
+      async () => {
+        setLoadingAvailableSlots(
+          true,
+        );
+
+        /*
+         * Do not keep displaying slots from the previous service
+         * selection/date while a new request is running.
+         */
+        setAvailableSlots(
+          [],
+        );
+
+        /*
+         * The previous selected time may no longer exist for the
+         * new date/services combination.
+         */
+        setValue(
+          'appointmentTime',
+          '',
+        );
+
+        setCustomTimeChecked(
+          null,
+        );
+
+        try {
+          const dateStr =
+            format(
+              watchDate,
+              'yyyy-MM-dd',
+            );
+
+          const res =
+            await appointmentsApi.getAvailableSlots(
+              dateStr,
+              watchServices,
+            );
+
+          if (
+            cancelled
+          ) {
+            return;
+          }
+
+          const data =
+            res?.error
+              ? []
+              : res?.data ||
+                [];
+
+          setAvailableSlots(
+            Array.isArray(
+              data,
+            )
+              ? data
+              : [],
+          );
+        } catch (
+          error: any
+        ) {
+          if (
+            cancelled
+          ) {
+            return;
+          }
+
+          console.error(
+            '[useAppointmentForm] Failed to load available slots:',
+            error,
+          );
+
+          setAvailableSlots(
+            [],
+          );
+
+          toast.error(
+            error?.message ||
+              'Failed to load available appointment slots.',
+          );
+        } finally {
+          if (
+            !cancelled
+          ) {
+            setLoadingAvailableSlots(
+              false,
+            );
+          }
+        }
+      };
+
+    void loadAvailableSlots();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     watchDate,
     watchServices,
+    setValue,
   ]);
 
   /* ==============================================================
@@ -459,6 +682,12 @@ export function useAppointmentForm(
             setValue(
               'appointmentTime',
               customTime,
+              {
+                shouldValidate:
+                  true,
+                shouldDirty:
+                  true,
+              },
             );
           } else {
             setCustomTimeChecked(
@@ -475,11 +704,20 @@ export function useAppointmentForm(
             setValue(
               'appointmentTime',
               '',
+              {
+                shouldValidate:
+                  true,
+              },
             );
           }
         } catch (
           err: any
         ) {
+          console.error(
+            '[useAppointmentForm] Failed to check custom time:',
+            err,
+          );
+
           toast.error(
             err?.message ||
               'Error checking availability.',
@@ -557,6 +795,12 @@ export function useAppointmentForm(
             'Appointment booked successfully.',
           );
 
+          /*
+           * Keep the selected customer/date/services after
+           * successful submission, matching the previous behavior.
+           *
+           * Only the appointment time and notes are reset.
+           */
           reset({
             ...data,
 
@@ -575,10 +819,19 @@ export function useAppointmentForm(
             null,
           );
 
+          setSelectedSlotType(
+            'preset',
+          );
+
           onSuccess();
         } catch (
           err: any
         ) {
+          console.error(
+            '[useAppointmentForm] Failed to create appointment:',
+            err,
+          );
+
           toast.error(
             err?.message ||
               'Something went wrong.',
@@ -600,7 +853,15 @@ export function useAppointmentForm(
   ============================================================== */
 
   return {
+    /* ============================================================
+       FORM
+    ============================================================= */
+
     form,
+
+    /* ============================================================
+       CUSTOMER / VEHICLE
+    ============================================================= */
 
     vehicles,
 
@@ -612,9 +873,25 @@ export function useAppointmentForm(
 
     setSelectedVehicle,
 
+    loadingVehicles,
+
+    /* ============================================================
+       AVAILABLE SLOTS
+    ============================================================= */
+
     availableSlots,
 
+    loadingAvailableSlots,
+
+    /* ============================================================
+       SUBMIT
+    ============================================================= */
+
     isSubmitting,
+
+    /* ============================================================
+       CUSTOM TIME
+    ============================================================= */
 
     customTime,
 
@@ -631,6 +908,10 @@ export function useAppointmentForm(
     selectedSlotType,
 
     setSelectedSlotType,
+
+    /* ============================================================
+       ACTIONS
+    ============================================================= */
 
     handleCheckCustomTime,
 

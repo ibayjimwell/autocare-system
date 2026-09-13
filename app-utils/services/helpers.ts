@@ -1,3 +1,5 @@
+// @/app-utils/services/helpers.ts
+
 export const formatPrice = (price: any): string => {
   const num = parseFloat(price);
   return isNaN(num) ? "0.00" : num.toLocaleString("en-PH", { minimumFractionDigits: 2 });

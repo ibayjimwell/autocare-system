@@ -1,4 +1,4 @@
-
+'use client';
 
 import React, {
   useState,
@@ -23,6 +23,8 @@ import {
 
 import StatusAccentBar from './status-accent-bar';
 
+import AppointmentNotesCard from './appointment-notes-card';
+
 import {
   canReschedule,
 } from '@/app-utils/appointments/helpers';
@@ -37,29 +39,52 @@ import {
   useAppointmentDetailModal,
 } from '@/hooks/appointments/useAppointmentDetailModal';
 
+/* ================================================================
+   TYPES
+================================================================ */
+
 interface AppointmentData {
   id: string;
+
   customerId: string;
+
   vehicleId: string;
-  services: any[] | null;
+
+  services:
+    | any[]
+    | null;
+
   trackingNumber: string;
+
   appointmentDate: string;
+
   appointmentTime: string;
+
   status: string;
-  notes: string | null;
+
+  notes:
+    | string
+    | null;
+
   createdAt: string;
+
   updatedAt: string;
 
   customer?: {
     id?: string;
+
     fullname: string;
   };
 
   vehicle?: {
     id?: string;
+
     plateNumber: string;
+
     model: string;
+
     make?: string;
+
     year?: number;
   };
 }
@@ -78,6 +103,10 @@ interface AppointmentCardProps {
   ) => void;
 }
 
+/* ================================================================
+   COMPONENT
+================================================================ */
+
 export default function AppointmentCard({
   appointment,
   children,
@@ -89,6 +118,10 @@ export default function AppointmentCard({
     expanded,
     setExpanded,
   ] = useState(false);
+
+  /* ==============================================================
+     DETAIL MODAL HOOK
+  ============================================================== */
 
   const {
     open,
@@ -153,30 +186,55 @@ export default function AppointmentCard({
       appointment?.id,
     );
 
-  if (
-    !appointment
-  ) {
+  /* ==============================================================
+     INVALID DATA
+  ============================================================== */
+
+  if (!appointment) {
     return (
       <div
         className={cn(
           `
-            flex w-full items-center gap-2
-            rounded-lg border border-destructive/25
-            bg-destructive/10 p-3
-            text-destructive md:p-4
+            flex
+            w-full
+            items-center
+            gap-2
+            rounded-lg
+            border
+            border-destructive/25
+            bg-destructive/10
+            p-3
+            text-destructive
+
+            md:p-4
           `,
           className,
         )}
       >
-        <AlertCircle className="h-4 w-4 shrink-0" />
+        <AlertCircle
+          className="
+            h-4
+            w-4
+            shrink-0
+          "
+        />
 
-        <span className="text-xs font-medium">
+        <span
+          className="
+            text-xs
+            font-medium
+          "
+        >
           Invalid appointment
           data.
         </span>
       </div>
     );
   }
+
+  /* ==============================================================
+     STATUS
+  ============================================================== */
 
   const hasPendingReschedule =
     pendingRescheduleCount >
@@ -187,45 +245,107 @@ export default function AppointmentCard({
       appointment.status,
     );
 
+  /*
+   * Details are expandable when:
+   *
+   * - appointment has children
+   * - appointment can be rescheduled
+   */
   const hasDetails =
     !!children ||
     (isReschedulable &&
-      !!onReschedule);
+      !!onReschedule) ||
+    !!appointment.notes;
+
+  /* ==============================================================
+     RENDER
+  ============================================================== */
 
   return (
     <>
+      {/* ==========================================================
+          APPOINTMENT CARD
+      =========================================================== */}
+
       <div
         className={cn(
           `
-            group relative w-full overflow-hidden
-            rounded-lg border border-border
-            bg-card text-card-foreground
-            shadow-sm transition-shadow
+            group
+            relative
+            w-full
+            overflow-hidden
+            rounded-lg
+            border
+            border-border
+            bg-card
+            text-card-foreground
+            shadow-sm
+            transition-shadow
             hover:shadow-md
           `,
           hasPendingReschedule &&
-            'border-blue-500/30 ring-1 ring-blue-500/10',
+            `
+              border-blue-500/30
+              ring-1
+              ring-blue-500/10
+            `,
           className,
         )}
       >
+        {/* ========================================================
+            STATUS ACCENT
+        ========================================================= */}
+
         <StatusAccentBar
           status={
             appointment.status
           }
         />
 
-        <div className="p-3 md:p-3.5">
-          {/* =======================================================
+        <div
+          className="
+            p-3
+            md:p-3.5
+          "
+        >
+          {/* ======================================================
               SUMMARY
-          ======================================================== */}
+          ======================================================= */}
 
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="
+              flex
+              items-start
+              justify-between
+              gap-3
+            "
+          >
+            {/* ====================================================
+                LEFT
+            ===================================================== */}
+
+            <div
+              className="
+                min-w-0
+                flex-1
+              "
+            >
+              <div
+                className="
+                  flex
+                  flex-wrap
+                  items-center
+                  gap-2
+                "
+              >
                 <span
                   className="
-                    truncate text-sm font-bold
-                    uppercase tracking-wide text-foreground
+                    truncate
+                    text-sm
+                    font-bold
+                    uppercase
+                    tracking-wide
+                    text-foreground
                   "
                 >
                   #
@@ -234,18 +354,22 @@ export default function AppointmentCard({
                   }
                 </span>
 
-                {/* =================================================
+                {/* ===============================================
                     RESCHEDULE INDICATOR
-                ================================================== */}
+                ================================================= */}
 
                 {hasPendingReschedule && (
                   <span
                     className="
-                      inline-flex items-center gap-1.5
+                      inline-flex
+                      items-center
+                      gap-1.5
                       rounded-full
-                      border border-blue-500/25
+                      border
+                      border-blue-500/25
                       bg-blue-500/10
-                      px-2 py-0.5
+                      px-2
+                      py-0.5
                       text-[9px]
                       font-bold
                       uppercase
@@ -254,25 +378,85 @@ export default function AppointmentCard({
                       dark:text-blue-400
                     "
                   >
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-blue-500/70" />
+                    <span
+                      className="
+                        relative
+                        flex
+                        h-2
+                        w-2
+                      "
+                    >
+                      <span
+                        className="
+                          absolute
+                          inline-flex
+                          h-2
+                          w-2
+                          animate-ping
+                          rounded-full
+                          bg-blue-500/70
+                        "
+                      />
 
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                      <span
+                        className="
+                          relative
+                          inline-flex
+                          h-2
+                          w-2
+                          rounded-full
+                          bg-blue-500
+                        "
+                      />
                     </span>
 
-                    <CalendarClock className="h-3 w-3" />
+                    <CalendarClock
+                      className="
+                        h-3
+                        w-3
+                      "
+                    />
 
                     Reschedule
                   </span>
                 )}
               </div>
 
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                {appointment
-                  .customer
+              {/* =================================================
+                  CUSTOMER / VEHICLE
+              ================================================== */}
+
+              <div
+                className="
+                  mt-1
+                  flex
+                  flex-wrap
+                  items-center
+                  gap-x-3
+                  gap-y-1
+                "
+              >
+                {appointment.customer
                   ?.fullname && (
-                  <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
-                    <User className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span
+                    className="
+                      flex
+                      min-w-0
+                      items-center
+                      gap-1.5
+                      text-xs
+                      font-medium
+                      text-foreground
+                    "
+                  >
+                    <User
+                      className="
+                        h-3.5
+                        w-3.5
+                        shrink-0
+                        text-primary
+                      "
+                    />
 
                     <span className="truncate">
                       {
@@ -284,17 +468,27 @@ export default function AppointmentCard({
                   </span>
                 )}
 
-                {appointment
-                  .vehicle
+                {appointment.vehicle
                   ?.plateNumber && (
                   <span
                     className="
-                      flex shrink-0 items-center gap-1
-                      text-[10px] font-semibold
-                      uppercase tracking-wide text-muted-foreground
+                      flex
+                      shrink-0
+                      items-center
+                      gap-1
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-wide
+                      text-muted-foreground
                     "
                   >
-                    <Car className="h-3 w-3" />
+                    <Car
+                      className="
+                        h-3
+                        w-3
+                      "
+                    />
 
                     {
                       appointment
@@ -310,13 +504,27 @@ export default function AppointmentCard({
                 ACTIONS
             ==================================================== */}
 
-            <div className="flex shrink-0 items-center gap-1">
+            <div
+              className="
+                flex
+                shrink-0
+                items-center
+                gap-1
+              "
+            >
               <StatusBadge
                 status={
                   appointment.status
                 }
-                className="shrink-0 scale-90"
+                className="
+                  shrink-0
+                  scale-90
+                "
               />
+
+              {/* =================================================
+                  VIEW
+              ================================================== */}
 
               <Button
                 type="button"
@@ -333,16 +541,22 @@ export default function AppointmentCard({
                   text-muted-foreground
                   hover:bg-primary/5
                   hover:text-primary
+
                   focus-visible:outline-none
                   focus-visible:ring-2
                   focus-visible:ring-ring
                   focus-visible:ring-offset-2
+
                   md:h-8
                   md:w-8
                 "
               >
                 <Eye className="h-4 w-4" />
               </Button>
+
+              {/* =================================================
+                  EXPAND
+              ================================================== */}
 
               {hasDetails && (
                 <button
@@ -374,17 +588,24 @@ export default function AppointmentCard({
                     transition-colors
                     hover:bg-accent
                     hover:text-foreground
+
                     focus-visible:outline-none
                     focus-visible:ring-2
                     focus-visible:ring-ring
                     focus-visible:ring-offset-2
+
                     md:h-8
                     md:w-8
                   "
                 >
                   <ChevronDown
                     className={cn(
-                      'h-4 w-4 transition-transform duration-200',
+                      `
+                        h-4
+                        w-4
+                        transition-transform
+                        duration-200
+                      `,
                       expanded &&
                         'rotate-180',
                     )}
@@ -394,13 +615,37 @@ export default function AppointmentCard({
             </div>
           </div>
 
-          {/* =======================================================
+          {/* ======================================================
               DATE + TIME
-          ======================================================== */}
+          ======================================================= */}
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5 text-primary" />
+          <div
+            className="
+              mt-2
+              flex
+              flex-wrap
+              items-center
+              gap-x-4
+              gap-y-1
+            "
+          >
+            <span
+              className="
+                flex
+                items-center
+                gap-1.5
+                text-[11px]
+                font-medium
+                text-muted-foreground
+              "
+            >
+              <Calendar
+                className="
+                  h-3.5
+                  w-3.5
+                  text-primary
+                "
+              />
 
               {appointment.appointmentDate
                 ? new Date(
@@ -417,8 +662,23 @@ export default function AppointmentCard({
                 : 'N/A'}
             </span>
 
-            <span className="flex items-center gap-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
+            <span
+              className="
+                flex
+                items-center
+                gap-1.5
+                text-[11px]
+                font-medium
+                tabular-nums
+                text-muted-foreground
+              "
+            >
+              <Clock
+                className="
+                  h-3.5
+                  w-3.5
+                "
+              />
 
               {appointment.appointmentTime
                 ? appointment.appointmentTime.slice(
@@ -429,20 +689,44 @@ export default function AppointmentCard({
             </span>
           </div>
 
-          {/* =======================================================
+          {/* ======================================================
               EXPANDABLE CONTENT
-          ======================================================== */}
+          ======================================================= */}
 
           {hasDetails && (
             <div
               className={cn(
-                'flex-col gap-1.5',
+                'flex-col gap-2',
                 expanded
-                  ? 'mt-3 flex border-t border-border pt-3'
+                  ? `
+                    mt-3
+                    flex
+                    border-t
+                    border-border
+                    pt-3
+                  `
                   : 'hidden',
               )}
             >
+              {/* ==================================================
+                  NOTES CARD
+              =================================================== */}
+
+              <AppointmentNotesCard
+                notes={
+                  appointment.notes
+                }
+              />
+
+              {/* ==================================================
+                  EXISTING CHILDREN
+              =================================================== */}
+
               {children}
+
+              {/* ==================================================
+                  RESCHEDULE
+              =================================================== */}
 
               {isReschedulable &&
                 onReschedule && (
@@ -464,28 +748,56 @@ export default function AppointmentCard({
                       px-3
                       text-xs
                       font-medium
+
                       focus-visible:outline-none
                       focus-visible:ring-2
                       focus-visible:ring-ring
                       focus-visible:ring-offset-2
+
                       sm:w-auto
                       md:h-9
                     "
                   >
-                    <Calendar className="h-3.5 w-3.5" />
+                    <Calendar
+                      className="
+                        h-3.5
+                        w-3.5
+                      "
+                    />
 
                     Reschedule
 
                     {hasPendingReschedule && (
                       <span
                         className="
-                          absolute -right-1 -top-1
-                          flex h-3 w-3
+                          absolute
+                          -right-1
+                          -top-1
+                          flex
+                          h-3
+                          w-3
                         "
                       >
-                        <span className="absolute h-3 w-3 animate-ping rounded-full bg-blue-500/60" />
+                        <span
+                          className="
+                            absolute
+                            h-3
+                            w-3
+                            animate-ping
+                            rounded-full
+                            bg-blue-500/60
+                          "
+                        />
 
-                        <span className="relative h-3 w-3 rounded-full bg-blue-500" />
+                        <span
+                          className="
+                            relative
+                            h-3
+                            w-3
+                            rounded-full
+                            bg-blue-500
+                          "
+                        />
                       </span>
                     )}
                   </Button>
@@ -495,9 +807,9 @@ export default function AppointmentCard({
         </div>
       </div>
 
-      {/* =============================================================
+      {/* ===========================================================
           DETAIL MODAL
-      ============================================================= */}
+      ============================================================ */}
 
       <AppointmentDetailModal
         open={
@@ -593,4 +905,3 @@ export default function AppointmentCard({
     </>
   );
 }
-

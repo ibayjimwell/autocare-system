@@ -117,7 +117,7 @@ export function Header({
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 flex shrink-0 items-center justify-between gap-3",
+        "stick top-0 z-40 flex shrink-0 items-center justify-between gap-3",
         "h-16 md:h-[72px]",
         "border-b border-border",
         "bg-card text-card-foreground",
