@@ -1,165 +1,656 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 import { Database } from '@/lib/drizzle';
-import { AppointmentRescheduleRequests } from '@/database/models/appointments/appointment-reschedule-requests.model';
-import { Appointments } from '@/database/models/appointments/appointments.model';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/staffs/auth';
-import { isValidUUID } from '@/utils/shared';
-import { eq } from 'drizzle-orm';
-import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
-import { appointmentsTriggers } from '@/triggers/appointments';
-import { mobileAppointmentsTriggers } from '@/app-triggers/appointments';
-import { verifyJWT } from '@/utils/jwt';
+
+import {
+  AppointmentRescheduleRequests,
+} from '@/database/models/appointments/appointment-reschedule-requests.model';
+
+import {
+  Appointments,
+} from '@/database/models/appointments/appointments.model';
+
+import {
+  ServiceQueue,
+} from '@/database/models/queue/service-queue.model';
+
+import {
+  getServerSession,
+} from 'next-auth';
+
+import {
+  authOptions,
+} from '@/lib/auth/staffs/auth';
+
+import {
+  isValidUUID,
+} from '@/utils/shared';
+
+import {
+  eq,
+} from 'drizzle-orm';
+
+import {
+  getAppointmentInfo,
+} from '@/utils/payments/get-appointment-info';
+
+import {
+  appointmentsTriggers,
+} from '@/triggers/appointments';
+
+import {
+  mobileAppointmentsTriggers,
+} from '@/app-triggers/appointments';
+
+import {
+  verifyJWT,
+} from '@/utils/jwt';
+
+/* ================================================================
+   PATCH /api/appointments/reschedule-request/[id]
+
+   Approve:
+     1. Update appointment date/time.
+     2. Synchronize the existing ServiceQueue.queueDate.
+     3. Mark reschedule request APPROVED.
+     4. Send notifications.
+
+   Reject:
+     1. Mark request REJECTED.
+     2. Store rejection reason.
+     3. Send notifications.
+================================================================ */
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+    params,
+  }: {
+    params: Promise<{
+      id: string;
+    }>;
+  },
 ) {
-  const { id: requestId } = await params;
-  if (!isValidUUID(requestId)) {
-    return NextResponse.json({ error: true, errorMessage: 'Invalid request ID' }, { status: 422 });
+  const {
+    id: requestId,
+  } = await params;
+
+  /* ==============================================================
+     VALIDATE REQUEST ID
+  ============================================================== */
+
+  if (
+    !isValidUUID(
+      requestId,
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Invalid request ID',
+      },
+      {
+        status: 422,
+      },
+    );
   }
 
-  const session = await getServerSession(authOptions);
-  let staffId: string | null = null;
-  let customerId: string | null = null;
-  let isStaff = false;
+  /* ==============================================================
+     AUTHENTICATION
+  ============================================================== */
 
-  if (session?.user?.id) {
-    staffId = session.user.id;
-    isStaff = true;
+  const session =
+    await getServerSession(
+      authOptions,
+    );
+
+  let staffId:
+    | string
+    | null = null;
+
+  let customerId:
+    | string
+    | null = null;
+
+  if (
+    session?.user?.id
+  ) {
+    staffId =
+      session.user.id;
   } else {
-    // Try customer JWT from header
-    const authHeader = req.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
+    const authHeader =
+      req.headers.get(
+        'authorization',
+      );
+
+    if (
+      authHeader?.startsWith(
+        'Bearer ',
+      )
+    ) {
+      const token =
+        authHeader.slice(
+          7,
+        );
+
       try {
-        const decoded = await verifyJWT(token);
-        if (decoded && decoded.id) {
-          customerId = decoded.id;
+        const decoded =
+          await verifyJWT(
+            token,
+          );
+
+        if (
+          decoded?.id
+        ) {
+          customerId =
+            decoded.id;
         }
-      } catch (err) {
-        console.error('JWT verification failed:', err);
-        // Continue without customerId – will return 401 below
+      } catch (
+        error
+      ) {
+        console.error(
+          '[PATCH reschedule-request] JWT verification failed:',
+          error,
+        );
       }
     }
   }
 
-  if (!staffId && !customerId) {
-    return NextResponse.json({ error: true, errorMessage: 'Unauthorized' }, { status: 401 });
+  if (
+    !staffId &&
+    !customerId
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Unauthorized',
+      },
+      {
+        status: 401,
+      },
+    );
   }
 
-  let body;
+  /* ==============================================================
+     PARSE BODY
+  ============================================================== */
+
+  let body: {
+    action?: string;
+    rejectionReason?: string;
+  };
+
   try {
-    body = await req.json();
+    body =
+      await req.json();
   } catch {
-    return NextResponse.json({ error: true, errorMessage: 'Invalid JSON' }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Invalid JSON',
+      },
+      {
+        status: 400,
+      },
+    );
   }
 
-  const { action, rejectionReason } = body;
-  if (!action || !['approve', 'reject'].includes(action)) {
-    return NextResponse.json({ error: true, errorMessage: 'Action must be approve or reject' }, { status: 422 });
+  const {
+    action,
+    rejectionReason,
+  } = body;
+
+  if (
+    !action ||
+    ![
+      'approve',
+      'reject',
+    ].includes(action)
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Action must be approve or reject',
+      },
+      {
+        status: 422,
+      },
+    );
   }
 
-  if (action === 'reject' && (!rejectionReason || typeof rejectionReason !== 'string' || rejectionReason.trim().length === 0)) {
-    return NextResponse.json({ error: true, errorMessage: 'A reason is required for rejection' }, { status: 422 });
+  /* ==============================================================
+     VALIDATE REJECTION REASON
+  ============================================================== */
+
+  if (
+    action ===
+      'reject' &&
+    (
+      !rejectionReason ||
+      typeof rejectionReason !==
+        'string' ||
+      !rejectionReason.trim()
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'A reason is required for rejection',
+      },
+      {
+        status: 422,
+      },
+    );
   }
 
-  const [request] = await Database.select()
-    .from(AppointmentRescheduleRequests)
-    .where(eq(AppointmentRescheduleRequests.id, requestId));
-  if (!request) {
-    return NextResponse.json({ error: true, errorMessage: 'Request not found' }, { status: 404 });
+  /* ==============================================================
+     LOAD REQUEST
+  ============================================================== */
+
+  const [
+    request,
+  ] =
+    await Database
+      .select()
+      .from(
+        AppointmentRescheduleRequests,
+      )
+      .where(
+        eq(
+          AppointmentRescheduleRequests.id,
+          requestId,
+        ),
+      );
+
+  if (
+    !request
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Request not found',
+      },
+      {
+        status: 404,
+      },
+    );
   }
 
-  if (request.status !== 'PENDING') {
-    return NextResponse.json({ error: true, errorMessage: 'Request already processed' }, { status: 422 });
+  /* ==============================================================
+     REQUEST MUST STILL BE PENDING
+  ============================================================== */
+
+  if (
+    request.status !==
+    'PENDING'
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Request already processed',
+      },
+      {
+        status: 422,
+      },
+    );
   }
 
-  // If it's a customer, verify they own the appointment
-  if (customerId) {
-    const [appointment] = await Database.select()
-      .from(Appointments)
-      .where(eq(Appointments.id, request.appointmentId));
-    if (!appointment || appointment.customerId !== customerId) {
-      return NextResponse.json({ error: true, errorMessage: 'You do not have permission to act on this request' }, { status: 403 });
-    }
+  /* ==============================================================
+     LOAD APPOINTMENT
+  ============================================================== */
+
+  const [
+    appointment,
+  ] =
+    await Database
+      .select()
+      .from(
+        Appointments,
+      )
+      .where(
+        eq(
+          Appointments.id,
+          request.appointmentId,
+        ),
+      );
+
+  if (
+    !appointment
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Appointment not found',
+      },
+      {
+        status: 404,
+      },
+    );
   }
 
-  // Get the appointment info for notifications
-  const info = await getAppointmentInfo(request.appointmentId);
-  const trackingNumber = info.trackingNumber;
-  const customerName = info.customerName || 'Customer';
+  /* ==============================================================
+     CUSTOMER OWNERSHIP VALIDATION
+  ============================================================== */
 
-  // Get customer ID for mobile notifications
-  const [appt] = await Database.select({ customerId: Appointments.customerId })
-    .from(Appointments)
-    .where(eq(Appointments.id, request.appointmentId));
-  const customerIdForNotif = appt?.customerId;
+  if (
+    customerId &&
+    appointment.customerId !==
+      customerId
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'You do not have permission to act on this request',
+      },
+      {
+        status: 403,
+      },
+    );
+  }
 
-  if (action === 'approve') {
-    // Update appointment date/time
-    await Database.update(Appointments)
-      .set({
-        appointmentDate: request.newAppointmentDate,
-        appointmentTime: request.newAppointmentTime,
-        updatedAt: new Date(),
+  /* ==============================================================
+     APPOINTMENT INFORMATION
+  ============================================================== */
+
+  const info =
+    await getAppointmentInfo(
+      request.appointmentId,
+    );
+
+  const trackingNumber =
+    info.trackingNumber;
+
+  const customerName =
+    info.customerName ||
+    'Customer';
+
+  /* ==============================================================
+     CUSTOMER ID FOR NOTIFICATIONS
+  ============================================================== */
+
+  const [
+    appointmentForNotification,
+  ] =
+    await Database
+      .select({
+        customerId:
+          Appointments.customerId,
       })
-      .where(eq(Appointments.id, request.appointmentId));
+      .from(
+        Appointments,
+      )
+      .where(
+        eq(
+          Appointments.id,
+          request.appointmentId,
+        ),
+      );
 
-    await Database.update(AppointmentRescheduleRequests)
-      .set({ status: 'APPROVED', updatedAt: new Date() })
-      .where(eq(AppointmentRescheduleRequests.id, requestId));
+  const customerIdForNotif =
+    appointmentForNotification?.customerId;
 
-    // ----- TRIGGERS (Approved) -----
-    if (customerIdForNotif) {
-      mobileAppointmentsTriggers.onRescheduleApproved({
-        customerId: customerIdForNotif,
-        trackingNumber,
-        newDate: request.newAppointmentDate,
-        newTime: request.newAppointmentTime,
-      }).catch(console.error);
-    }
+  /* ==============================================================
+     APPROVE
+  ============================================================== */
 
-    appointmentsTriggers.onRescheduleApproved({
-      trackingNumber,
-      customerName,
-      newDate: request.newAppointmentDate,
-      newTime: request.newAppointmentTime,
-    }).catch(console.error);
+  if (
+    action ===
+    'approve'
+  ) {
+    const now =
+      new Date();
 
-    return NextResponse.json({
-      error: false,
-      message: 'Appointment rescheduled successfully',
-    }, { status: 200 });
-  } else {
-    // Reject – update request status and store rejection reason
-    await Database.update(AppointmentRescheduleRequests)
+    /* ------------------------------------------------------------
+       1. UPDATE APPOINTMENT
+    ------------------------------------------------------------- */
+
+    await Database
+      .update(
+        Appointments,
+      )
       .set({
-        status: 'REJECTED',
-        reason: rejectionReason.trim(),
-        updatedAt: new Date(),
-      })
-      .where(eq(AppointmentRescheduleRequests.id, requestId));
+        appointmentDate:
+          request.newAppointmentDate,
 
-    // ----- TRIGGERS (Rejected) -----
-    if (customerIdForNotif) {
-      mobileAppointmentsTriggers.onRescheduleRejected({
-        customerId: customerIdForNotif,
-        trackingNumber,
-        reason: rejectionReason.trim(),
-      }).catch(console.error);
+        appointmentTime:
+          request.newAppointmentTime,
+
+        updatedAt:
+          now,
+      })
+      .where(
+        eq(
+          Appointments.id,
+          request.appointmentId,
+        ),
+      );
+
+    /* ------------------------------------------------------------
+       2. SYNCHRONIZE SERVICE QUEUE
+       
+       ServiceQueue stores its own queueDate.
+
+       A confirmed appointment already in the queue must move with
+       the appointment when a reschedule is approved.
+
+       IMPORTANT:
+       We update ALL queue records for this appointment, not just
+       one, so an old/stale duplicate cannot remain attached to the
+       previous date.
+    ------------------------------------------------------------- */
+
+    await Database
+      .update(
+        ServiceQueue,
+      )
+      .set({
+        queueDate:
+          request.newAppointmentDate,
+
+        updatedAt:
+          now,
+      })
+      .where(
+        eq(
+          ServiceQueue.appointmentId,
+          request.appointmentId,
+        ),
+      );
+
+    /* ------------------------------------------------------------
+       3. MARK REQUEST APPROVED
+    ------------------------------------------------------------- */
+
+    await Database
+      .update(
+        AppointmentRescheduleRequests,
+      )
+      .set({
+        status:
+          'APPROVED',
+
+        updatedAt:
+          now,
+      })
+      .where(
+        eq(
+          AppointmentRescheduleRequests.id,
+          requestId,
+        ),
+      );
+
+    /* ------------------------------------------------------------
+       4. NOTIFY CUSTOMER
+    ------------------------------------------------------------- */
+
+    if (
+      customerIdForNotif
+    ) {
+      mobileAppointmentsTriggers
+        .onRescheduleApproved({
+          customerId:
+            customerIdForNotif,
+
+          trackingNumber,
+
+          newDate:
+            request.newAppointmentDate,
+
+          newTime:
+            request.newAppointmentTime,
+        })
+        .catch(
+          console.error,
+        );
     }
 
-    appointmentsTriggers.onRescheduleRejected({
-      trackingNumber,
-      customerName,
-      reason: rejectionReason.trim(),
-    }).catch(console.error);
+    /* ------------------------------------------------------------
+       5. NOTIFY STAFF / SYSTEM
+    ------------------------------------------------------------- */
 
-    return NextResponse.json({
-      error: false,
-      message: 'Reschedule request rejected',
-    }, { status: 200 });
+    appointmentsTriggers
+      .onRescheduleApproved({
+        trackingNumber,
+
+        customerName,
+
+        newDate:
+          request.newAppointmentDate,
+
+        newTime:
+          request.newAppointmentTime,
+      })
+      .catch(
+        console.error,
+      );
+
+    /* ------------------------------------------------------------
+       RESPONSE
+    ------------------------------------------------------------- */
+
+    return NextResponse.json(
+      {
+        error: false,
+
+        message:
+          'Appointment rescheduled successfully',
+
+        data: {
+          appointmentId:
+            request.appointmentId,
+
+          appointmentDate:
+            request.newAppointmentDate,
+
+          appointmentTime:
+            request.newAppointmentTime,
+
+          queueDate:
+            request.newAppointmentDate,
+        },
+      },
+      {
+        status: 200,
+      },
+    );
   }
+
+  /* ==============================================================
+     REJECT
+  ============================================================== */
+
+  const normalizedRejectionReason =
+    rejectionReason!.trim();
+
+  const now =
+    new Date();
+
+  /* --------------------------------------------------------------
+     UPDATE REQUEST
+  -------------------------------------------------------------- */
+
+  await Database
+    .update(
+      AppointmentRescheduleRequests,
+    )
+    .set({
+      status:
+        'REJECTED',
+
+      reason:
+        normalizedRejectionReason,
+
+      updatedAt:
+        now,
+    })
+    .where(
+      eq(
+        AppointmentRescheduleRequests.id,
+        requestId,
+      ),
+    );
+
+  /* --------------------------------------------------------------
+     NOTIFY CUSTOMER
+  -------------------------------------------------------------- */
+
+  if (
+    customerIdForNotif
+  ) {
+    mobileAppointmentsTriggers
+      .onRescheduleRejected({
+        customerId:
+          customerIdForNotif,
+
+        trackingNumber,
+
+        reason:
+          normalizedRejectionReason,
+      })
+      .catch(
+        console.error,
+      );
+  }
+
+  /* --------------------------------------------------------------
+     NOTIFY STAFF / SYSTEM
+  -------------------------------------------------------------- */
+
+  appointmentsTriggers
+    .onRescheduleRejected({
+      trackingNumber,
+
+      customerName,
+
+      reason:
+        normalizedRejectionReason,
+    })
+    .catch(
+      console.error,
+    );
+
+  /* --------------------------------------------------------------
+     RESPONSE
+  -------------------------------------------------------------- */
+
+  return NextResponse.json(
+    {
+      error: false,
+
+      message:
+        'Reschedule request rejected',
+    },
+    {
+      status: 200,
+    },
+  );
 }

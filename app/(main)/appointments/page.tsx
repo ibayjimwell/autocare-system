@@ -53,6 +53,7 @@ import { appointmentsApi } from '@/lib/appointments/appointments';
 import { useAuth } from '@/lib/auth/staffs/useAuth';
 import { useConfigurations } from '@/hooks/configurations/useConfigurations';
 import { getEffectiveConfigForDate } from '@/utils/configurations';
+import { usePendingRescheduleRequests } from '@/hooks/appointments/usePendingRescheduleRequests';
 
 /* ================================================================
    SEARCH TYPES
@@ -439,6 +440,33 @@ export default function AppointmentsPage() {
     useAppointmentData();
 
   /* ==============================================================
+     PENDING RESCHEDULE REQUESTS
+
+     Fetch all pending reschedule indicators with ONE batch request.
+     The map is shared by the calendar, agenda, and search results.
+  ============================================================== */
+
+  const appointmentIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          appointments
+            .map((appointment) => appointment?.id)
+            .filter(
+              (id): id is string =>
+                typeof id === 'string' && id.trim().length > 0,
+            ),
+        ),
+      ),
+    [appointments],
+  );
+
+  const {
+    pendingMap: pendingRescheduleMap,
+    refresh: refreshPendingReschedules,
+  } = usePendingRescheduleRequests(appointmentIds);
+
+  /* ==============================================================
      SEARCH STATE
   ============================================================== */
 
@@ -800,6 +828,7 @@ export default function AppointmentsPage() {
           );
 
           await loadAppointments();
+          await refreshPendingReschedules();
         }
       } catch (
         err: any
@@ -853,6 +882,7 @@ export default function AppointmentsPage() {
           );
 
           await loadAppointments();
+          await refreshPendingReschedules();
         }
       } catch (
         err: any
@@ -1700,6 +1730,9 @@ export default function AppointmentsPage() {
                       appointment={
                         appointment
                       }
+                      pendingRescheduleCount={
+                        pendingRescheduleMap[appointment.id] ?? 0
+                      }
                       className="
                         w-full
                         shadow-sm
@@ -1903,6 +1936,9 @@ export default function AppointmentsPage() {
                 closedDates={
                   closedDates
                 }
+                pendingRescheduleMap={
+                  pendingRescheduleMap
+                }
               />
             </Card>
 
@@ -2002,6 +2038,9 @@ export default function AppointmentsPage() {
                 }
                 onRefresh={
                   loadAppointments
+                }
+                pendingRescheduleMap={
+                  pendingRescheduleMap
                 }
               />
             </div>

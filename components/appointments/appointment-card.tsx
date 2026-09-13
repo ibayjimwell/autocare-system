@@ -1,4 +1,4 @@
-'use client';
+
 
 import React, {
   useState,
@@ -14,6 +14,7 @@ import {
   User,
   Car,
   Eye,
+  CalendarClock,
 } from 'lucide-react';
 
 import {
@@ -73,7 +74,7 @@ interface AppointmentCardProps {
   pendingRescheduleCount?: number;
 
   onReschedule?: (
-    appointment: AppointmentData
+    appointment: AppointmentData,
   ) => void;
 }
 
@@ -149,10 +150,12 @@ export default function AppointmentCard({
     refresh,
   } =
     useAppointmentDetailModal(
-      appointment?.id
+      appointment?.id,
     );
 
-  if (!appointment) {
+  if (
+    !appointment
+  ) {
     return (
       <div
         className={cn(
@@ -162,13 +165,14 @@ export default function AppointmentCard({
             bg-destructive/10 p-3
             text-destructive md:p-4
           `,
-          className
+          className,
         )}
       >
         <AlertCircle className="h-4 w-4 shrink-0" />
 
         <span className="text-xs font-medium">
-          Invalid appointment data.
+          Invalid appointment
+          data.
         </span>
       </div>
     );
@@ -180,7 +184,7 @@ export default function AppointmentCard({
 
   const isReschedulable =
     canReschedule(
-      appointment.status
+      appointment.status,
     );
 
   const hasDetails =
@@ -199,7 +203,9 @@ export default function AppointmentCard({
             shadow-sm transition-shadow
             hover:shadow-md
           `,
-          className
+          hasPendingReschedule &&
+            'border-blue-500/30 ring-1 ring-blue-500/10',
+          className,
         )}
       >
         <StatusAccentBar
@@ -215,7 +221,7 @@ export default function AppointmentCard({
 
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span
                   className="
                     truncate text-sm font-bold
@@ -228,20 +234,42 @@ export default function AppointmentCard({
                   }
                 </span>
 
+                {/* =================================================
+                    RESCHEDULE INDICATOR
+                ================================================== */}
+
                 {hasPendingReschedule && (
                   <span
-                    className="relative flex h-2 w-2 shrink-0"
-                    aria-label="Pending reschedule request"
+                    className="
+                      inline-flex items-center gap-1.5
+                      rounded-full
+                      border border-blue-500/25
+                      bg-blue-500/10
+                      px-2 py-0.5
+                      text-[9px]
+                      font-bold
+                      uppercase
+                      tracking-wider
+                      text-blue-600
+                      dark:text-blue-400
+                    "
                   >
-                    <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-destructive/60" />
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-blue-500/70" />
 
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+                    </span>
+
+                    <CalendarClock className="h-3 w-3" />
+
+                    Reschedule
                   </span>
                 )}
               </div>
 
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                {appointment.customer
+                {appointment
+                  .customer
                   ?.fullname && (
                   <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
                     <User className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -256,7 +284,8 @@ export default function AppointmentCard({
                   </span>
                 )}
 
-                {appointment.vehicle
+                {appointment
+                  .vehicle
                   ?.plateNumber && (
                   <span
                     className="
@@ -288,8 +317,6 @@ export default function AppointmentCard({
                 }
                 className="shrink-0 scale-90"
               />
-
-              {/* NEW EYE BUTTON */}
 
               <Button
                 type="button"
@@ -323,9 +350,9 @@ export default function AppointmentCard({
                   onClick={() =>
                     setExpanded(
                       (
-                        previous
+                        previous,
                       ) =>
-                        !previous
+                        !previous,
                     )
                   }
                   aria-expanded={
@@ -359,7 +386,7 @@ export default function AppointmentCard({
                     className={cn(
                       'h-4 w-4 transition-transform duration-200',
                       expanded &&
-                        'rotate-180'
+                        'rotate-180',
                     )}
                   />
                 </button>
@@ -377,7 +404,7 @@ export default function AppointmentCard({
 
               {appointment.appointmentDate
                 ? new Date(
-                    appointment.appointmentDate
+                    `${appointment.appointmentDate}T00:00:00`,
                   ).toLocaleDateString(
                     'en-US',
                     {
@@ -385,7 +412,7 @@ export default function AppointmentCard({
                         'short',
                       day:
                         'numeric',
-                    }
+                    },
                   )
                 : 'N/A'}
             </span>
@@ -396,14 +423,14 @@ export default function AppointmentCard({
               {appointment.appointmentTime
                 ? appointment.appointmentTime.slice(
                     0,
-                    5
+                    5,
                   )
                 : 'N/A'}
             </span>
           </div>
 
           {/* =======================================================
-              EXISTING EXPANDABLE CONTENT
+              EXPANDABLE CONTENT
           ======================================================== */}
 
           {hasDetails && (
@@ -412,7 +439,7 @@ export default function AppointmentCard({
                 'flex-col gap-1.5',
                 expanded
                   ? 'mt-3 flex border-t border-border pt-3'
-                  : 'hidden'
+                  : 'hidden',
               )}
             >
               {children}
@@ -425,7 +452,7 @@ export default function AppointmentCard({
                     variant="outline"
                     onClick={() =>
                       onReschedule(
-                        appointment
+                        appointment,
                       )
                     }
                     className="
@@ -450,10 +477,15 @@ export default function AppointmentCard({
                     Reschedule
 
                     {hasPendingReschedule && (
-                      <span className="absolute -right-1 -top-1 flex h-3 w-3">
-                        <span className="absolute h-3 w-3 animate-ping rounded-full bg-destructive/60" />
+                      <span
+                        className="
+                          absolute -right-1 -top-1
+                          flex h-3 w-3
+                        "
+                      >
+                        <span className="absolute h-3 w-3 animate-ping rounded-full bg-blue-500/60" />
 
-                        <span className="relative h-3 w-3 rounded-full bg-destructive" />
+                        <span className="relative h-3 w-3 rounded-full bg-blue-500" />
                       </span>
                     )}
                   </Button>
@@ -472,7 +504,7 @@ export default function AppointmentCard({
           open
         }
         onOpenChange={(
-          nextOpen
+          nextOpen,
         ) => {
           if (
             nextOpen
@@ -561,3 +593,4 @@ export default function AppointmentCard({
     </>
   );
 }
+

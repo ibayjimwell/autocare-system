@@ -1,16 +1,30 @@
-// lib/service-queue/service-queue.ts
-export const serviceQueueApi = {
-  list: async (date: string) => {
-    const res = await fetch(`/api/queue?date=${date}`);
-    return res.json();
-  },
+/* ================================================================
+   SERVICE QUEUE API
+================================================================ */
 
-  reorder: async (appointmentId: string, newPosition: number) => {
-    const res = await fetch('/api/queue/reorder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appointmentId, newPosition }),
-    });
+export const serviceQueueApi = {
+  /* ================================================================
+     GET TODAY'S QUEUE
+  ================================================================= */
+
+  list: async (
+    date: string,
+  ) => {
+    const res =
+      await fetch(
+        `/api/queue?date=${encodeURIComponent(
+          date,
+        )}`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+            Accept:
+              'application/json',
+          },
+        },
+      );
+
     return res.json();
   },
 };

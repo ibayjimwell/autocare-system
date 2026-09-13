@@ -5,23 +5,37 @@ import { Appointments } from '@/database/models/appointments/appointments.model'
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
-import { eq, desc, and } from 'drizzle-orm'; // ✅ add and
+import { eq, desc, and } from 'drizzle-orm';
 import { canReschedule } from '@/utils/appointments';
 import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from '@/app-triggers/appointments';
 import { verifyJWT } from '@/utils/jwt';
 
-// ------------------------------------------------------------------
-// GET /api/appointments/[id]/reschedule-request – List reschedule requests
-// ------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// GET /api/appointments/[id]/reschedule-request
+//
+// Returns ALL reschedule requests for one appointment.
+//
+// Existing behavior is preserved for:
+// - RescheduleRequestModal
+// - Appointment details
+// - Customer / staff reschedule workflows
+// -----------------------------------------------------------------------------
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: appointmentId } = await params;
+
   if (!isValidUUID(appointmentId)) {
-    return NextResponse.json({ error: true, errorMessage: 'Invalid appointment ID' }, { status: 422 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'Invalid appointment ID',
+      },
+      { status: 422 }
+    );
   }
 
   try {
@@ -30,169 +44,309 @@ export async function GET(
       .where(eq(AppointmentRescheduleRequests.appointmentId, appointmentId))
       .orderBy(desc(AppointmentRescheduleRequests.createdAt));
 
-    return NextResponse.json({
-      error: false,
-      data: requests,
-    }, { status: 200 });
-  } catch (e) {
-    console.error('[GET /api/appointments/[id]/reschedule-request] Error:', e);
-    return NextResponse.json({
-      error: true,
-      errorMessage: 'Failed to fetch reschedule requests',
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: false,
+        data: requests,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error(
+      '[GET /api/appointments/[id]/reschedule-request] Error:',
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'Failed to fetch reschedule requests',
+      },
+      { status: 500 }
+    );
   }
 }
 
-// ------------------------------------------------------------------
-// POST /api/appointments/[id]/reschedule-request – Create a reschedule request
-// ------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// POST /api/appointments/[id]/reschedule-request
+//
+// Creates a new reschedule request.
+//
+// Existing customer/staff behavior is preserved.
+// -----------------------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: appointmentId } = await params;
+
   if (!isValidUUID(appointmentId)) {
-    return NextResponse.json({ error: true, errorMessage: 'Invalid appointment ID' }, { status: 422 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'Invalid appointment ID',
+      },
+      { status: 422 }
+    );
   }
 
   const session = await getServerSession(authOptions);
-  let customerId: string | undefined = undefined;
-  let staffId: string | undefined = undefined;
+
+  let customerId: string | undefined;
+  let staffId: string | undefined;
+
   let requestedBy: 'customer' | 'staff' = 'customer';
 
-  let body;
+  let body: any;
+
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: true, errorMessage: 'Invalid JSON' }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'Invalid JSON',
+      },
+      { status: 400 }
+    );
   }
 
-  // Determine who is making the request (staff via session, customer via body or JWT)
+  // ---------------------------------------------------------------------------
+  // Determine requester
+  // ---------------------------------------------------------------------------
+
   if (session?.user?.id) {
     staffId = session.user.id;
     requestedBy = 'staff';
-  } else if (body.customerId && isValidUUID(body.customerId)) {
+  } else if (body?.customerId && isValidUUID(body.customerId)) {
     customerId = body.customerId;
     requestedBy = 'customer';
   } else {
-    // Try customer JWT from header
     const authHeader = req.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+
+    if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
+
       try {
         const decoded = await verifyJWT(token);
-        if (decoded && decoded.id) {
+
+        if (decoded?.id) {
           customerId = decoded.id;
           requestedBy = 'customer';
         }
-      } catch (err) {
-        console.error('JWT verification failed:', err);
-        // Continue without customerId – will return 401 below
+      } catch (error) {
+        console.error(
+          '[POST reschedule-request] JWT verification failed:',
+          error
+        );
       }
     }
   }
 
   if (!staffId && !customerId) {
-    return NextResponse.json({ error: true, errorMessage: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'Unauthorized',
+      },
+      { status: 401 }
+    );
   }
 
-  // Validate appointment exists and can be rescheduled
+  // ---------------------------------------------------------------------------
+  // Validate appointment
+  // ---------------------------------------------------------------------------
+
   const [appointment] = await Database.select()
     .from(Appointments)
     .where(eq(Appointments.id, appointmentId));
+
   if (!appointment) {
-    return NextResponse.json({ error: true, errorMessage: 'Appointment not found' }, { status: 404 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'Appointment not found',
+      },
+      { status: 404 }
+    );
   }
 
   if (!canReschedule(appointment.status)) {
-    return NextResponse.json({ error: true, errorMessage: 'Appointment cannot be rescheduled at this stage' }, { status: 422 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'Appointment cannot be rescheduled at this stage',
+      },
+      { status: 422 }
+    );
   }
 
-  if (requestedBy === 'customer' && appointment.customerId !== customerId) {
-    return NextResponse.json({ error: true, errorMessage: 'You do not own this appointment' }, { status: 403 });
+  // Customer can only reschedule their own appointment.
+  if (
+    requestedBy === 'customer' &&
+    appointment.customerId !== customerId
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'You do not own this appointment',
+      },
+      { status: 403 }
+    );
   }
 
-  // ✅ Check if there's already a pending request for this appointment
-  // Use explicit `and()` to avoid any ambiguity
+  // ---------------------------------------------------------------------------
+  // Prevent duplicate pending request
+  // ---------------------------------------------------------------------------
+
   const pendingRequests = await Database.select()
     .from(AppointmentRescheduleRequests)
     .where(
       and(
-        eq(AppointmentRescheduleRequests.appointmentId, appointmentId),
-        eq(AppointmentRescheduleRequests.status, 'PENDING')
+        eq(
+          AppointmentRescheduleRequests.appointmentId,
+          appointmentId
+        ),
+        eq(
+          AppointmentRescheduleRequests.status,
+          'PENDING'
+        )
       )
     )
     .limit(1);
 
   if (pendingRequests.length > 0) {
-    return NextResponse.json({
-      error: true,
-      errorMessage: 'A pending reschedule request already exists for this appointment.',
-      pendingRequest: pendingRequests[0],
-    }, { status: 409 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'A pending reschedule request already exists for this appointment.',
+        pendingRequest: pendingRequests[0],
+      },
+      { status: 409 }
+    );
   }
 
-  const { newAppointmentDate, newAppointmentTime, reason } = body;
+  // ---------------------------------------------------------------------------
+  // Validate requested date/time
+  // ---------------------------------------------------------------------------
+
+  const {
+    newAppointmentDate,
+    newAppointmentTime,
+    reason,
+  } = body ?? {};
+
   if (!newAppointmentDate || !newAppointmentTime) {
-    return NextResponse.json({ error: true, errorMessage: 'New date and time are required' }, { status: 422 });
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: 'New date and time are required',
+      },
+      { status: 422 }
+    );
   }
 
+  // ---------------------------------------------------------------------------
   // Create request
-  const [request] = await Database.insert(AppointmentRescheduleRequests)
+  // ---------------------------------------------------------------------------
+
+  const [request] = await Database.insert(
+    AppointmentRescheduleRequests
+  )
     .values({
       appointmentId,
       requestedBy,
-      requestedByCustomerId: requestedBy === 'customer' ? customerId : null,
-      requestedByStaffId: requestedBy === 'staff' ? staffId : null,
+
+      requestedByCustomerId:
+        requestedBy === 'customer'
+          ? customerId ?? null
+          : null,
+
+      requestedByStaffId:
+        requestedBy === 'staff'
+          ? staffId ?? null
+          : null,
+
       newAppointmentDate,
       newAppointmentTime,
-      reason: reason || null,
+
+      reason:
+        typeof reason === 'string' && reason.trim().length > 0
+          ? reason.trim()
+          : null,
+
       status: 'PENDING',
     })
     .returning();
 
-  // ----- TRIGGERS -----
-  const info = await getAppointmentInfo(appointmentId);
-  const trackingNumber = info.trackingNumber;
-  const customerName = info.customerName || 'Customer';
+  // ---------------------------------------------------------------------------
+  // Notifications / triggers
+  // ---------------------------------------------------------------------------
 
-  if (requestedBy === 'staff') {
-    // Staff requested → notify customer (mobile)
-    mobileAppointmentsTriggers.onRescheduleRequested({
-      customerId: appointment.customerId,
-      trackingNumber,
-      newDate: newAppointmentDate,
-      newTime: newAppointmentTime,
-    }).catch(console.error);
-    // Also notify staff (system)
-    appointmentsTriggers.onRescheduleRequested({
-      trackingNumber,
-      customerName,
-      requestedBy: 'staff',
-      newDate: newAppointmentDate,
-      newTime: newAppointmentTime,
-    }).catch(console.error);
-  } else {
-    // Customer requested → notify staff (system)
-    appointmentsTriggers.onRescheduleRequested({
-      trackingNumber,
-      customerName,
-      requestedBy: 'customer',
-      newDate: newAppointmentDate,
-      newTime: newAppointmentTime,
-    }).catch(console.error);
-    // Notify customer (mobile) that their request was submitted
-    mobileAppointmentsTriggers.onRescheduleRequestedByCustomer({
-      customerId: appointment.customerId,
-      trackingNumber,
-      newDate: newAppointmentDate,
-      newTime: newAppointmentTime,
-    }).catch(console.error);
+  try {
+    const info = await getAppointmentInfo(appointmentId);
+
+    const trackingNumber = info.trackingNumber;
+    const customerName = info.customerName || 'Customer';
+
+    if (requestedBy === 'staff') {
+      // Staff requested -> notify customer.
+      mobileAppointmentsTriggers
+        .onRescheduleRequested({
+          customerId: appointment.customerId,
+          trackingNumber,
+          newDate: newAppointmentDate,
+          newTime: newAppointmentTime,
+        })
+        .catch(console.error);
+
+      // Staff/system notification.
+      appointmentsTriggers
+        .onRescheduleRequested({
+          trackingNumber,
+          customerName,
+          requestedBy: 'staff',
+          newDate: newAppointmentDate,
+          newTime: newAppointmentTime,
+        })
+        .catch(console.error);
+    } else {
+      // Customer requested -> notify staff.
+      appointmentsTriggers
+        .onRescheduleRequested({
+          trackingNumber,
+          customerName,
+          requestedBy: 'customer',
+          newDate: newAppointmentDate,
+          newTime: newAppointmentTime,
+        })
+        .catch(console.error);
+
+      // Notify customer that request was submitted.
+      mobileAppointmentsTriggers
+        .onRescheduleRequestedByCustomer({
+          customerId: appointment.customerId,
+          trackingNumber,
+          newDate: newAppointmentDate,
+          newTime: newAppointmentTime,
+        })
+        .catch(console.error);
+    }
+  } catch (error) {
+    // Notification failure should not invalidate a successful request creation.
+    console.error(
+      '[POST /api/appointments/[id]/reschedule-request] Trigger error:',
+      error
+    );
   }
 
-  return NextResponse.json({
-    error: false,
-    message: 'Reschedule request created',
-    data: request,
-  }, { status: 201 });
+  return NextResponse.json(
+    {
+      error: false,
+      message: 'Reschedule request created',
+      data: request,
+    },
+    { status: 201 }
+  );
 }

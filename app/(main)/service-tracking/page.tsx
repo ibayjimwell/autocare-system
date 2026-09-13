@@ -1,15 +1,27 @@
 'use client';
 
 import React from 'react';
+
 import PageContainer from '@/components/shared/page-container';
 import ServiceTrackingSkeleton from '@/components/skeleton/service-tracking-skeleton';
 import ServiceDetailPanel from '@/components/service-tracking/service-detail-panel';
 import QueueList from '@/components/queue/QueueList';
 import AppointmentGrid from '@/components/service-tracking/AppointmentGrid';
-import { useAppointmentList } from '@/hooks/service-tracking/useAppointmentList';
-import { useServiceQueue } from '@/hooks/queue/useServiceQueue';
-import { appointmentsApi } from '@/lib/appointments/appointments';
+
+import {
+  useAppointmentList,
+} from '@/hooks/service-tracking/useAppointmentList';
+
+import {
+  useServiceQueue,
+} from '@/hooks/queue/useServiceQueue';
+
+import {
+  appointmentsApi,
+} from '@/lib/appointments/appointments';
+
 import { toast } from 'sonner';
+
 import { cn } from '@/lib/utils';
 
 import {
@@ -40,8 +52,14 @@ import {
 } from '@/app-utils/service-tracking/constants';
 
 import ConfirmationDialog from '@/components/shared/confimation-dialog';
+
 import FutureAppointmentsDrawer from '@/components/service-tracking/FutureAppointmentsDrawer';
+
 import { format } from 'date-fns';
+
+/* ================================================================
+   FILTERS
+================================================================ */
 
 const FILTERS = [
   {
@@ -65,62 +83,155 @@ const FILTERS = [
 ];
 
 export default function ServiceTrackingPage() {
+  /* ==============================================================
+     APPOINTMENT LIST
+  ============================================================== */
+
   const {
-    initialLoading: listLoading,
+    initialLoading:
+      listLoading,
+
     selectedAppointment,
+
     activeFilter,
     setActiveFilter,
+
     search,
     setSearch,
+
     sortField,
     setSortField,
+
     sortDirection,
     setSortDirection,
+
     confirmDialogOpen,
     setConfirmDialogOpen,
+
     pendingAppointment,
+
     handleInspect,
     handleConfirmStartInspection,
+
     handleBack,
+
     filteredAppointments,
+
     loadAppointments,
+
     futureAppointments,
     loadFutureAppointments,
+
     futureDrawerOpen,
     setFutureDrawerOpen,
-    todayDate,
-  } = useAppointmentList();
 
-  const isToday = activeFilter === 'CONFIRMED';
+    todayDate,
+  } =
+    useAppointmentList();
+
+  /* ==============================================================
+     TODAY / QUEUE MODE
+  ============================================================== */
+
+  const isToday =
+    activeFilter ===
+    'CONFIRMED';
+
+  /* ==============================================================
+     SERVICE QUEUE
+     
+     Queue ordering is controlled completely by the API.
+     
+     Priority:
+     1. Earliest appointment time
+     2. Earliest createdAt when appointment time is identical
+     
+     There is no manual queue movement.
+  ============================================================== */
 
   const {
     queue,
-    loading: queueLoading,
-    moveUp,
-    moveDown,
-    reorder,
+    loading:
+      queueLoading,
     loadQueue,
-  } = useServiceQueue(todayDate, isToday);
+  } =
+    useServiceQueue(
+      todayDate,
+      isToday,
+    );
 
-  const handleStartInspectionFromQueue = async (appointmentId: string) => {
-    try {
-      const res = await appointmentsApi.updateStatus(
-        appointmentId,
-        'UNDER_INSPECTION'
-      );
+  /* ==============================================================
+     START INSPECTION FROM QUEUE
+     
+     Starting inspection moves the appointment:
+     
+       CONFIRMED
+            ↓
+       UNDER_INSPECTION
+     
+     Because the queue only contains CONFIRMED appointments,
+     the inspected appointment automatically leaves the queue.
+     
+     The remaining queue is then recalculated by the API.
+  ============================================================== */
 
-      if (res.error) {
-        toast.error(res.errorMessage || 'Failed to start inspection.');
-      } else {
-        toast.success('Inspection started!');
-        loadAppointments();
+  const handleStartInspectionFromQueue =
+    async (
+      appointmentId: string,
+    ) => {
+      try {
+        const res =
+          await appointmentsApi.updateStatus(
+            appointmentId,
+            'UNDER_INSPECTION',
+          );
+
+        if (
+          res.error
+        ) {
+          toast.error(
+            res.errorMessage ||
+              'Failed to start inspection.',
+          );
+
+          return;
+        }
+
+        toast.success(
+          'Inspection started!',
+        );
+
+        /*
+         * Refresh appointment lists so the status change is reflected
+         * everywhere in the service tracking page.
+         */
+        await loadAppointments();
+
+        /*
+         * Refresh the queue immediately.
+         *
+         * The inspected appointment is now UNDER_INSPECTION,
+         * therefore it is excluded from the CONFIRMED queue and
+         * the remaining appointments receive new queue positions.
+         */
+        await loadQueue();
+      } catch (
+        err: any
+      ) {
+        toast.error(
+          err?.message ||
+            'Error starting inspection.',
+        );
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Error starting inspection.');
-    }
-  };
+    };
 
-  if (listLoading) {
+  /* ==============================================================
+     INITIAL LOADING
+  ============================================================== */
+
+  if (
+    listLoading
+  ) {
     return (
       <PageContainer
         title="Service Tracking"
@@ -131,15 +242,31 @@ export default function ServiceTrackingPage() {
     );
   }
 
-  if (selectedAppointment) {
+  /* ==============================================================
+     DETAIL PANEL
+  ============================================================== */
+
+  if (
+    selectedAppointment
+  ) {
     return (
       <ServiceDetailPanel
-        appointment={selectedAppointment}
-        onBack={handleBack}
-        onStatusChanged={loadAppointments}
+        appointment={
+          selectedAppointment
+        }
+        onBack={
+          handleBack
+        }
+        onStatusChanged={
+          loadAppointments
+        }
       />
     );
   }
+
+  /* ==============================================================
+     PAGE
+  ============================================================== */
 
   return (
     <PageContainer
@@ -147,72 +274,109 @@ export default function ServiceTrackingPage() {
       subtitle="Monitor and manage real-time workshop operations"
     >
       <div className="w-full space-y-5 md:space-y-6">
-        {/* -------------------------------------------------------
-         * TOP CONTROL SURFACE
-         * ----------------------------------------------------- */}
+        {/* ========================================================
+            TOP CONTROL SURFACE
+        ========================================================= */}
+
         <section className="rounded-xl border border-border bg-card shadow-sm">
           <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-            {/* Filter tabs */}
+            {/* ----------------------------------------------------
+                FILTER TABS
+            ----------------------------------------------------- */}
+
             <div className="min-w-0">
               <div
-                className="inline-flex max-w-full overflow-x-auto rounded-lg border border-border bg-muted p-1 no-scrollbar"
+                className="
+                  inline-flex
+                  max-w-full
+                  overflow-x-auto
+                  rounded-lg
+                  border
+                  border-border
+                  bg-muted
+                  p-1
+                  no-scrollbar
+                "
                 role="tablist"
                 aria-label="Service tracking filters"
               >
-                {FILTERS.map((filter) => {
-                  const Icon = filter.icon;
-                  const active = activeFilter === filter.value;
+                {FILTERS.map(
+                  (
+                    filter,
+                  ) => {
+                    const Icon =
+                      filter.icon;
 
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setActiveFilter(filter.value)}
-                      className={cn(
-                        'flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3.5 py-2 text-left transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                        'md:min-h-9 md:px-3',
-                        active
-                          ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
-                          : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
+                    const active =
+                      activeFilter ===
+                      filter.value;
+
+                    return (
+                      <button
+                        key={
+                          filter.value
+                        }
+                        type="button"
+                        role="tab"
+                        aria-selected={
                           active
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-background text-muted-foreground'
+                        }
+                        onClick={() =>
+                          setActiveFilter(
+                            filter.value,
+                          )
+                        }
+                        className={cn(
+                          'flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3.5 py-2 text-left transition-colors',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                          'md:min-h-9 md:px-3',
+                          active
+                            ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
+                            : 'text-muted-foreground hover:bg-background/70 hover:text-foreground',
                         )}
                       >
-                        <Icon className="h-4 w-4" />
-                      </span>
-
-                      <span className="min-w-0">
                         <span
                           className={cn(
-                            'block truncate text-sm font-semibold',
+                            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
                             active
-                              ? 'text-foreground'
-                              : 'text-muted-foreground'
+                              ? 'bg-primary/10 text-primary'
+                              : 'bg-background text-muted-foreground',
                           )}
                         >
-                          {filter.label}
+                          <Icon className="h-4 w-4" />
                         </span>
 
-                        <span className="hidden text-[11px] text-muted-foreground lg:block">
-                          {filter.description}
+                        <span className="min-w-0">
+                          <span
+                            className={cn(
+                              'block truncate text-sm font-semibold',
+                              active
+                                ? 'text-foreground'
+                                : 'text-muted-foreground',
+                            )}
+                          >
+                            {
+                              filter.label
+                            }
+                          </span>
+
+                          <span className="hidden text-[11px] text-muted-foreground lg:block">
+                            {
+                              filter.description
+                            }
+                          </span>
                         </span>
-                      </span>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  },
+                )}
               </div>
             </div>
 
-            {/* Right-side controls */}
+            {/* ----------------------------------------------------
+                RIGHT CONTROLS
+            ----------------------------------------------------- */}
+
             <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
               {isToday && (
                 <Button
@@ -220,63 +384,101 @@ export default function ServiceTrackingPage() {
                   variant="outline"
                   onClick={() => {
                     loadFutureAppointments();
-                    setFutureDrawerOpen(true);
+
+                    setFutureDrawerOpen(
+                      true,
+                    );
                   }}
                   className={cn(
                     'h-11 w-full rounded-md px-4 sm:w-auto md:h-9',
                     'border-primary/30 text-primary hover:bg-primary/5',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   )}
                 >
                   <CalendarDays className="mr-2 h-4 w-4" />
+
                   Future Appointments
                 </Button>
               )}
 
               {!isToday && (
                 <>
+                  {/* ------------------------------------------------
+                      SEARCH
+                  ------------------------------------------------- */}
+
                   <div className="relative w-full sm:min-w-[260px] sm:w-[260px]">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
                     <Input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      value={
+                        search
+                      }
+                      onChange={(
+                        e,
+                      ) =>
+                        setSearch(
+                          e.target
+                            .value,
+                        )
+                      }
                       placeholder="Search customer, vehicle, tracking..."
                       className={cn(
                         'h-11 rounded-md pl-10 pr-3 text-base md:h-9 md:text-sm',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                       )}
                     />
                   </div>
 
+                  {/* ------------------------------------------------
+                      SORT
+                  ------------------------------------------------- */}
+
                   <div className="flex w-full gap-2 sm:w-auto">
                     <Select
-                      value={sortField}
-                      onValueChange={(val) =>
-                        setSortField(val as SortField)
+                      value={
+                        sortField
+                      }
+                      onValueChange={(
+                        val,
+                      ) =>
+                        setSortField(
+                          val as SortField,
+                        )
                       }
                     >
                       <SelectTrigger
                         className={cn(
                           'h-11 min-w-0 flex-1 rounded-md text-base md:h-9 md:w-[165px] md:flex-none md:text-sm',
-                          'focus:ring-2 focus:ring-ring focus:ring-offset-2'
+                          'focus:ring-2 focus:ring-ring focus:ring-offset-2',
                         )}
                       >
                         <div className="flex items-center gap-2">
                           <ListFilter className="h-4 w-4 text-muted-foreground" />
+
                           <SelectValue placeholder="Sort by" />
                         </div>
                       </SelectTrigger>
 
                       <SelectContent className="rounded-lg">
-                        {SORT_OPTIONS.map((opt) => (
-                          <SelectItem
-                            key={opt.value}
-                            value={opt.value}
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
+                        {SORT_OPTIONS.map(
+                          (
+                            opt,
+                          ) => (
+                            <SelectItem
+                              key={
+                                opt.value
+                              }
+                              value={
+                                opt.value
+                              }
+                            >
+                              {
+                                opt.label
+                              }
+                            </SelectItem>
+                          ),
+                        )}
                       </SelectContent>
                     </Select>
 
@@ -285,21 +487,26 @@ export default function ServiceTrackingPage() {
                       variant="outline"
                       size="icon"
                       aria-label={`Sort ${
-                        sortDirection === 'asc'
+                        sortDirection ===
+                        'asc'
                           ? 'descending'
                           : 'ascending'
                       }`}
                       onClick={() =>
                         setSortDirection(
-                          sortDirection === 'asc' ? 'desc' : 'asc'
+                          sortDirection ===
+                            'asc'
+                            ? 'desc'
+                            : 'asc',
                         )
                       }
                       className={cn(
                         'h-11 w-11 shrink-0 rounded-md md:h-9 md:w-9',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                       )}
                     >
-                      {sortDirection === 'asc' ? (
+                      {sortDirection ===
+                      'asc' ? (
                         <ArrowUp className="h-4 w-4" />
                       ) : (
                         <ArrowDown className="h-4 w-4" />
@@ -312,9 +519,10 @@ export default function ServiceTrackingPage() {
           </div>
         </section>
 
-        {/* -------------------------------------------------------
-         * TODAY CONTEXT
-         * ----------------------------------------------------- */}
+        {/* ========================================================
+            TODAY CONTEXT
+        ========================================================= */}
+
         {isToday && (
           <section className="grid gap-3 sm:grid-cols-[1fr_auto]">
             <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
@@ -330,8 +538,10 @@ export default function ServiceTrackingPage() {
 
                   <p className="truncate text-sm font-semibold text-foreground">
                     {format(
-                      new Date(`${todayDate}T00:00:00Z`),
-                      'MMMM d, yyyy'
+                      new Date(
+                        `${todayDate}T00:00:00Z`,
+                      ),
+                      'MMMM d, yyyy',
                     )}
                   </p>
                 </div>
@@ -350,7 +560,7 @@ export default function ServiceTrackingPage() {
                   </p>
 
                   <p className="text-sm font-semibold text-foreground">
-                    Today&apos;s appointments
+                    Appointment time priority
                   </p>
                 </div>
               </div>
@@ -358,9 +568,10 @@ export default function ServiceTrackingPage() {
           </section>
         )}
 
-        {/* -------------------------------------------------------
-         * PRIMARY WORKSPACE
-         * ----------------------------------------------------- */}
+        {/* ========================================================
+            PRIMARY WORKSPACE
+        ========================================================= */}
+
         <section className="rounded-xl border border-border bg-card shadow-sm">
           <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-5">
             <div className="flex min-w-0 items-center gap-3">
@@ -372,14 +583,15 @@ export default function ServiceTrackingPage() {
                 <h2 className="truncate text-sm font-semibold text-foreground">
                   {isToday
                     ? 'Workshop Queue'
-                    : activeFilter === 'UNDER_INSPECTION'
+                    : activeFilter ===
+                        'UNDER_INSPECTION'
                       ? 'Inspection Jobs'
                       : 'Active Repair Jobs'}
                 </h2>
 
                 <p className="text-xs text-muted-foreground">
                   {isToday
-                    ? 'Prioritize today’s confirmed service appointments'
+                    ? 'Earliest appointment time goes first; matching times use booking time. Inspecting a vehicle removes it from the queue.'
                     : 'Review and manage current service operations'}
                 </p>
               </div>
@@ -389,48 +601,82 @@ export default function ServiceTrackingPage() {
           <div className="p-3 sm:p-5">
             {isToday ? (
               <QueueList
-                queue={queue}
-                loading={queueLoading}
-                onMoveUp={moveUp}
-                onMoveDown={moveDown}
-                onStartInspection={handleStartInspectionFromQueue}
+                queue={
+                  queue
+                }
+                loading={
+                  queueLoading
+                }
+                onStartInspection={
+                  handleStartInspectionFromQueue
+                }
               />
             ) : (
               <AppointmentGrid
-                appointments={filteredAppointments}
-                search={search}
-                activeFilter={activeFilter}
-                handleInspect={handleInspect}
+                appointments={
+                  filteredAppointments
+                }
+                search={
+                  search
+                }
+                activeFilter={
+                  activeFilter
+                }
+                handleInspect={
+                  handleInspect
+                }
               />
             )}
           </div>
         </section>
       </div>
 
-      {/* ---------------------------------------------------------
-       * CONFIRMATION
-       * ------------------------------------------------------- */}
+      {/* ==========================================================
+          CONFIRMATION
+      =========================================================== */}
+
       <ConfirmationDialog
-        open={confirmDialogOpen}
-        onOpenChange={setConfirmDialogOpen}
+        open={
+          confirmDialogOpen
+        }
+        onOpenChange={
+          setConfirmDialogOpen
+        }
         title="Start Inspection"
         description={`Begin inspection for ${
-          pendingAppointment?.vehicle?.make || 'Unknown'
-        } ${pendingAppointment?.vehicle?.model || ''} (${
-          pendingAppointment?.vehicle?.plateNumber || 'N/A'
+          pendingAppointment?.vehicle?.make ||
+          'Unknown'
+        } ${
+          pendingAppointment?.vehicle?.model ||
+          ''
+        } (${
+          pendingAppointment?.vehicle
+            ?.plateNumber ||
+          'N/A'
         })?`}
-        onConfirm={handleConfirmStartInspection}
+        onConfirm={
+          handleConfirmStartInspection
+        }
         confirmText="Confirm & Start"
       />
 
-      {/* ---------------------------------------------------------
-       * FUTURE APPOINTMENTS
-       * ------------------------------------------------------- */}
+      {/* ==========================================================
+          FUTURE APPOINTMENTS
+      =========================================================== */}
+
       <FutureAppointmentsDrawer
-        open={futureDrawerOpen}
-        onOpenChange={setFutureDrawerOpen}
-        appointments={futureAppointments}
-        onInspect={handleInspect}
+        open={
+          futureDrawerOpen
+        }
+        onOpenChange={
+          setFutureDrawerOpen
+        }
+        appointments={
+          futureAppointments
+        }
+        onInspect={
+          handleInspect
+        }
       />
     </PageContainer>
   );

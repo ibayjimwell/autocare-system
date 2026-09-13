@@ -1,4 +1,9 @@
-import React from 'react';
+'use client';
+
+import React, {
+  useMemo,
+} from 'react';
+
 import {
   format,
   startOfMonth,
@@ -15,6 +20,7 @@ import {
   Info,
   Settings,
   XCircle,
+  CalendarClock,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,7 +30,9 @@ const getCountBadgeClass = (
   count: number,
   isSelected: boolean,
 ): string => {
-  if (count === 0) return 'hidden';
+  if (count === 0) {
+    return 'hidden';
+  }
 
   if (isSelected) {
     return 'bg-primary-foreground text-primary shadow-sm';
@@ -43,12 +51,17 @@ const getCountBadgeClass = (
 
 interface AppointmentCalendarProps {
   currentMonth: Date;
-  onMonthChange: (direction: number) => void;
+  onMonthChange: (
+    direction: number,
+  ) => void;
   appointments: any[];
   selectedDate: Date | null;
-  onDateClick: (date: Date) => void;
+  onDateClick: (
+    date: Date,
+  ) => void;
   onConfigureDate?: () => void;
   closedDates?: string[];
+  pendingRescheduleMap?: Record<string, number>;
 }
 
 export default function AppointmentCalendar({
@@ -59,32 +72,151 @@ export default function AppointmentCalendar({
   onDateClick,
   onConfigureDate,
   closedDates = [],
+  pendingRescheduleMap = {},
 }: AppointmentCalendarProps) {
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const daysInMonth = eachDayOfInterval({
-    start: monthStart,
-    end: monthEnd,
-  });
+  const monthStart =
+    startOfMonth(
+      currentMonth,
+    );
 
-  const startOffset = monthStart.getDay();
+  const monthEnd =
+    endOfMonth(
+      currentMonth,
+    );
 
-  const countMap: Record<string, number> = {};
-  const pendingCountMap: Record<string, number> = {};
+  const daysInMonth =
+    eachDayOfInterval({
+      start: monthStart,
+      end: monthEnd,
+    });
 
-  appointments.forEach((apt) => {
-    if (apt.status !== 'CANCELLED') {
-      const dateKey = apt.appointmentDate;
-      countMap[dateKey] =
-        (countMap[dateKey] || 0) + 1;
-    }
+  const startOffset =
+    monthStart.getDay();
 
-    if (apt.status === 'PENDING') {
-      const dateKey = apt.appointmentDate;
-      pendingCountMap[dateKey] =
-        (pendingCountMap[dateKey] || 0) + 1;
-    }
-  });
+  /* ================================================================
+     APPOINTMENT COUNTS
+  ================================================================= */
+
+  const {
+    countMap,
+    pendingCountMap,
+  } = useMemo(() => {
+    const appointmentCounts: Record<
+      string,
+      number
+    > = {};
+
+    const pendingCounts: Record<
+      string,
+      number
+    > = {};
+
+    appointments.forEach(
+      (
+        apt,
+      ) => {
+        if (
+          apt.status !==
+          'CANCELLED'
+        ) {
+          const dateKey =
+            apt.appointmentDate;
+
+          if (
+            dateKey
+          ) {
+            appointmentCounts[
+              dateKey
+            ] =
+              (
+                appointmentCounts[
+                  dateKey
+                ] || 0
+              ) + 1;
+          }
+        }
+
+        if (
+          apt.status ===
+          'PENDING'
+        ) {
+          const dateKey =
+            apt.appointmentDate;
+
+          if (
+            dateKey
+          ) {
+            pendingCounts[
+              dateKey
+            ] =
+              (
+                pendingCounts[
+                  dateKey
+                ] || 0
+              ) + 1;
+          }
+        }
+      },
+    );
+
+    return {
+      countMap:
+        appointmentCounts,
+      pendingCountMap:
+        pendingCounts,
+    };
+  }, [
+    appointments,
+  ]);
+
+  /* ================================================================
+     RESCHEDULE COUNT BY DATE
+
+     Pending reschedule counts are supplied by the parent page.
+     This component does not perform API requests.
+  ================================================================= */
+
+  const rescheduleCountMap =
+    useMemo(() => {
+      const map: Record<
+        string,
+        number
+      > = {};
+
+      appointments.forEach(
+        (
+          appointment,
+        ) => {
+          if (
+            !appointment?.id ||
+            !appointment?.appointmentDate
+          ) {
+            return;
+          }
+
+          const requestCount =
+            pendingRescheduleMap[
+              appointment.id
+            ] ?? 0;
+
+          if (requestCount <= 0) {
+            return;
+          }
+
+          const dateKey =
+            appointment.appointmentDate;
+
+          map[dateKey] =
+            (map[dateKey] || 0) +
+            requestCount;
+        },
+      );
+
+      return map;
+    }, [
+      appointments,
+      pendingRescheduleMap,
+    ]);
 
   const weekdays = [
     'Sun',
@@ -98,7 +230,10 @@ export default function AppointmentCalendar({
 
   return (
     <div className="w-full p-4 md:p-5">
-      {/* Header */}
+      {/* ==========================================================
+          HEADER
+      =========================================================== */}
+
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -107,11 +242,18 @@ export default function AppointmentCalendar({
 
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold tracking-tight text-foreground md:text-lg">
-              {format(currentMonth, 'MMMM')}
+              {format(
+                currentMonth,
+                'MMMM',
+              )}
             </h2>
 
             <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {format(currentMonth, 'yyyy')} Schedule
+              {format(
+                currentMonth,
+                'yyyy',
+              )}{' '}
+              Schedule
             </p>
           </div>
         </div>
@@ -122,12 +264,17 @@ export default function AppointmentCalendar({
               type="button"
               variant="outline"
               size="icon"
-              onClick={onConfigureDate}
+              onClick={
+                onConfigureDate
+              }
               title="Configure selected date"
               aria-label="Configure selected date"
               className="
                 h-11 w-11 rounded-md
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
                 md:h-9 md:w-9
               "
             >
@@ -140,11 +287,18 @@ export default function AppointmentCalendar({
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => onMonthChange(-1)}
+              onClick={() =>
+                onMonthChange(
+                  -1,
+                )
+              }
               aria-label="Previous month"
               className="
                 h-11 w-11 rounded-[5px]
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
                 md:h-9 md:w-9
               "
             >
@@ -155,11 +309,18 @@ export default function AppointmentCalendar({
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => onMonthChange(1)}
+              onClick={() =>
+                onMonthChange(
+                  1,
+                )
+              }
               aria-label="Next month"
               className="
                 h-11 w-11 rounded-[5px]
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
                 md:h-9 md:w-9
               "
             >
@@ -169,146 +330,297 @@ export default function AppointmentCalendar({
         </div>
       </div>
 
-      {/* Weekdays */}
+      {/* ==========================================================
+          WEEKDAYS
+      =========================================================== */}
+
       <div className="mb-2 grid grid-cols-7 gap-1">
-        {weekdays.map((day) => (
-          <div
-            key={day}
-            className="
-              py-1 text-center text-[9px] font-semibold
-              uppercase tracking-widest text-muted-foreground
-              md:text-[10px]
-            "
-          >
-            {day}
-          </div>
-        ))}
+        {weekdays.map(
+          (
+            day,
+          ) => (
+            <div
+              key={
+                day
+              }
+              className="
+                py-1 text-center text-[9px] font-semibold
+                uppercase tracking-widest text-muted-foreground
+                md:text-[10px]
+              "
+            >
+              {day}
+            </div>
+          ),
+        )}
       </div>
 
-      {/* Calendar */}
+      {/* ==========================================================
+          CALENDAR
+      =========================================================== */}
+
       <div className="grid grid-cols-7 gap-1 md:gap-1.5">
-        {Array.from({ length: startOffset }).map((_, i) => (
-          <div
-            key={`empty-${i}`}
-            className="aspect-square"
-            aria-hidden="true"
-          />
-        ))}
+        {Array.from({
+          length:
+            startOffset,
+        }).map(
+          (
+            _,
+            index,
+          ) => (
+            <div
+              key={`empty-${index}`}
+              className="aspect-square"
+              aria-hidden="true"
+            />
+          ),
+        )}
 
-        {daysInMonth.map((day) => {
-          const dateKey = format(day, 'yyyy-MM-dd');
-          const count = countMap[dateKey] || 0;
-          const pendingCount =
-            pendingCountMap[dateKey] || 0;
+        {daysInMonth.map(
+          (
+            day,
+          ) => {
+            const dateKey =
+              format(
+                day,
+                'yyyy-MM-dd',
+              );
 
-          const isSelected =
-            selectedDate && isSameDay(day, selectedDate);
+            const count =
+              countMap[
+                dateKey
+              ] || 0;
 
-          const isCurrentMonth =
-            isSameMonth(day, currentMonth);
+            const pendingCount =
+              pendingCountMap[
+                dateKey
+              ] || 0;
 
-          const isToday =
-            isSameDay(day, new Date());
+            const rescheduleCount =
+              rescheduleCountMap[
+                dateKey
+              ] || 0;
 
-          const isClosed =
-            closedDates.includes(dateKey);
+            const isSelected =
+              selectedDate
+                ? isSameDay(
+                    day,
+                    selectedDate,
+                  )
+                : false;
 
-          return (
-            <button
-              type="button"
-              key={dateKey}
-              onClick={() => onDateClick(day)}
-              aria-pressed={!!isSelected}
-              aria-current={
-                isToday ? 'date' : undefined
-              }
-              className={cn(
-                `
-                  relative flex aspect-square flex-col
-                  items-center justify-center rounded-md
-                  border transition-all duration-150
-                  active:scale-95
-                  focus-visible:outline-none
-                  focus-visible:ring-2
-                  focus-visible:ring-ring
-                  focus-visible:ring-offset-2
-                `,
-                !isCurrentMonth && 'opacity-30',
-                isSelected
-                  ? 'z-10 border-primary bg-primary text-primary-foreground shadow-sm'
-                  : isClosed
-                    ? 'border-border/50 bg-muted/50'
-                    : 'border-transparent bg-card hover:border-border hover:bg-accent',
-              )}
-            >
-              {isToday && !isSelected && (
-                <span className="absolute left-1/2 top-1 h-1 w-1 -translate-x-1/2 rounded-full bg-primary" />
-              )}
+            const isCurrentMonth =
+              isSameMonth(
+                day,
+                currentMonth,
+              );
 
-              <span
-                className={cn(
-                  'text-sm font-semibold tabular-nums md:text-base',
+            const isToday =
+              isSameDay(
+                day,
+                new Date(),
+              );
+
+            const isClosed =
+              closedDates.includes(
+                dateKey,
+              );
+
+            return (
+              <button
+                type="button"
+                key={
+                  dateKey
+                }
+                onClick={() =>
+                  onDateClick(
+                    day,
+                  )
+                }
+                aria-pressed={
                   isSelected
-                    ? 'text-primary-foreground'
+                }
+                aria-current={
+                  isToday
+                    ? 'date'
+                    : undefined
+                }
+                className={cn(
+                  `
+                    relative flex aspect-square flex-col
+                    items-center justify-center rounded-md
+                    border transition-all duration-150
+                    active:scale-95
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-ring
+                    focus-visible:ring-offset-2
+                  `,
+                  !isCurrentMonth &&
+                    'opacity-30',
+                  isSelected
+                    ? 'z-10 border-primary bg-primary text-primary-foreground shadow-sm'
                     : isClosed
-                      ? 'text-muted-foreground'
-                      : 'text-foreground',
+                      ? 'border-border/50 bg-muted/50'
+                      : 'border-transparent bg-card hover:border-border hover:bg-accent',
                 )}
               >
-                {format(day, 'd')}
-              </span>
+                {/* ==================================================
+                    TODAY MARKER
+                =================================================== */}
 
-              {pendingCount > 0 && !isClosed && (
-                <span
-                  className="
-                    absolute -right-1 -top-1 flex h-[18px]
-                    min-w-[18px] items-center justify-center
-                    rounded-full border-2 border-card bg-destructive
-                    px-0.5 text-[9px] font-bold text-destructive-foreground
-                    shadow-sm
-                  "
-                >
-                  {pendingCount}
-                </span>
-              )}
+                {isToday &&
+                  !isSelected && (
+                    <span className="absolute left-1/2 top-1 h-1 w-1 -translate-x-1/2 rounded-full bg-primary" />
+                  )}
 
-              {isClosed ? (
-                <span
-                  className="
-                    absolute -bottom-1 -right-1 flex h-5 w-5
-                    items-center justify-center rounded-md
-                    border border-border bg-muted
-                    text-muted-foreground
-                  "
-                >
-                  <XCircle className="h-3 w-3" />
-                </span>
-              ) : (
+                {/* ==================================================
+                    RESCHEDULE REQUEST COUNT
+                    TOP LEFT
+                =================================================== */}
+
+                {rescheduleCount >
+                  0 &&
+                  !isClosed && (
+                    <span
+                      className={cn(
+                        `
+                          absolute -left-1 -top-1 z-20
+                          flex h-[19px] min-w-[19px]
+                          items-center justify-center
+                          gap-0.5 rounded-full
+                          border-2 border-card
+                          bg-blue-500
+                          px-1 text-[9px]
+                          font-bold text-white
+                          shadow-sm
+                        `,
+                        'animate-pulse',
+                        isSelected &&
+                          'border-primary',
+                      )}
+                      title={`${rescheduleCount} pending reschedule ${
+                        rescheduleCount ===
+                        1
+                          ? 'request'
+                          : 'requests'
+                      }`}
+                    >
+                      <CalendarClock className="h-2.5 w-2.5" />
+
+                      <span>
+                        {
+                          rescheduleCount
+                        }
+                      </span>
+                    </span>
+                  )}
+
+                {/* ==================================================
+                    DATE
+                =================================================== */}
+
                 <span
                   className={cn(
-                    `
-                      absolute -bottom-1 -right-1 flex h-5 w-5
-                      items-center justify-center rounded-md
-                      text-[9px] font-bold
-                    `,
-                    getCountBadgeClass(
-                      count,
-                      !!isSelected,
-                    ),
+                    'text-sm font-semibold tabular-nums md:text-base',
+                    isSelected
+                      ? 'text-primary-foreground'
+                      : isClosed
+                        ? 'text-muted-foreground'
+                        : 'text-foreground',
                   )}
                 >
-                  {count}
+                  {format(
+                    day,
+                    'd',
+                  )}
                 </span>
-              )}
-            </button>
-          );
-        })}
+
+                {/* ==================================================
+                    PENDING APPOINTMENT COUNT
+                    TOP RIGHT
+                =================================================== */}
+
+                {pendingCount >
+                  0 &&
+                  !isClosed && (
+                    <span
+                      className="
+                        absolute -right-1 -top-1 z-10
+                        flex h-[18px]
+                        min-w-[18px]
+                        items-center
+                        justify-center
+                        rounded-full
+                        border-2
+                        border-card
+                        bg-destructive
+                        px-0.5
+                        text-[9px]
+                        font-bold
+                        text-destructive-foreground
+                        shadow-sm
+                        animate-pulse
+                      "
+                      title={`${pendingCount} pending appointment ${
+                        pendingCount ===
+                        1
+                          ? 'request'
+                          : 'requests'
+                      }`}
+                    >
+                      {
+                        pendingCount
+                      }
+                    </span>
+                  )}
+
+                {/* ==================================================
+                    CLOSED
+                =================================================== */}
+
+                {isClosed ? (
+                  <span
+                    className="
+                      absolute -bottom-1 -right-1 flex h-5 w-5
+                      items-center justify-center rounded-md
+                      border border-border bg-muted
+                      text-muted-foreground
+                    "
+                  >
+                    <XCircle className="h-3 w-3" />
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      `
+                        absolute -bottom-1 -right-1 flex h-5 w-5
+                        items-center justify-center rounded-md
+                        text-[9px] font-bold
+                      `,
+                      getCountBadgeClass(
+                        count,
+                        isSelected,
+                      ),
+                    )}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          },
+        )}
       </div>
 
-      {/* Legend */}
+      {/* ==========================================================
+          LEGEND
+      =========================================================== */}
+
       <div className="mt-5 border-t border-border pt-4">
         <div className="mb-3 flex items-center gap-1.5 text-muted-foreground">
           <Info className="h-3.5 w-3.5" />
+
           <span className="text-[10px] font-semibold uppercase tracking-wider">
             Shop Load Intensity
           </span>
@@ -317,6 +629,7 @@ export default function AppointmentCalendar({
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full border border-border bg-muted" />
+
             <span className="text-[9px] font-semibold uppercase text-muted-foreground">
               Available
             </span>
@@ -324,6 +637,7 @@ export default function AppointmentCalendar({
 
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-amber-500" />
+
             <span className="text-[9px] font-semibold uppercase text-muted-foreground">
               Busy
             </span>
@@ -331,20 +645,31 @@ export default function AppointmentCalendar({
 
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-destructive" />
+
             <span className="text-[9px] font-semibold uppercase text-muted-foreground">
               Peak
             </span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full border-2 border-card bg-destructive" />
+            <span className="h-2 w-2 animate-pulse rounded-full border-2 border-card bg-destructive" />
+
             <span className="text-[9px] font-semibold uppercase text-muted-foreground">
               Pending
             </span>
           </div>
 
           <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+
+            <span className="text-[9px] font-semibold uppercase text-muted-foreground">
+              Reschedule
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full border border-muted-foreground/40 bg-muted" />
+
             <span className="text-[9px] font-semibold uppercase text-muted-foreground">
               Closed
             </span>

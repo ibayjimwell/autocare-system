@@ -1,65 +1,185 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
-import { serviceQueueApi } from '@/lib/queue/service-queue';
-import { toast } from 'sonner';
-import { useRealtimeServiceQueue } from '@/connections/useRealtimeServiceQueue';
+import {
+  useState,
+  useCallback,
+  useEffect,
+} from 'react';
 
-export function useServiceQueue(date: string, enabled: boolean = true) {
-  const [queue, setQueue] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+import {
+  serviceQueueApi,
+} from '@/lib/queue/service-queue';
 
-  const loadQueue = useCallback(async () => {
-    if (!enabled || !date) return;
-    try {
-      const res = await serviceQueueApi.list(date);
-      if (res.error) {
-        toast.error(res.errorMessage || 'Failed to load queue.');
-        setQueue([]);
-      } else {
-        setQueue(res.data || []);
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Error loading queue.');
-      setQueue([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [date, enabled]);
+import {
+  toast,
+} from 'sonner';
+
+import {
+  useRealtimeServiceQueue,
+} from '@/connections/useRealtimeServiceQueue';
+
+/* ================================================================
+   HOOK
+================================================================ */
+
+export function useServiceQueue(
+  date: string,
+  enabled: boolean = true,
+) {
+  const [
+    queue,
+    setQueue,
+  ] = useState<any[]>(
+    [],
+  );
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(
+    true,
+  );
+
+  /* ==============================================================
+     LOAD QUEUE
+  ============================================================== */
+
+  const loadQueue =
+    useCallback(
+      async () => {
+        if (
+          !enabled ||
+          !date
+        ) {
+          setQueue(
+            [],
+          );
+
+          setLoading(
+            false,
+          );
+
+          return;
+        }
+
+        try {
+          const res =
+            await serviceQueueApi.list(
+              date,
+            );
+
+          if (
+            res.error
+          ) {
+            toast.error(
+              res.errorMessage ||
+                'Failed to load queue.',
+            );
+
+            setQueue(
+              [],
+            );
+
+            return;
+          }
+
+          setQueue(
+            Array.isArray(
+              res.data,
+            )
+              ? res.data
+              : [],
+          );
+        } catch (
+          error: any
+        ) {
+          console.error(
+            '[useServiceQueue] Failed to load queue:',
+            error,
+          );
+
+          toast.error(
+            error?.message ||
+              'Error loading queue.',
+          );
+
+          setQueue(
+            [],
+          );
+        } finally {
+          setLoading(
+            false,
+          );
+        }
+      },
+      [
+        date,
+        enabled,
+      ],
+    );
+
+  /* ==============================================================
+     INITIAL LOAD / DATE CHANGE
+  ============================================================== */
 
   useEffect(() => {
-    if (enabled && date) {
-      loadQueue();
-    } else {
-      setLoading(false);
-      setQueue([]);
-    }
-  }, [enabled, date, loadQueue]);
+    if (
+      !enabled ||
+      !date
+    ) {
+      setQueue(
+        [],
+      );
 
-  // Realtime subscription – for the given date
+      setLoading(
+        false,
+      );
+
+      return;
+    }
+
+    setLoading(
+      true,
+    );
+
+    void loadQueue();
+  }, [
+    date,
+    enabled,
+    loadQueue,
+  ]);
+
+  /* ==============================================================
+     REALTIME REFRESH
+     
+     The server remains the single source of truth.
+  ============================================================== */
+
   useRealtimeServiceQueue({
-    onDataChanged: enabled && date ? loadQueue : () => {},
+    onDataChanged:
+      enabled &&
+      date
+        ? loadQueue
+        : () => {},
+
     date,
   });
 
-  const reorder = useCallback(async (appointmentId: string, newPosition: number) => {
-    const res = await serviceQueueApi.reorder(appointmentId, newPosition);
-    if (res.error) {
-      toast.error(res.errorMessage || 'Failed to reorder.');
-    } else {
-      toast.success('Queue updated.');
-    }
-  }, []);
+  /* ==============================================================
+     RETURN
+     
+     There is intentionally no moveUp / moveDown / reorder API.
+     
+     Queue order is derived from:
+       appointmentTime ASC
+       createdAt ASC
+  ============================================================== */
 
-  const moveUp = useCallback((appointmentId: string, currentPosition: number) => {
-    if (currentPosition <= 1) return;
-    reorder(appointmentId, currentPosition - 1);
-  }, [reorder]);
-
-  const moveDown = useCallback((appointmentId: string, currentPosition: number, maxPosition: number) => {
-    if (currentPosition >= maxPosition) return;
-    reorder(appointmentId, currentPosition + 1);
-  }, [reorder]);
-
-  return { queue, loading, loadQueue, moveUp, moveDown, reorder };
+  return {
+    queue,
+    loading,
+    loadQueue,
+  };
 }
+
+export default useServiceQueue;
