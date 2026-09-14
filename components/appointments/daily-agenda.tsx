@@ -1,8 +1,8 @@
 'use client';
 
 import React, {
-  useState,
   useMemo,
+  useState,
 } from 'react';
 
 import {
@@ -41,6 +41,7 @@ import {
   XCircle,
   RefreshCw,
   CalendarClock,
+  AlertTriangle,
 } from 'lucide-react';
 
 import AppointmentCard from '@/components/appointments/appointment-card';
@@ -68,6 +69,10 @@ import {
 
 import RescheduleRequestModal from './RescheduleRequestModal';
 
+/* ================================================================
+   TYPES
+================================================================ */
+
 interface DailyAgendaProps {
   appointments: any[];
 
@@ -83,43 +88,74 @@ interface DailyAgendaProps {
   ) => void;
 
   onRefresh?: () => void;
-  pendingRescheduleMap?: Record<string, number>;
+
+  pendingRescheduleMap?: Record<
+    string,
+    number
+  >;
 }
+
+/* ================================================================
+   STATUS TABS
+================================================================ */
 
 const STATUS_TABS = [
   {
     value: 'ALL',
     label: 'All',
   },
+
   {
     value: 'PENDING',
     label: 'Pending',
   },
+
   {
     value: 'CONFIRMED',
     label: 'Confirmed',
   },
+
   {
     value: 'UNDER_INSPECTION',
     label: 'Under Inspection',
   },
+
   {
     value: 'WAITING_FOR_APPROVAL',
     label: 'Waiting Approval',
   },
+
   {
     value: 'IN_PROGRESS',
     label: 'In Progress',
   },
+
   {
     value: 'COMPLETED',
     label: 'Completed',
   },
+
   {
     value: 'CANCELLED',
     label: 'Cancelled',
   },
 ];
+
+/* ================================================================
+   CANCELLABLE STATUSES
+================================================================ */
+
+const CANCELLABLE_STATUSES = [
+  'PENDING',
+  'CONFIRMED',
+  'UNDER_INSPECTION',
+  'WAITING_FOR_APPROVAL',
+  'IN_PROGRESS',
+] as const;
+
+/* ================================================================
+   COMPONENT
+================================================================ */
 
 export default function DailyAgenda({
   appointments,
@@ -129,17 +165,23 @@ export default function DailyAgenda({
   onRefresh,
   pendingRescheduleMap = {},
 }: DailyAgendaProps) {
+  /* ==============================================================
+     FILTER STATE
+  ============================================================== */
+
   const [
     sidebarFilter,
     setSidebarFilter,
-  ] =
-    useState('');
+  ] = useState('');
 
   const [
     activeStatus,
     setActiveStatus,
-  ] =
-    useState('ALL');
+  ] = useState('ALL');
+
+  /* ==============================================================
+     DECLINE MODAL
+  ============================================================== */
 
   const [
     declineModal,
@@ -150,8 +192,7 @@ export default function DailyAgenda({
       appointment: any | null;
       reason: string;
     }>({
-      open:
-        false,
+      open: false,
 
       appointment:
         null,
@@ -159,6 +200,10 @@ export default function DailyAgenda({
       reason:
         '',
     });
+
+  /* ==============================================================
+     RESCHEDULE MODAL
+  ============================================================== */
 
   const [
     rescheduleModal,
@@ -168,12 +213,41 @@ export default function DailyAgenda({
       open: boolean;
       appointment: any | null;
     }>({
-      open:
-        false,
+      open: false,
 
       appointment:
         null,
     });
+
+  /* ==============================================================
+     CANCEL MODAL
+  ============================================================== */
+
+  const [
+    cancelModal,
+    setCancelModal,
+  ] =
+    useState<{
+      open: boolean;
+      appointment: any | null;
+      reason: string;
+      loading: boolean;
+    }>({
+      open: false,
+
+      appointment:
+        null,
+
+      reason:
+        '',
+
+      loading:
+        false,
+    });
+
+  /* ==============================================================
+     DATE
+  ============================================================== */
 
   const dateStr =
     format(
@@ -188,8 +262,13 @@ export default function DailyAgenda({
       'yyyy-MM-dd',
     );
 
+  /* ==============================================================
+     SERVICE QUEUE
+  ============================================================== */
+
   const {
     queue,
+
     loading:
       queueLoading,
   } =
@@ -198,6 +277,10 @@ export default function DailyAgenda({
       activeStatus ===
         'CONFIRMED',
     );
+
+  /* ==============================================================
+     FILTER APPOINTMENTS
+  ============================================================== */
 
   const filteredAppointments =
     useMemo(
@@ -293,24 +376,35 @@ export default function DailyAgenda({
   const handleDeclineConfirm =
     () => {
       if (
-        declineModal.appointment
+        !declineModal.appointment
       ) {
-        onDecline(
-          declineModal.appointment,
-          declineModal.reason,
-        );
-
-        setDeclineModal({
-          open:
-            false,
-
-          appointment:
-            null,
-
-          reason:
-            '',
-        });
+        return;
       }
+
+      const reason =
+        declineModal.reason.trim();
+
+      if (
+        !reason
+      ) {
+        return;
+      }
+
+      onDecline(
+        declineModal.appointment,
+        reason,
+      );
+
+      setDeclineModal({
+        open:
+          false,
+
+        appointment:
+          null,
+
+        reason:
+          '',
+      });
     };
 
   /* ================================================================
@@ -332,6 +426,156 @@ export default function DailyAgenda({
   const handleRescheduleSuccess =
     () => {
       onRefresh?.();
+    };
+
+  /* ================================================================
+     CANCEL APPOINTMENT
+  ================================================================= */
+
+  const canCancelAppointment =
+    (
+      appointment: any,
+    ) =>
+      !!appointment &&
+      CANCELLABLE_STATUSES.includes(
+        appointment.status,
+      );
+
+  /* ----------------------------------------------------------------
+     OPEN CANCEL MODAL
+  ---------------------------------------------------------------- */
+
+  const handleCancelOpen =
+    (
+      appointment: any,
+    ) => {
+      if (
+        !canCancelAppointment(
+          appointment,
+        )
+      ) {
+        return;
+      }
+
+      setCancelModal({
+        open:
+          true,
+
+        appointment,
+
+        reason:
+          '',
+
+        loading:
+          false,
+      });
+    };
+
+  /* ----------------------------------------------------------------
+     CLOSE CANCEL MODAL
+  ---------------------------------------------------------------- */
+
+  const handleCancelClose =
+    () => {
+      if (
+        cancelModal.loading
+      ) {
+        return;
+      }
+
+      setCancelModal({
+        open:
+          false,
+
+        appointment:
+          null,
+
+        reason:
+          '',
+
+        loading:
+          false,
+      });
+    };
+
+  /* ----------------------------------------------------------------
+     CONFIRM CANCEL
+  ---------------------------------------------------------------- */
+
+  const handleCancelConfirm =
+    async () => {
+      const appointment =
+        cancelModal.appointment;
+
+      const reason =
+        cancelModal.reason.trim();
+
+      if (
+        !appointment
+      ) {
+        return;
+      }
+
+      if (
+        !canCancelAppointment(
+          appointment,
+        )
+      ) {
+        return;
+      }
+
+      if (
+        !reason
+      ) {
+        return;
+      }
+
+      /*
+       * The parent page performs the actual API update so
+       * appointment data and the realtime page state remain
+       * centralized there.
+       */
+      setCancelModal(
+        (
+          previous,
+        ) => ({
+          ...previous,
+
+          loading:
+            true,
+        }),
+      );
+
+      try {
+        /*
+         * The cancellation callback is intentionally awaitable.
+         *
+         * DailyAgenda supports both:
+         *
+         *   async callbacks
+         *   synchronous callbacks
+         *
+         * so existing parents continue to work.
+         */
+        await onDecline(
+          appointment,
+          reason,
+        );
+      } finally {
+        setCancelModal({
+          open:
+            false,
+
+          appointment:
+            null,
+
+          reason:
+            '',
+
+          loading:
+            false,
+        });
+      }
     };
 
   /* ================================================================
@@ -545,7 +789,10 @@ export default function DailyAgenda({
                 }
                 className="grid grid-cols-[3.75rem_minmax(0,1fr)] gap-2 md:grid-cols-[4.5rem_minmax(0,1fr)] md:gap-3"
               >
-                {/* Time */}
+                {/* ==================================================
+                    TIME
+                =================================================== */}
+
                 <div className="pt-3 text-right">
                   <span className="text-[10px] font-semibold tabular-nums text-muted-foreground md:text-[11px]">
                     {slot.time ===
@@ -557,7 +804,10 @@ export default function DailyAgenda({
                   </span>
                 </div>
 
-                {/* Timeline */}
+                {/* ==================================================
+                    TIMELINE
+                =================================================== */}
+
                 <div className="relative border-l border-border pb-4 pl-3 md:pl-4">
                   <span
                     aria-hidden="true"
@@ -596,11 +846,19 @@ export default function DailyAgenda({
                             handleRescheduleOpen
                           }
                         >
+                          {/* =========================================
+                              CUSTOMER
+                          ========================================== */}
+
                           <CustomerCard
                             customerId={
                               appointment.customerId
                             }
                           />
+
+                          {/* =========================================
+                              VEHICLE
+                          ========================================== */}
 
                           <VehicleCard
                             vehicleId={
@@ -610,6 +868,10 @@ export default function DailyAgenda({
                               appointment.customerId
                             }
                           />
+
+                          {/* =========================================
+                              SERVICES
+                          ========================================== */}
 
                           {appointment.services &&
                           appointment.services
@@ -635,11 +897,19 @@ export default function DailyAgenda({
                             </div>
                           )}
 
+                          {/* =========================================
+                              STAFF
+                          ========================================== */}
+
                           <StaffCards
                             appointmentId={
                               appointment.id
                             }
                           />
+
+                          {/* =========================================
+                              PENDING ACTIONS
+                          ========================================== */}
 
                           {appointment.status ===
                             'PENDING' && (
@@ -664,6 +934,7 @@ export default function DailyAgenda({
                                 "
                               >
                                 <CheckCircle className="h-4 w-4" />
+
                                 Confirm
                               </Button>
 
@@ -687,7 +958,66 @@ export default function DailyAgenda({
                                 "
                               >
                                 <XCircle className="h-4 w-4" />
+
                                 Decline
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* =========================================
+                              CANCEL APPOINTMENT
+
+                              Available for:
+                                PENDING
+                                CONFIRMED
+                                UNDER_INSPECTION
+                                WAITING_FOR_APPROVAL
+                                IN_PROGRESS
+                          ========================================== */}
+
+                          {canCancelAppointment(
+                            appointment,
+                          ) && (
+                            <div
+                              className="
+                                mt-2
+                                border-t
+                                border-border
+                                pt-2
+                              "
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                  handleCancelOpen(
+                                    appointment,
+                                  )
+                                }
+                                disabled={
+                                  cancelModal.loading
+                                }
+                                className="
+                                  h-10
+                                  w-full
+                                  rounded-md
+                                  border-destructive/20
+                                  text-xs
+                                  font-semibold
+                                  text-destructive
+                                  hover:border-destructive/30
+                                  hover:bg-destructive/10
+                                  hover:text-destructive
+                                  focus-visible:outline-none
+                                  focus-visible:ring-2
+                                  focus-visible:ring-destructive/30
+                                  focus-visible:ring-offset-2
+                                  md:h-9
+                                "
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+
+                                Cancel Appointment
                               </Button>
                             </div>
                           )}
@@ -703,6 +1033,10 @@ export default function DailyAgenda({
       );
     };
 
+  /* ================================================================
+     CONTENT
+  ================================================================= */
+
   const renderContent =
     () => {
       if (
@@ -715,8 +1049,16 @@ export default function DailyAgenda({
       return renderAppointments();
     };
 
+  /* ================================================================
+     RESCHEDULE APPOINTMENT
+  ================================================================= */
+
   const currentAppointment =
     rescheduleModal.appointment;
+
+  /* ================================================================
+     DATE COUNTS
+  ================================================================= */
 
   const selectedDateAppointmentCount =
     appointments.filter(
@@ -738,6 +1080,24 @@ export default function DailyAgenda({
         (pendingRescheduleMap[appointment.id] ?? 0) >
           0,
     ).length;
+
+  /* ================================================================
+     CANCEL MODAL DATA
+  ================================================================= */
+
+  const cancelAppointment =
+    cancelModal.appointment;
+
+  const cancelReason =
+    cancelModal.reason.trim();
+
+  const cancelReasonValid =
+    cancelReason.length >=
+    3;
+
+  /* ================================================================
+     RENDER
+  ================================================================= */
 
   return (
     <>
@@ -792,6 +1152,7 @@ export default function DailyAgenda({
                 <Badge
                   variant="outline"
                   className="
+                    animate-pulse
                     rounded-full
                     border-blue-500/25
                     bg-blue-500/10
@@ -802,12 +1163,13 @@ export default function DailyAgenda({
                     tracking-wide
                     text-blue-600
                     dark:text-blue-400
-                    animate-pulse
                   "
                 >
                   <CalendarClock className="mr-1 h-3 w-3" />
 
-                  {selectedDateRescheduleCount}
+                  {
+                    selectedDateRescheduleCount
+                  }
                 </Badge>
               )}
 
@@ -981,12 +1343,22 @@ export default function DailyAgenda({
         }
         onOpenChange={(
           open,
-        ) =>
-          setDeclineModal({
-            ...declineModal,
-            open,
-          })
-        }
+        ) => {
+          if (
+            !open
+          ) {
+            setDeclineModal({
+              open:
+                false,
+
+              appointment:
+                null,
+
+              reason:
+                '',
+            });
+          }
+        }}
       >
         <DialogContent className="rounded-none p-4 sm:max-w-md sm:rounded-xl sm:p-6">
           <DialogHeader>
@@ -1008,11 +1380,17 @@ export default function DailyAgenda({
               onChange={(
                 event,
               ) =>
-                setDeclineModal({
-                  ...declineModal,
-                  reason:
-                    event.target.value,
-                })
+                setDeclineModal(
+                  (
+                    previous,
+                  ) => ({
+                    ...previous,
+
+                    reason:
+                      event.target
+                        .value,
+                  }),
+                )
               }
               className="h-11 rounded-md text-base md:h-9 md:text-sm"
             />
@@ -1045,9 +1423,415 @@ export default function DailyAgenda({
               onClick={
                 handleDeclineConfirm
               }
+              disabled={
+                !declineModal.reason.trim()
+              }
               className="h-11 rounded-md px-4 font-semibold md:h-9"
             >
               Confirm Decline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================
+          CANCEL APPOINTMENT
+      ============================================================= */}
+
+      <Dialog
+        open={
+          cancelModal.open
+        }
+        onOpenChange={(
+          open,
+        ) => {
+          if (
+            !open &&
+            !cancelModal.loading
+          ) {
+            handleCancelClose();
+          }
+        }}
+      >
+        <DialogContent
+          className="
+            max-h-[calc(100dvh-1rem)]
+            w-[calc(100vw-1rem)]
+            overflow-y-auto
+            rounded-xl
+            p-4
+
+            sm:max-w-lg
+            sm:p-6
+          "
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-start gap-3 text-lg font-semibold tracking-tight">
+              <span
+                className="
+                  flex
+                  h-10
+                  w-10
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-destructive/10
+                "
+              >
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </span>
+
+              <span className="min-w-0 flex-1">
+                Cancel Appointment
+              </span>
+            </DialogTitle>
+
+            <DialogDescription className="mt-2 text-sm leading-6 text-muted-foreground">
+              Are you sure you want to cancel this appointment?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* ======================================================
+              APPOINTMENT INFORMATION
+          ======================================================= */}
+
+          {cancelAppointment && (
+            <div
+              className="
+                rounded-lg
+                border
+                border-border
+                bg-muted/20
+                p-4
+              "
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <p
+                    className="
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-wider
+                      text-muted-foreground
+                    "
+                  >
+                    Tracking Number
+                  </p>
+
+                  <p
+                    className="
+                      mt-1
+                      text-sm
+                      font-semibold
+                      uppercase
+                      tracking-wide
+                      text-foreground
+                    "
+                  >
+                    #
+                    {
+                      cancelAppointment.trackingNumber
+                    }
+                  </p>
+                </div>
+
+                <div>
+                  <p
+                    className="
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-wider
+                      text-muted-foreground
+                    "
+                  >
+                    Current Status
+                  </p>
+
+                  <Badge
+                    variant="outline"
+                    className="
+                      mt-1
+                      rounded-full
+                      border-primary/20
+                      bg-primary/5
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-wide
+                      text-primary
+                    "
+                  >
+                    {String(
+                      cancelAppointment.status ||
+                        '',
+                    ).replace(
+                      /_/g,
+                      ' ',
+                    )}
+                  </Badge>
+                </div>
+
+                <div>
+                  <p
+                    className="
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-wider
+                      text-muted-foreground
+                    "
+                  >
+                    Appointment Date
+                  </p>
+
+                  <p
+                    className="
+                      mt-1
+                      text-sm
+                      font-medium
+                      text-foreground
+                    "
+                  >
+                    {cancelAppointment.appointmentDate
+                      ? format(
+                          new Date(
+                            `${cancelAppointment.appointmentDate}T00:00:00`,
+                          ),
+                          'MMMM d, yyyy',
+                        )
+                      : 'N/A'}
+                  </p>
+                </div>
+
+                <div>
+                  <p
+                    className="
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-wider
+                      text-muted-foreground
+                    "
+                  >
+                    Appointment Time
+                  </p>
+
+                  <p
+                    className="
+                      mt-1
+                      text-sm
+                      font-medium
+                      tabular-nums
+                      text-foreground
+                    "
+                  >
+                    {cancelAppointment.appointmentTime
+                      ? formatTime12h(
+                          cancelAppointment.appointmentTime,
+                        )
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================
+              WARNING
+          ======================================================= */}
+
+          <div
+            className="
+              flex
+              items-start
+              gap-3
+              rounded-lg
+              border
+              border-destructive/20
+              bg-destructive/5
+              p-3
+            "
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-destructive">
+                This cannot be undone.
+              </p>
+
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                The appointment will immediately change to
+                CANCELLED. Confirmed appointments will also be
+                removed from the service queue.
+              </p>
+            </div>
+          </div>
+
+          {/* ======================================================
+              REASON
+          ======================================================= */}
+
+          <div className="space-y-2">
+            <label
+              htmlFor="cancel-appointment-reason"
+              className="
+                block
+                text-xs
+                font-semibold
+                uppercase
+                tracking-wider
+                text-muted-foreground
+              "
+            >
+              Cancellation Reason
+            </label>
+
+            <textarea
+              id="cancel-appointment-reason"
+              value={
+                cancelModal.reason
+              }
+              onChange={(
+                event,
+              ) =>
+                setCancelModal(
+                  (
+                    previous,
+                  ) => ({
+                    ...previous,
+
+                    reason:
+                      event.target.value,
+                  }),
+                )
+              }
+              placeholder="Enter the reason for cancelling this appointment..."
+              disabled={
+                cancelModal.loading
+              }
+              maxLength={
+                500
+              }
+              rows={
+                5
+              }
+              className="
+                flex
+                min-h-[120px]
+                w-full
+                resize-y
+                rounded-md
+                border
+                border-input
+                bg-background
+                px-3
+                py-2
+                text-base
+                text-foreground
+                shadow-sm
+                outline-none
+                transition-colors
+
+                placeholder:text-muted-foreground
+
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
+
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+
+                md:text-sm
+              "
+            />
+
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[11px] leading-5 text-muted-foreground">
+                A cancellation reason is required for audit history
+                and customer communication.
+              </p>
+
+              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                {
+                  cancelModal.reason.length
+                }
+                /500
+              </span>
+            </div>
+
+            {cancelModal.reason.length >
+              0 &&
+              !cancelReasonValid && (
+                <p className="text-xs font-medium text-destructive">
+                  Please enter at least 3 characters.
+                </p>
+              )}
+          </div>
+
+          {/* ======================================================
+              FOOTER
+          ======================================================= */}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={
+                handleCancelClose
+              }
+              disabled={
+                cancelModal.loading
+              }
+              className="
+                h-11
+                rounded-md
+                px-4
+                text-sm
+                font-medium
+
+                md:h-9
+              "
+            >
+              Keep Appointment
+            </Button>
+
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={
+                handleCancelConfirm
+              }
+              disabled={
+                cancelModal.loading ||
+                !cancelReasonValid
+              }
+              className="
+                h-11
+                rounded-md
+                px-4
+                text-sm
+                font-semibold
+
+                md:h-9
+              "
+            >
+              {cancelModal.loading ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+
+                  Cancelling...
+                </>
+              ) : (
+                <>
+                  <XCircle className="mr-2 h-4 w-4" />
+
+                  Cancel Appointment
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

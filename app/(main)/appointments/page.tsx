@@ -11,7 +11,9 @@ import {
   format,
 } from 'date-fns';
 
-import { toast } from 'sonner';
+import {
+  toast,
+} from 'sonner';
 
 import {
   Settings,
@@ -32,10 +34,21 @@ import BookingFormCard from '@/components/appointments/booking-form-card';
 import DailyAgenda from '@/components/appointments/daily-agenda';
 import AppointmentCard from '@/components/appointments/appointment-card';
 
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import {
+  Card,
+} from '@/components/ui/card';
+
+import {
+  Button,
+} from '@/components/ui/button';
+
+import {
+  Badge,
+} from '@/components/ui/badge';
+
+import {
+  Input,
+} from '@/components/ui/input';
 
 import {
   Select,
@@ -45,15 +58,37 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import { GlobalConfigModal } from '@/components/configurations/global-config-modal';
-import { DateConfigModal } from '@/components/configurations/date-config-modal';
+import {
+  GlobalConfigModal,
+} from '@/components/configurations/global-config-modal';
 
-import { useAppointmentData } from '@/hooks/appointments/useAppointmentData';
-import { appointmentsApi } from '@/lib/appointments/appointments';
-import { useAuth } from '@/lib/auth/staffs/useAuth';
-import { useConfigurations } from '@/hooks/configurations/useConfigurations';
-import { getEffectiveConfigForDate } from '@/utils/configurations';
-import { usePendingRescheduleRequests } from '@/hooks/appointments/usePendingRescheduleRequests';
+import {
+  DateConfigModal,
+} from '@/components/configurations/date-config-modal';
+
+import {
+  useAppointmentData,
+} from '@/hooks/appointments/useAppointmentData';
+
+import {
+  appointmentsApi,
+} from '@/lib/appointments/appointments';
+
+import {
+  useAuth,
+} from '@/lib/auth/staffs/useAuth';
+
+import {
+  useConfigurations,
+} from '@/hooks/configurations/useConfigurations';
+
+import {
+  getEffectiveConfigForDate,
+} from '@/utils/configurations';
+
+import {
+  usePendingRescheduleRequests,
+} from '@/hooks/appointments/usePendingRescheduleRequests';
 
 /* ================================================================
    SEARCH TYPES
@@ -73,12 +108,24 @@ const SEARCH_CATEGORY_LABELS: Record<
   string
 > = {
   ALL: 'All fields',
-  TRACKING_NUMBER: 'Tracking number',
-  CUSTOMER: 'Customer',
-  VEHICLE: 'Vehicle',
-  DATE: 'Appointment date',
-  STATUS: 'Status',
-  SERVICE: 'Service',
+
+  TRACKING_NUMBER:
+    'Tracking number',
+
+  CUSTOMER:
+    'Customer',
+
+  VEHICLE:
+    'Vehicle',
+
+  DATE:
+    'Appointment date',
+
+  STATUS:
+    'Status',
+
+  SERVICE:
+    'Service',
 };
 
 const SEARCH_CATEGORY_DESCRIPTIONS: Record<
@@ -87,16 +134,22 @@ const SEARCH_CATEGORY_DESCRIPTIONS: Record<
 > = {
   ALL:
     'Search across tracking number, customer, vehicle, date, status, and service.',
+
   TRACKING_NUMBER:
     'Find an appointment directly using its tracking number.',
+
   CUSTOMER:
     'Search by customer name, phone number, or email address.',
+
   VEHICLE:
     'Search by vehicle make, model, year, or plate number.',
+
   DATE:
     'Find appointments scheduled on a specific appointment date.',
+
   STATUS:
     'Find appointments by their current status.',
+
   SERVICE:
     'Find appointments containing a specific service.',
 };
@@ -157,7 +210,6 @@ function getVehicleSearchText(
     appointment?.vehicle?.plateNumber,
     appointment?.vehicle?.plate,
     appointment?.vehicle?.licensePlate,
-
     appointment?.vehicleMake,
     appointment?.vehicleModel,
     appointment?.plateNumber,
@@ -183,7 +235,9 @@ function getServiceSearchText(
 
   return appointment.services
     .map(
-      (service: any) =>
+      (
+        service: any,
+      ) =>
         [
           service?.name,
           service?.serviceName,
@@ -223,12 +277,16 @@ function getAppointmentDateSearchText(
   const rawDate =
     appointment?.appointmentDate;
 
-  if (!rawDate) {
+  if (
+    !rawDate
+  ) {
     return '';
   }
 
   const values: string[] = [
-    String(rawDate),
+    String(
+      rawDate,
+    ),
   ];
 
   try {
@@ -264,7 +322,7 @@ function getAppointmentDateSearchText(
       );
     }
   } catch {
-    // Keep raw date.
+    // Keep raw value.
   }
 
   return values.join(' ');
@@ -279,6 +337,7 @@ function getAllSearchText(
 ): string {
   return [
     appointment?.trackingNumber,
+
     appointment?.id,
 
     getCustomerSearchText(
@@ -308,12 +367,12 @@ function getAllSearchText(
 }
 
 /* ================================================================
-   APPOINTMENT PAGE
+   PAGE
 ================================================================ */
 
 export default function AppointmentsPage() {
   /* ==============================================================
-     CALENDAR STATE
+     CALENDAR
   ============================================================== */
 
   const [
@@ -331,23 +390,25 @@ export default function AppointmentsPage() {
   );
 
   /* ==============================================================
-     CONFIGURATION STATE
-
-     UNCHANGED.
+     CONFIGURATION
   ============================================================== */
 
   const [
     globalConfigOpen,
     setGlobalConfigOpen,
-  ] = useState(false);
+  ] = useState(
+    false,
+  );
 
   const [
     dateConfigOpen,
     setDateConfigOpen,
-  ] = useState(false);
+  ] = useState(
+    false,
+  );
 
   /* ==============================================================
-     SEARCH STATE
+     SEARCH
   ============================================================== */
 
   const [
@@ -378,13 +439,12 @@ export default function AppointmentsPage() {
 
   /* ==============================================================
      CONFIGURATION
-
-     UNCHANGED.
   ============================================================== */
 
   const {
     config,
-  } = useConfigurations();
+  } =
+    useConfigurations();
 
   const closedDates =
     config
@@ -440,34 +500,51 @@ export default function AppointmentsPage() {
     useAppointmentData();
 
   /* ==============================================================
-     PENDING RESCHEDULE REQUESTS
-
-     Fetch all pending reschedule indicators with ONE batch request.
-     The map is shared by the calendar, agenda, and search results.
+     RESCHEDULE COUNTS
   ============================================================== */
 
-  const appointmentIds = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          appointments
-            .map((appointment) => appointment?.id)
-            .filter(
-              (id): id is string =>
-                typeof id === 'string' && id.trim().length > 0,
-            ),
+  const appointmentIds =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            appointments
+              .map(
+                (
+                  appointment,
+                ) =>
+                  appointment?.id,
+              )
+              .filter(
+                (
+                  id,
+                ): id is string =>
+                  typeof id ===
+                    'string' &&
+                  id.trim()
+                    .length >
+                    0,
+              ),
+          ),
         ),
-      ),
-    [appointments],
-  );
+      [
+        appointments,
+      ],
+    );
 
   const {
-    pendingMap: pendingRescheduleMap,
-    refresh: refreshPendingReschedules,
-  } = usePendingRescheduleRequests(appointmentIds);
+    pendingMap:
+      pendingRescheduleMap,
+
+    refresh:
+      refreshPendingReschedules,
+  } =
+    usePendingRescheduleRequests(
+      appointmentIds,
+    );
 
   /* ==============================================================
-     SEARCH STATE
+     SEARCH
   ============================================================== */
 
   const normalizedSearchValue =
@@ -480,156 +557,124 @@ export default function AppointmentsPage() {
     0;
 
   /* ==============================================================
-     FILTER APPOINTMENTS
+     FILTER SEARCH RESULTS
   ============================================================== */
 
   const filteredAppointments =
-    useMemo(() => {
-      /*
-       * No active search.
-       */
-      if (
-        !normalizedSearchValue
-      ) {
-        return [];
-      }
+    useMemo(
+      () => {
+        if (
+          !normalizedSearchValue
+        ) {
+          return [];
+        }
 
-      return appointments.filter(
-        (
-          appointment,
-        ) => {
-          switch (
-            searchCategory
-          ) {
-            /* ====================================================
-               TRACKING NUMBER
-            ==================================================== */
+        return appointments.filter(
+          (
+            appointment,
+          ) => {
+            switch (
+              searchCategory
+            ) {
+              case 'TRACKING_NUMBER': {
+                const trackingNumber =
+                  normalizeSearchValue(
+                    appointment?.trackingNumber,
+                  );
 
-            case 'TRACKING_NUMBER': {
-              const trackingNumber =
-                normalizeSearchValue(
-                  appointment?.trackingNumber,
+                return trackingNumber.includes(
+                  normalizedSearchValue,
                 );
+              }
 
-              return trackingNumber.includes(
-                normalizedSearchValue,
-              );
-            }
+              case 'CUSTOMER': {
+                const customer =
+                  normalizeSearchValue(
+                    getCustomerSearchText(
+                      appointment,
+                    ),
+                  );
 
-            /* ====================================================
-               CUSTOMER
-            ==================================================== */
-
-            case 'CUSTOMER': {
-              const customer =
-                normalizeSearchValue(
-                  getCustomerSearchText(
-                    appointment,
-                  ),
+                return customer.includes(
+                  normalizedSearchValue,
                 );
+              }
 
-              return customer.includes(
-                normalizedSearchValue,
-              );
-            }
+              case 'VEHICLE': {
+                const vehicle =
+                  normalizeSearchValue(
+                    getVehicleSearchText(
+                      appointment,
+                    ),
+                  );
 
-            /* ====================================================
-               VEHICLE
-            ==================================================== */
-
-            case 'VEHICLE': {
-              const vehicle =
-                normalizeSearchValue(
-                  getVehicleSearchText(
-                    appointment,
-                  ),
+                return vehicle.includes(
+                  normalizedSearchValue,
                 );
+              }
 
-              return vehicle.includes(
-                normalizedSearchValue,
-              );
-            }
+              case 'DATE': {
+                const appointmentDate =
+                  normalizeSearchValue(
+                    getAppointmentDateSearchText(
+                      appointment,
+                    ),
+                  );
 
-            /* ====================================================
-               DATE
-            ==================================================== */
-
-            case 'DATE': {
-              const appointmentDate =
-                normalizeSearchValue(
-                  getAppointmentDateSearchText(
-                    appointment,
-                  ),
+                return appointmentDate.includes(
+                  normalizedSearchValue,
                 );
+              }
 
-              return appointmentDate.includes(
-                normalizedSearchValue,
-              );
-            }
+              case 'STATUS': {
+                const status =
+                  normalizeSearchValue(
+                    getStatusSearchText(
+                      appointment,
+                    ),
+                  );
 
-            /* ====================================================
-               STATUS
-            ==================================================== */
-
-            case 'STATUS': {
-              const status =
-                normalizeSearchValue(
-                  getStatusSearchText(
-                    appointment,
-                  ),
+                return status.includes(
+                  normalizedSearchValue,
                 );
+              }
 
-              return status.includes(
-                normalizedSearchValue,
-              );
-            }
+              case 'SERVICE': {
+                const service =
+                  normalizeSearchValue(
+                    getServiceSearchText(
+                      appointment,
+                    ),
+                  );
 
-            /* ====================================================
-               SERVICE
-            ==================================================== */
-
-            case 'SERVICE': {
-              const service =
-                normalizeSearchValue(
-                  getServiceSearchText(
-                    appointment,
-                  ),
+                return service.includes(
+                  normalizedSearchValue,
                 );
+              }
 
-              return service.includes(
-                normalizedSearchValue,
-              );
-            }
+              case 'ALL':
+              default: {
+                const allValues =
+                  normalizeSearchValue(
+                    getAllSearchText(
+                      appointment,
+                    ),
+                  );
 
-            /* ====================================================
-               ALL
-            ==================================================== */
-
-            case 'ALL':
-            default: {
-              const allValues =
-                normalizeSearchValue(
-                  getAllSearchText(
-                    appointment,
-                  ),
+                return allValues.includes(
+                  normalizedSearchValue,
                 );
-
-              return allValues.includes(
-                normalizedSearchValue,
-              );
+              }
             }
-          }
-        },
-      );
-    }, [
-      appointments,
-      normalizedSearchValue,
-      searchCategory,
-    ]);
-
-  /* ==============================================================
-     SEARCH RESULT COUNT
-  ============================================================== */
+          },
+        );
+      },
+      [
+        appointments,
+        normalizedSearchValue,
+        searchCategory,
+      ],
+    );
 
   const searchResultCount =
     filteredAppointments.length;
@@ -644,38 +689,41 @@ export default function AppointmentsPage() {
   ============================================================== */
 
   const searchPlaceholder =
-    useMemo(() => {
-      switch (
-        searchCategory
-      ) {
-        case 'TRACKING_NUMBER':
-          return 'Enter tracking number...';
+    useMemo(
+      () => {
+        switch (
+          searchCategory
+        ) {
+          case 'TRACKING_NUMBER':
+            return 'Enter tracking number...';
 
-        case 'CUSTOMER':
-          return 'Search customer name, phone or email...';
+          case 'CUSTOMER':
+            return 'Search customer name, phone or email...';
 
-        case 'VEHICLE':
-          return 'Search make, model, year or plate number...';
+          case 'VEHICLE':
+            return 'Search make, model, year or plate number...';
 
-        case 'DATE':
-          return '';
+          case 'DATE':
+            return '';
 
-        case 'STATUS':
-          return 'Choose an appointment status...';
+          case 'STATUS':
+            return 'Choose an appointment status...';
 
-        case 'SERVICE':
-          return 'Search service name...';
+          case 'SERVICE':
+            return 'Search service name...';
 
-        case 'ALL':
-        default:
-          return 'Search tracking number, customer, vehicle, date, status or service...';
-      }
-    }, [
-      searchCategory,
-    ]);
+          case 'ALL':
+          default:
+            return 'Search tracking number, customer, vehicle, date, status or service...';
+        }
+      },
+      [
+        searchCategory,
+      ],
+    );
 
   /* ==============================================================
-     SEARCH CATEGORY CHANGE
+     CHANGE SEARCH CATEGORY
   ============================================================== */
 
   const handleSearchCategoryChange =
@@ -686,10 +734,6 @@ export default function AppointmentsPage() {
         value as AppointmentSearchCategory,
       );
 
-      /*
-       * Clear the previous search value because changing the
-       * category should start a fresh search.
-       */
       setSearchValue('');
     };
 
@@ -707,7 +751,7 @@ export default function AppointmentsPage() {
     };
 
   /* ==============================================================
-     VIEW SEARCH RESULT IN SCHEDULE
+     VIEW SEARCH RESULT
   ============================================================== */
 
   const handleViewSearchResult =
@@ -730,9 +774,6 @@ export default function AppointmentsPage() {
             appointmentDate.getTime(),
           )
         ) {
-          /*
-           * Move the scheduler to the appointment's date.
-           */
           setSelectedDate(
             appointmentDate,
           );
@@ -743,75 +784,74 @@ export default function AppointmentsPage() {
         }
       }
 
-      /*
-       * Return to the normal scheduler after the user selects
-       * the appointment.
-       */
       clearSearch();
     };
 
   /* ==============================================================
-     AUTOMATIC DATE NAVIGATION FOR A UNIQUE SEARCH RESULT
+     AUTO NAVIGATE UNIQUE RESULT
   ============================================================== */
 
-  useEffect(() => {
-    if (
-      !hasSearch ||
-      filteredAppointments.length !==
-        1
-    ) {
-      return;
-    }
+  useEffect(
+    () => {
+      if (
+        !hasSearch ||
+        filteredAppointments.length !==
+          1
+      ) {
+        return;
+      }
 
-    const matchedAppointment =
-      filteredAppointments[0];
+      const matchedAppointment =
+        filteredAppointments[0];
 
-    const rawDate =
-      matchedAppointment?.appointmentDate;
+      const rawDate =
+        matchedAppointment?.appointmentDate;
 
-    if (!rawDate) {
-      return;
-    }
+      if (
+        !rawDate
+      ) {
+        return;
+      }
 
-    const targetDate =
-      new Date(
-        `${rawDate}T00:00:00`,
+      const targetDate =
+        new Date(
+          `${rawDate}T00:00:00`,
+        );
+
+      if (
+        Number.isNaN(
+          targetDate.getTime(),
+        )
+      ) {
+        return;
+      }
+
+      setSelectedDate(
+        targetDate,
       );
 
-    if (
-      Number.isNaN(
-        targetDate.getTime(),
-      )
-    ) {
-      return;
-    }
-
-    setSelectedDate(
-      targetDate,
-    );
-
-    setCurrentMonth(
-      targetDate,
-    );
-  }, [
-    hasSearch,
-    filteredAppointments,
-  ]);
+      setCurrentMonth(
+        targetDate,
+      );
+    },
+    [
+      hasSearch,
+      filteredAppointments,
+    ],
+  );
 
   /* ==============================================================
-     CONFIRM APPOINTMENT
-
-     EXISTING BUSINESS LOGIC PRESERVED.
+     CONFIRM
   ============================================================== */
 
   const handleConfirm =
     async (
-      appt: any,
+      appointment: any,
     ) => {
       try {
         const res =
           await appointmentsApi.updateStatus(
-            appt.id,
+            appointment.id,
             'CONFIRMED',
           );
 
@@ -828,22 +868,23 @@ export default function AppointmentsPage() {
           );
 
           await loadAppointments();
+
           await refreshPendingReschedules();
         }
       } catch (
-        err: any
+        error: any
       ) {
         toast.error(
-          err.message ||
-            'Error confirming.',
+          error?.message ||
+            'Error confirming appointment.',
         );
       }
     };
 
   /* ==============================================================
-     DECLINE APPOINTMENT
-
-     EXISTING BUSINESS LOGIC PRESERVED.
+     DECLINE
+     
+     Existing pending-decline behavior.
   ============================================================== */
 
   const handleDecline =
@@ -876,20 +917,98 @@ export default function AppointmentsPage() {
             res.errorMessage ||
               'Failed to decline.',
           );
-        } else {
-          toast.success(
-            'Appointment declined.',
-          );
 
-          await loadAppointments();
-          await refreshPendingReschedules();
+          return;
         }
+
+        toast.success(
+          'Appointment declined.',
+        );
+
+        await loadAppointments();
+
+        await refreshPendingReschedules();
       } catch (
-        err: any
+        error: any
       ) {
         toast.error(
-          err.message ||
-            'Error declining.',
+          error?.message ||
+            'Error declining appointment.',
+        );
+      }
+    };
+
+  /* ==============================================================
+     CANCEL APPOINTMENT
+     
+     Used by DailyAgenda's "Cancel Appointment" action.
+     
+     This is deliberately separate from handleDecline so that
+     declining a pending request and intentionally cancelling an
+     existing appointment remain two distinct actions.
+  ============================================================== */
+
+  const handleCancel =
+    async (
+      appointment: any,
+      reason: string,
+    ) => {
+      const normalizedReason =
+        reason.trim();
+
+      if (
+        !normalizedReason
+      ) {
+        toast.error(
+          'Please provide a cancellation reason.',
+        );
+
+        return;
+      }
+
+      try {
+        const res =
+          await appointmentsApi.updateStatus(
+            appointment.id,
+            'CANCELLED',
+            normalizedReason,
+          );
+
+        if (
+          res.error
+        ) {
+          toast.error(
+            res.errorMessage ||
+              'Failed to cancel appointment.',
+          );
+
+          return;
+        }
+
+        toast.success(
+          'Appointment cancelled successfully.',
+        );
+
+        /*
+         * Reload immediately.
+         *
+         * Supabase realtime also refreshes the appointment list,
+         * but this gives the operator an immediate UI update.
+         */
+        await loadAppointments();
+
+        await refreshPendingReschedules();
+      } catch (
+        error: any
+      ) {
+        console.error(
+          '[AppointmentsPage] Cancel appointment failed:',
+          error,
+        );
+
+        toast.error(
+          error?.message ||
+            'Error cancelling appointment.',
         );
       }
     };
@@ -904,17 +1023,21 @@ export default function AppointmentsPage() {
     return (
       <PageContainer
         title="Service Scheduler"
-        subtitle="Confirm or decline customer bookings"
+        subtitle="Confirm, reschedule, or manage appointments"
       >
         <AppointmentsSkeleton />
       </PageContainer>
     );
   }
 
+  /* ==============================================================
+     RENDER
+  ============================================================== */
+
   return (
     <PageContainer
       title="Service Scheduler"
-      subtitle="Confirm or decline customer bookings"
+      subtitle="Confirm, reschedule, or manage appointments"
     >
       <div className="space-y-4 md:space-y-5 lg:space-y-6">
         {/* ========================================================
@@ -1105,10 +1228,6 @@ export default function AppointmentsPage() {
             shadow-sm
           "
         >
-          {/* --------------------------------------------------------
-              SEARCH PANEL HEADER
-          --------------------------------------------------------- */}
-
           <div
             className="
               border-b
@@ -1153,10 +1272,6 @@ export default function AppointmentsPage() {
             </div>
           </div>
 
-          {/* --------------------------------------------------------
-              SEARCH CONTROLS
-          --------------------------------------------------------- */}
-
           <div className="space-y-4 p-4 md:p-6 lg:p-7">
             <div
               className="
@@ -1167,10 +1282,6 @@ export default function AppointmentsPage() {
                 lg:grid-cols-[minmax(0,1fr)_250px]
               "
             >
-              {/* ====================================================
-                  SEARCH INPUT
-              ==================================================== */}
-
               <div className="min-w-0">
                 <label
                   htmlFor="appointment-search"
@@ -1229,18 +1340,13 @@ export default function AppointmentsPage() {
                         h-11
                         w-full
                         rounded-md
-                        border-input
                         bg-background
                         pl-11
                         pr-10
                         text-base
                         shadow-sm
-
-                        focus-visible:outline-none
                         focus-visible:ring-2
                         focus-visible:ring-ring
-                        focus-visible:ring-offset-2
-
                         md:h-9
                         md:pl-10
                         md:text-sm
@@ -1264,24 +1370,18 @@ export default function AppointmentsPage() {
                       placeholder={
                         searchPlaceholder
                       }
-                      aria-label="Search appointments"
                       autoComplete="off"
                       className="
                         h-11
                         w-full
                         rounded-md
-                        border-input
                         bg-background
                         pl-11
                         pr-10
                         text-base
                         shadow-sm
-
-                        focus-visible:outline-none
                         focus-visible:ring-2
                         focus-visible:ring-ring
-                        focus-visible:ring-offset-2
-
                         md:h-9
                         md:pl-10
                         md:text-sm
@@ -1311,10 +1411,6 @@ export default function AppointmentsPage() {
                         text-muted-foreground
                         hover:bg-muted
                         hover:text-foreground
-                        focus-visible:outline-none
-                        focus-visible:ring-2
-                        focus-visible:ring-ring
-                        focus-visible:ring-offset-2
                       "
                     >
                       <X className="h-4 w-4" />
@@ -1322,10 +1418,6 @@ export default function AppointmentsPage() {
                   )}
                 </div>
               </div>
-
-              {/* ====================================================
-                  SEARCH CATEGORY
-              ==================================================== */}
 
               <div className="min-w-0">
                 <label
@@ -1362,7 +1454,6 @@ export default function AppointmentsPage() {
                       w-full
                       rounded-md
                       bg-background
-
                       md:h-9
                     "
                   >
@@ -1399,10 +1490,6 @@ export default function AppointmentsPage() {
               </div>
             </div>
 
-            {/* ======================================================
-                SEARCH HELP
-            ======================================================= */}
-
             <div
               className="
                 flex
@@ -1427,10 +1514,6 @@ export default function AppointmentsPage() {
               </p>
             </div>
 
-            {/* ======================================================
-                STATUS SHORTCUTS
-            ======================================================= */}
-
             {searchCategory ===
               'STATUS' && (
               <div>
@@ -1449,20 +1532,14 @@ export default function AppointmentsPage() {
                           '',
                         )
                       }
-                      className="
-                        h-8
-                        rounded-md
-                        px-2.5
-                        text-xs
-                        text-muted-foreground
-                      "
+                      className="h-8 rounded-md px-2.5 text-xs"
                     >
                       Clear
                     </Button>
                   )}
                 </div>
 
-                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
                   <Button
                     type="button"
                     variant={
@@ -1532,10 +1609,6 @@ export default function AppointmentsPage() {
               </div>
             )}
 
-            {/* ======================================================
-                ACTIVE SEARCH SUMMARY
-            ======================================================= */}
-
             {hasSearch && (
               <div
                 className="
@@ -1582,13 +1655,15 @@ export default function AppointmentsPage() {
                         ]
                       }{' '}
                       ·{' '}
-                      {searchCategory ===
-                      'STATUS'
-                        ? searchValue.replace(
-                            /_/g,
-                            ' ',
-                          )
-                        : searchValue}
+                      {
+                        searchCategory ===
+                        'STATUS'
+                          ? searchValue.replace(
+                              /_/g,
+                              ' ',
+                            )
+                          : searchValue
+                      }
                     </p>
                   </div>
                 </div>
@@ -1610,14 +1685,7 @@ export default function AppointmentsPage() {
                     onClick={
                       clearSearch
                     }
-                    className="
-                      h-8
-                      rounded-md
-                      px-2.5
-                      text-xs
-                      text-muted-foreground
-                      hover:text-foreground
-                    "
+                    className="h-8 rounded-md px-2.5 text-xs"
                   >
                     <X className="mr-1 h-3.5 w-3.5" />
 
@@ -1631,18 +1699,10 @@ export default function AppointmentsPage() {
 
         {/* ========================================================
             SEARCH RESULTS
-           
-            IMPORTANT:
-            Search results now use the EXISTING AppointmentCard
-            component rather than a separate custom result card.
         ========================================================= */}
 
         {hasSearch && (
           <section className="space-y-3">
-            {/* ----------------------------------------------------
-                RESULTS HEADER
-            ----------------------------------------------------- */}
-
             <div
               className="
                 flex
@@ -1688,26 +1748,15 @@ export default function AppointmentsPage() {
                 0 && (
                 <Badge
                   variant="secondary"
-                  className="
-                    w-fit
-                    rounded-full
-                    px-2.5
-                    py-1
-                    text-[10px]
-                    font-semibold
-                  "
+                  className="w-fit rounded-full px-2.5 py-1 text-[10px] font-semibold"
                 >
-                  {searchResultCount}{' '}
+                  {
+                    searchResultCount
+                  }{' '}
                   found
                 </Badge>
               )}
             </div>
-
-            {/* ----------------------------------------------------
-                RESULT LIST
-
-                EXISTING AppointmentCard is used directly.
-            ----------------------------------------------------- */}
 
             {hasSearchResults ? (
               <div
@@ -1731,7 +1780,9 @@ export default function AppointmentsPage() {
                         appointment
                       }
                       pendingRescheduleCount={
-                        pendingRescheduleMap[appointment.id] ?? 0
+                        pendingRescheduleMap[
+                          appointment.id
+                        ] ?? 0
                       }
                       className="
                         w-full
@@ -1739,13 +1790,6 @@ export default function AppointmentsPage() {
                         hover:shadow-md
                       "
                     >
-                      {/* ==========================================
-                          SEARCH RESULT ACTION
-
-                          This is rendered inside the existing
-                          AppointmentCard expandable area.
-                      =========================================== */}
-
                       <Button
                         type="button"
                         variant="secondary"
@@ -1761,9 +1805,7 @@ export default function AppointmentsPage() {
                           px-3
                           text-xs
                           font-medium
-
                           sm:w-auto
-
                           md:h-9
                         "
                       >
@@ -1776,43 +1818,9 @@ export default function AppointmentsPage() {
                 )}
               </div>
             ) : (
-              /* --------------------------------------------------
-                 NO RESULTS
-              --------------------------------------------------- */
-
-              <Card
-                className="
-                  rounded-xl
-                  border-border
-                  bg-card
-                  shadow-sm
-                "
-              >
-                <div
-                  className="
-                    flex
-                    flex-col
-                    items-center
-                    justify-center
-                    px-6
-                    py-12
-                    text-center
-
-                    md:py-16
-                  "
-                >
-                  <div
-                    className="
-                      mb-4
-                      flex
-                      h-14
-                      w-14
-                      items-center
-                      justify-center
-                      rounded-full
-                      bg-muted
-                    "
-                  >
+              <Card className="rounded-xl border-border bg-card shadow-sm">
+                <div className="flex flex-col items-center justify-center px-6 py-12 text-center md:py-16">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
                     <Search className="h-6 w-6 text-muted-foreground/60" />
                   </div>
 
@@ -1850,16 +1858,7 @@ export default function AppointmentsPage() {
                     onClick={
                       clearSearch
                     }
-                    className="
-                      mt-5
-                      h-11
-                      rounded-md
-                      px-4
-                      text-sm
-                      font-medium
-
-                      md:h-9
-                    "
+                    className="mt-5 h-11 rounded-md px-4 text-sm md:h-9"
                   >
                     <X className="mr-2 h-4 w-4" />
 
@@ -1872,7 +1871,7 @@ export default function AppointmentsPage() {
         )}
 
         {/* ========================================================
-            MAIN SCHEDULER WORKSPACE
+            MAIN SCHEDULER
         ========================================================= */}
 
         <div
@@ -1890,17 +1889,10 @@ export default function AppointmentsPage() {
           "
         >
           {/* ======================================================
-              LEFT RAIL
+              LEFT
           ======================================================= */}
 
           <aside className="space-y-4 md:space-y-5">
-            {/* ----------------------------------------------------
-                CALENDAR
-
-                Always use the full appointment list so the calendar
-                retains its normal appointment counts.
-            ----------------------------------------------------- */}
-
             <Card className="overflow-hidden rounded-xl border-border bg-card shadow-sm">
               <AppointmentCalendar
                 currentMonth={
@@ -1942,10 +1934,6 @@ export default function AppointmentsPage() {
               />
             </Card>
 
-            {/* ----------------------------------------------------
-                CLOSED DATE NOTICE
-            ----------------------------------------------------- */}
-
             {isSelectedDateClosed && (
               <div
                 className="
@@ -1958,7 +1946,6 @@ export default function AppointmentsPage() {
                   bg-destructive/10
                   p-3.5
                   text-destructive
-
                   md:p-4
                 "
               >
@@ -1970,9 +1957,7 @@ export default function AppointmentsPage() {
                   </p>
 
                   <p className="mt-0.5 text-xs leading-5 text-destructive/80">
-                    No new appointments
-                    can be booked on this
-                    date.
+                    No new appointments can be booked on this date.
                     {effective?.reason
                       ? ` Reason: ${effective.reason}`
                       : ''}
@@ -1980,12 +1965,6 @@ export default function AppointmentsPage() {
                 </div>
               </div>
             )}
-
-            {/* ----------------------------------------------------
-                BOOKING FORM
-
-                Existing booking form remains unchanged.
-            ----------------------------------------------------- */}
 
             <BookingFormCard
               customers={
@@ -2004,7 +1983,7 @@ export default function AppointmentsPage() {
           </aside>
 
           {/* ======================================================
-              PRIMARY DAILY AGENDA
+              DAILY AGENDA
           ======================================================= */}
 
           <section className="min-w-0 lg:sticky lg:top-4 lg:self-start">
@@ -2018,10 +1997,6 @@ export default function AppointmentsPage() {
               "
             >
               <DailyAgenda
-                /*
-                 * Search results filter the agenda while searching.
-                 * Normal scheduler shows the full collection.
-                 */
                 appointments={
                   hasSearch
                     ? filteredAppointments
@@ -2036,6 +2011,9 @@ export default function AppointmentsPage() {
                 onDecline={
                   handleDecline
                 }
+                onCancel={
+                  handleCancel
+                }
                 onRefresh={
                   loadAppointments
                 }
@@ -2049,9 +2027,7 @@ export default function AppointmentsPage() {
       </div>
 
       {/* ==========================================================
-          GLOBAL CONFIGURATION
-
-          UNCHANGED.
+          GLOBAL CONFIG
       =========================================================== */}
 
       <GlobalConfigModal
@@ -2064,9 +2040,7 @@ export default function AppointmentsPage() {
       />
 
       {/* ==========================================================
-          DATE CONFIGURATION
-
-          UNCHANGED.
+          DATE CONFIG
       =========================================================== */}
 
       <DateConfigModal
