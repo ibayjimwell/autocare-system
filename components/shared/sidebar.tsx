@@ -390,7 +390,7 @@ export function Sidebar({
           ============================================================ */}
       <aside
         className={cn(
-          "sticky top-0 z-40 hidden h-screen shrink-0 lg:flex",
+          "sticky top-0 z-50 hidden h-screen shrink-0 lg:flex",
           "w-72 flex-col",
           "border-r border-border",
           "bg-card text-card-foreground",

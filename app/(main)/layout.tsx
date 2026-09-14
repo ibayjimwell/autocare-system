@@ -33,27 +33,24 @@ import {
  *
  * Used by the `(main)` route group.
  *
- * Layout structure:
+ * Application shell:
  *
- * ┌──────────────────┬───────────────────────────────────────────┐
- * │                  │                                           │
- * │                  │ FIXED NAVBAR                              │
- * │     SIDEBAR      │                                           │
- * │                  ├───────────────────────────────────────────┤
- * │                  │                                           │
- * │                  │                                           │
- * │                  │ SCROLLABLE PAGE CONTENT                   │
- * │                  │                                           │
- * │                  │                                           │
- * └──────────────────┴───────────────────────────────────────────┘
+ * ┌──────────────────┬─────────────────────────────────────────┐
+ * │                  │ FIXED NAVBAR                            │
+ * │                  │                                         │
+ * │    SIDEBAR       ├─────────────────────────────────────────┤
+ * │                  │                                         │
+ * │                  │ SCROLLABLE PAGE CONTENT                 │
+ * │                  │                                         │
+ * │                  │                                         │
+ * └──────────────────┴─────────────────────────────────────────┘
  *
- * IMPORTANT:
+ * Important stacking order:
  *
- * - The navbar is fixed to the viewport.
- * - The page content is the only scrolling region.
- * - The overall application shell does not scroll.
- * - On desktop the navbar starts after the 256px sidebar.
- * - On mobile the navbar spans the full viewport.
+ *   Sidebar / Navbar / App navigation = z-40
+ *   Dialogs / Modals                   = z-50+
+ *
+ * This allows any Radix/shadcn modal to cover the navbar.
  */
 export default function MainLayout({
   children,
@@ -67,13 +64,19 @@ export default function MainLayout({
   const [
     mobileOpen,
     setMobileOpen,
-  ] = useState(false);
+  ] = useState(
+    false,
+  );
 
   /* ==============================================================
-     GLOBAL ACTIVITY / PUSH NOTIFICATIONS
+     GLOBAL ACTIVITY
   ============================================================== */
 
   useStaffActivity();
+
+  /* ==============================================================
+     PUSH NOTIFICATIONS
+  ============================================================== */
 
   usePushNotifications();
 
@@ -121,7 +124,7 @@ export default function MainLayout({
         />
 
         {/* ========================================================
-            MAIN APPLICATION AREA
+            MAIN COLUMN
         ========================================================= */}
 
         <main
@@ -138,21 +141,16 @@ export default function MainLayout({
           "
         >
           {/* ======================================================
-              FIXED NAVBAR
-              
+              FIXED NAVBAR WRAPPER
+
               IMPORTANT:
-              
-              The navbar is intentionally wrapped in a fixed
-              container.
-              
-              This makes it independent from the page-content
-              scrolling container below.
-              
-              Desktop:
-                left = 256px (lg:left-64)
-              
-              Mobile/tablet:
-                left = 0
+
+              This is z-40.
+
+              DO NOT use z-[100] here.
+
+              shadcn/Radix dialogs use a higher stacking level,
+              normally z-50, so dialogs can cover this navbar.
           ======================================================= */}
 
           <div
@@ -160,7 +158,7 @@ export default function MainLayout({
               fixed
               inset-x-0
               top-0
-              z-[100]
+              z-40
               w-full
 
               lg:left-64
@@ -178,14 +176,11 @@ export default function MainLayout({
           </div>
 
           {/* ======================================================
-              SCROLLABLE PAGE CONTENT
-              
-              ONLY THIS REGION SHOULD SCROLL.
-              
-              The top padding reserves the exact navbar height:
-              
-              mobile  = 64px
-              desktop = 72px
+              PAGE SCROLL REGION
+
+              The page itself scrolls here.
+
+              The navbar above remains fixed.
           ======================================================= */}
 
           <div
@@ -196,6 +191,7 @@ export default function MainLayout({
               overflow-x-hidden
               overflow-y-auto
               overscroll-contain
+
               pt-16
 
               [-webkit-overflow-scrolling:touch]
@@ -229,10 +225,8 @@ export default function MainLayout({
 
           {/* ======================================================
               TOASTER
-              
-              Kept outside the scroll region so toast notifications
-              are attached to the application shell rather than the
-              individual page scroll container.
+
+              Outside the scroll region.
           ======================================================= */}
 
           <Toaster />

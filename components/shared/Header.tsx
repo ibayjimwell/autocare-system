@@ -215,62 +215,56 @@ export function Header({
     <header
       className={cn(
         /*
-         * ========================================================
-         * RELIABLE STICKY NAVBAR
-         * ========================================================
+         * IMPORTANT:
          *
-         * `sticky` is the correct Tailwind class.
+         * Keep the application navbar BELOW dialog/modal layers.
          *
-         * `stick` would not work.
+         * Radix/shadcn Dialog normally uses z-50.
          *
-         * Since the page content is inside the scrollable div
-         * from MainLayout, this header remains attached to the
-         * top of that scrolling region.
+         * Therefore:
+         *
+         *   App shell  = z-40
+         *   Dialog     = z-50+
+         *
+         * This prevents the fixed navbar from appearing above
+         * appointment/reschedule/confirmation modals.
          */
-        'sticky top-0 z-50',
+        'relative z-40',
 
         /*
-         * Prevent the header from shrinking inside the main
-         * flex column.
+         * Prevent shrinking.
          */
-        'shrink-0',
+        'flex shrink-0',
 
         /*
-         * Layout
+         * Layout.
          */
-        'flex items-center justify-between gap-3',
+        'items-center justify-between gap-3',
 
         /*
-         * Height
+         * Height.
          */
         'h-16 md:h-[72px]',
 
         /*
-         * Surface
+         * Surface.
          */
         'border-b border-border',
 
-        /*
-         * Background
-         *
-         * A solid card background prevents content underneath
-         * from visually bleeding through the navbar.
-         */
         'bg-card text-card-foreground',
 
         /*
-         * Shadow
+         * Elevation.
          */
         'shadow-sm',
 
         /*
-         * Horizontal padding
+         * Horizontal spacing.
          */
         'px-4 md:px-6 lg:px-8',
 
         /*
-         * Prevent horizontal overflow from account information,
-         * notifications, or long page titles.
+         * Prevent horizontal overflow.
          */
         'min-w-0',
       )}
@@ -305,7 +299,7 @@ export function Header({
             aria-haspopup="dialog"
             className={cn(
               /*
-               * iOS / mobile friendly tap target.
+               * Minimum comfortable touch target.
                */
               '-ml-2 h-11 w-11 shrink-0 rounded-xl',
 
@@ -314,8 +308,11 @@ export function Header({
               'hover:bg-accent hover:text-accent-foreground',
 
               'focus-visible:outline-none',
+
               'focus-visible:ring-2',
+
               'focus-visible:ring-ring',
+
               'focus-visible:ring-offset-2',
 
               'md:-ml-1 md:h-10 md:w-10',
@@ -345,6 +342,7 @@ export function Header({
             flex-1
             flex-col
             justify-center
+            md:ml-10
           "
         >
           <h2
@@ -357,6 +355,7 @@ export function Header({
               text-foreground
 
               md:text-xl
+
               lg:text-2xl
             "
           >
@@ -416,6 +415,7 @@ export function Header({
             hover:bg-accent/60
 
             md:gap-3
+
             md:px-2
           "
         >
@@ -474,7 +474,9 @@ export function Header({
               className={cn(
                 'mt-1 h-5 max-w-[140px] truncate rounded-md',
 
-                'border border-primary/20 bg-primary/10',
+                'border border-primary/20',
+
+                'bg-primary/10',
 
                 'px-1.5 text-[10px] font-semibold uppercase tracking-wider',
 
