@@ -12,6 +12,9 @@ import { Vehicles } from "@/database/models/customers/vehicles.model";
 import { eq, inArray } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 
+// --------------------------------------------------------------------
+// GET /api/payments/estimates/:id
+// --------------------------------------------------------------------
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

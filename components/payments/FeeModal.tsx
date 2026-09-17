@@ -1,3 +1,10 @@
+'use client';
+
+import React, {
+  useEffect,
+  useState,
+} from 'react';
+
 import {
   Dialog,
   DialogContent,
@@ -6,9 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
 import {
   Select,
   SelectContent,
@@ -16,24 +25,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle } from 'lucide-react';
+
+import {
+  PlusCircle,
+} from 'lucide-react';
+
+import {
+  DEFAULT_LABOR_PRESETS,
+} from '@/app-utils/payments/payment-defaults';
 
 interface FeeModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+
+  onOpenChange: (
+    open: boolean
+  ) => void;
+
   form: {
     title: string;
     amount: string;
-    findingId: string;
   };
-  setForm: (form: {
-    title: string;
-    amount: string;
-    findingId: string;
-  }) => void;
+
+  setForm: (
+    form: {
+      title: string;
+      amount: string;
+    }
+  ) => void;
+
   onSave: () => void;
+
   saving: boolean;
-  findings?: any[];
 }
 
 const focusClass =
@@ -46,14 +68,59 @@ export default function FeeModal({
   setForm,
   onSave,
   saving,
-  findings = [],
 }: FeeModalProps) {
+  const [
+    preset,
+    setPreset,
+  ] = useState(
+    'custom'
+  );
+
+  useEffect(() => {
+    if (open) {
+      setPreset('custom');
+    }
+  }, [open]);
+
+  const handlePresetChange = (
+    value: string
+  ) => {
+    setPreset(value);
+
+    if (value === 'custom') {
+      return;
+    }
+
+    const selected =
+      DEFAULT_LABOR_PRESETS.find(
+        (item) =>
+          item.id === value
+      );
+
+    if (!selected) {
+      return;
+    }
+
+    setForm({
+      title: selected.title,
+      amount: selected.amount.toFixed(2),
+    });
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       <DialogContent
         className="
-          w-[calc(100%-1rem)] rounded-xl border border-border
-          bg-card shadow-2xl sm:max-w-md
+          w-[calc(100%-1rem)]
+          rounded-xl
+          border
+          border-border
+          bg-card
+          shadow-2xl
+          sm:max-w-md
         "
       >
         <DialogHeader>
@@ -63,67 +130,132 @@ export default function FeeModal({
           </DialogTitle>
 
           <DialogDescription className="text-sm">
-            Add a service fee or labor charge.
+            Add a labor charge or service fee to the estimate.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
+          {/* =====================================================
+              DEFAULT LABOR
+          ====================================================== */}
+
+          <Field label="Default Labor Amount">
+            <Select
+              value={preset}
+              onValueChange={
+                handlePresetChange
+              }
+            >
+              <SelectTrigger
+                className={`
+                  h-11
+                  rounded-md
+                  text-base
+                  md:h-9
+                  md:text-sm
+                  ${focusClass}
+                `}
+              >
+                <SelectValue placeholder="Select labor preset" />
+              </SelectTrigger>
+
+              <SelectContent className="rounded-lg">
+                <SelectItem value="custom">
+                  Custom Labor Amount
+                </SelectItem>
+
+                {DEFAULT_LABOR_PRESETS.map(
+                  (
+                    labor
+                  ) => (
+                    <SelectItem
+                      key={
+                        labor.id
+                      }
+                      value={
+                        labor.id
+                      }
+                    >
+                      {labor.title} — ₱
+                      {labor.amount.toFixed(
+                        2
+                      )}
+                    </SelectItem>
+                  )
+                )}
+              </SelectContent>
+            </Select>
+
+            <p className="text-xs text-muted-foreground">
+              Select a standard labor amount or choose Custom Labor Amount.
+            </p>
+          </Field>
+
+          {/* =====================================================
+              TITLE
+          ====================================================== */}
+
           <Field label="Title">
             <Input
-              value={form.title}
-              onChange={(e) =>
+              value={
+                form.title
+              }
+              onChange={(
+                e
+              ) =>
                 setForm({
                   ...form,
-                  title: e.target.value,
+                  title:
+                    e.target.value,
                 })
               }
               placeholder="e.g., Labor - Engine Work"
-              className={`h-11 rounded-md text-base md:h-9 md:text-sm ${focusClass}`}
+              className={`
+                h-11
+                rounded-md
+                text-base
+                md:h-9
+                md:text-sm
+                ${focusClass}
+              `}
             />
           </Field>
+
+          {/* =====================================================
+              AMOUNT
+          ====================================================== */}
 
           <Field label="Amount (₱)">
             <Input
               type="number"
               step="0.01"
-              value={form.amount}
-              onChange={(e) =>
+              min="0"
+              value={
+                form.amount
+              }
+              onChange={(
+                e
+              ) =>
                 setForm({
                   ...form,
-                  amount: e.target.value,
+                  amount:
+                    e.target.value,
                 })
               }
               placeholder="0.00"
-              className={`h-11 rounded-md text-base md:h-9 md:text-sm ${focusClass}`}
+              className={`
+                h-11
+                rounded-md
+                text-base
+                md:h-9
+                md:text-sm
+                ${focusClass}
+              `}
             />
-          </Field>
 
-          <Field label="Finding (Optional)">
-            <Select
-              value={form.findingId}
-              onValueChange={(v) =>
-                setForm({
-                  ...form,
-                  findingId: v,
-                })
-              }
-            >
-              <SelectTrigger
-                className={`h-11 rounded-md text-base md:h-9 md:text-sm ${focusClass}`}
-              >
-                <SelectValue placeholder="Select finding (optional)" />
-              </SelectTrigger>
-
-              <SelectContent className="rounded-lg">
-                <SelectItem value="none">None</SelectItem>
-
-                {findings.map((f: any) => (
-                  <SelectItem key={f.id} value={f.id}>
-                    {f.description}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <p className="text-xs text-muted-foreground">
+              The selected preset can still be adjusted before adding.
+            </p>
           </Field>
         </div>
 
@@ -131,20 +263,47 @@ export default function FeeModal({
           <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-            className={`h-11 w-full rounded-md md:h-9 md:w-auto ${focusClass}`}
+            onClick={() =>
+              onOpenChange(
+                false
+              )
+            }
+            disabled={
+              saving
+            }
+            className={`
+              h-11
+              w-full
+              rounded-md
+              md:h-9
+              md:w-auto
+              ${focusClass}
+            `}
           >
             Cancel
           </Button>
 
           <Button
             type="button"
-            onClick={onSave}
-            disabled={saving}
-            className={`h-11 w-full rounded-md px-5 md:h-9 md:w-auto ${focusClass}`}
+            onClick={
+              onSave
+            }
+            disabled={
+              saving
+            }
+            className={`
+              h-11
+              w-full
+              rounded-md
+              px-5
+              md:h-9
+              md:w-auto
+              ${focusClass}
+            `}
           >
-            {saving ? 'Adding...' : 'Add Fee'}
+            {saving
+              ? 'Adding...'
+              : 'Add Fee'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -164,6 +323,7 @@ function Field({
       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </Label>
+
       {children}
     </div>
   );

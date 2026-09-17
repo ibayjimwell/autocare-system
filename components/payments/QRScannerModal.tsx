@@ -15,9 +15,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
+import {
+  Button,
+} from '@/components/ui/button';
+
+import {
+  Input,
+} from '@/components/ui/input';
+
+import {
+  Label,
+} from '@/components/ui/label';
+
 import {
   Tabs,
   TabsContent,
@@ -25,7 +35,14 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 
-import { Html5Qrcode } from 'html5-qrcode';
+import {
+  Html5Qrcode,
+} from 'html5-qrcode';
+
+import {
+  finalBillsApi,
+} from '@/lib/payments/final-bills';
+
 import {
   Keyboard,
   Loader2,
@@ -33,12 +50,19 @@ import {
   ScanLine,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+
+import {
+  toast,
+} from 'sonner';
 
 interface QRScannerModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onScan: (billId: string) => void;
+  onOpenChange: (
+    open: boolean
+  ) => void;
+  onScan: (
+    billId: string
+  ) => void;
 }
 
 const focusClass =
@@ -49,137 +73,441 @@ export default function QRScannerModal({
   onOpenChange,
   onScan,
 }: QRScannerModalProps) {
-  const [manualId, setManualId] = useState('');
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [starting, setStarting] = useState(false);
+  /* ==============================================================
+     MANUAL ENTRY
+  ============================================================== */
 
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const scannerContainerId = 'qr-reader-container';
+  const [
+    manualId,
+    setManualId,
+  ] = useState('');
 
-  const stopScanner = useCallback(async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-      } catch (err) {
-        console.error('Error stopping scanner:', err);
-      }
+  const [
+    manualLookupLoading,
+    setManualLookupLoading,
+  ] = useState(false);
 
-      scannerRef.current = null;
-    }
+  /* ==============================================================
+     SCANNER
+  ============================================================== */
 
-    setScanning(false);
-    setStarting(false);
-  }, []);
+  const [
+    scanError,
+    setScanError,
+  ] = useState<
+    string | null
+  >(null);
 
-  const startScanner = useCallback(async () => {
-    setScanError(null);
-    setStarting(true);
+  const [
+    scanning,
+    setScanning,
+  ] = useState(false);
 
-    try {
-      const stream =
-        await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'environment',
-          },
-        });
+  const [
+    starting,
+    setStarting,
+  ] = useState(false);
 
-      stream.getTracks().forEach((track) => track.stop());
-    } catch (err: any) {
-      console.error('Camera permission denied:', err);
+  const scannerRef =
+    useRef<Html5Qrcode | null>(
+      null
+    );
 
-      setScanError(
-        'Camera access denied. Please allow camera permissions in your browser settings.'
-      );
+  const scannerContainerId =
+    'qr-reader-container';
 
-      setStarting(false);
-      return;
-    }
+  /* ==============================================================
+     STOP SCANNER
+  ============================================================== */
 
-    const container =
-      document.getElementById(scannerContainerId);
+  const stopScanner =
+    useCallback(
+      async () => {
+        if (
+          scannerRef.current
+        ) {
+          try {
+            await scannerRef.current.stop();
+          } catch (
+            err
+          ) {
+            console.error(
+              'Error stopping scanner:',
+              err
+            );
+          }
 
-    if (!container) {
-      setScanError('Scanner container not found.');
-      setStarting(false);
-      return;
-    }
+          scannerRef.current =
+            null;
+        }
 
-    try {
-      const scanner = new Html5Qrcode(
-        scannerContainerId
-      );
+        setScanning(
+          false
+        );
 
-      scannerRef.current = scanner;
+        setStarting(
+          false
+        );
+      },
+      []
+    );
 
-      await scanner.start(
-        { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: {
-            width: 250,
-            height: 250,
-          },
-          aspectRatio: 1.0,
-        },
-        (decodedText: string) => {
-          stopScanner().catch(console.error);
-          onScan(decodedText);
-          onOpenChange(false);
-        },
-        () => {}
-      );
+  /* ==============================================================
+     START SCANNER
+  ============================================================== */
 
-      setScanning(true);
-    } catch (err: any) {
-      console.error('Scanner start error:', err);
+  const startScanner =
+    useCallback(
+      async () => {
+        setScanError(
+          null
+        );
 
-      setScanError(
-        'Failed to start camera. Please refresh the page and try again.'
-      );
-    } finally {
-      setStarting(false);
-    }
-  }, [onScan, onOpenChange, stopScanner]);
+        setStarting(
+          true
+        );
+
+        /*
+         * Request camera permission first.
+         *
+         * The temporary stream is immediately stopped because
+         * html5-qrcode will create/manage its own scanner stream.
+         */
+        try {
+          const stream =
+            await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode:
+                  'environment',
+              },
+            });
+
+          stream
+            .getTracks()
+            .forEach(
+              (
+                track
+              ) =>
+                track.stop()
+            );
+        } catch (
+          err: any
+        ) {
+          console.error(
+            'Camera permission denied:',
+            err
+          );
+
+          setScanError(
+            'Camera access denied. Please allow camera permissions in your browser settings.'
+          );
+
+          setStarting(
+            false
+          );
+
+          return;
+        }
+
+        const container =
+          document.getElementById(
+            scannerContainerId
+          );
+
+        if (
+          !container
+        ) {
+          setScanError(
+            'Scanner container not found.'
+          );
+
+          setStarting(
+            false
+          );
+
+          return;
+        }
+
+        try {
+          const scanner =
+            new Html5Qrcode(
+              scannerContainerId
+            );
+
+          scannerRef.current =
+            scanner;
+
+          await scanner.start(
+            {
+              facingMode:
+                'environment',
+            },
+            {
+              fps: 10,
+              qrbox: {
+                width: 250,
+                height: 250,
+              },
+              aspectRatio: 1.0,
+            },
+            (
+              decodedText: string
+            ) => {
+              /*
+               * QR behavior remains exactly as before.
+               *
+               * The decoded QR content is passed directly to the
+               * existing onScan callback.
+               *
+               * Manual Bill ID resolution is intentionally handled
+               * separately in handleManualSubmit().
+               */
+              stopScanner().catch(
+                console.error
+              );
+
+              onScan(
+                decodedText
+              );
+
+              onOpenChange(
+                false
+              );
+            },
+            () => {}
+          );
+
+          setScanning(
+            true
+          );
+        } catch (
+          err: any
+        ) {
+          console.error(
+            'Scanner start error:',
+            err
+          );
+
+          setScanError(
+            'Failed to start camera. Please refresh the page and try again.'
+          );
+        } finally {
+          setStarting(
+            false
+          );
+        }
+      },
+      [
+        onScan,
+        onOpenChange,
+        stopScanner,
+      ]
+    );
+
+  /* ==============================================================
+     OPEN / CLOSE EFFECT
+  ============================================================== */
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => {
-        startScanner();
-      }, 400);
-    } else {
-      stopScanner();
-      setScanError(null);
-      setStarting(false);
+    if (
+      open
+    ) {
+      /*
+       * Give Radix Dialog time to mount the scanner container before
+       * html5-qrcode tries to find it.
+       */
+      const timer =
+        window.setTimeout(
+          () => {
+            void startScanner();
+          },
+          400
+        );
+
+      return () => {
+        window.clearTimeout(
+          timer
+        );
+
+        void stopScanner();
+      };
     }
+
+    void stopScanner();
+
+    setScanError(
+      null
+    );
+
+    setStarting(
+      false
+    );
+
+    setManualId(
+      ''
+    );
+
+    setManualLookupLoading(
+      false
+    );
 
     return () => {
-      stopScanner();
+      void stopScanner();
     };
-  }, [open, startScanner, stopScanner]);
+  }, [
+    open,
+    startScanner,
+    stopScanner,
+  ]);
 
-  const handleManualSubmit = () => {
-    const trimmed = manualId.trim();
+  /* ==============================================================
+     MANUAL BILL ID
+  ============================================================== */
 
-    if (!trimmed) {
-      toast.error('Please enter a valid Bill ID.');
-      return;
-    }
+  const handleManualSubmit =
+    async () => {
+      const trimmed =
+        manualId
+          .trim()
+          .replace(
+            /^#/,
+            ''
+          )
+          .toUpperCase();
 
-    onScan(trimmed);
-    setManualId('');
-    onOpenChange(false);
-  };
+      if (
+        !trimmed
+      ) {
+        toast.error(
+          'Please enter a valid Bill ID.'
+        );
+
+        return;
+      }
+
+      /*
+       * The Final Cost table displays:
+       *
+       * bill.id.slice(0, 8).toUpperCase()
+       *
+       * Example:
+       *
+       * 32DBD79E
+       *
+       * Resolve that displayed ID to the real database UUID before
+       * sending it into the existing payment/cashier flow.
+       */
+      setManualLookupLoading(
+        true
+      );
+
+      try {
+        const result =
+          await finalBillsApi.resolveBillId(
+            trimmed
+          );
+
+        if (
+          result?.error ||
+          !result?.data
+        ) {
+          toast.error(
+            result?.errorMessage ||
+              `Bill ID "${trimmed}" was not found.`
+          );
+
+          return;
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * onScan() receives the actual database final-bill ID.
+         *
+         * Therefore the rest of the existing payment flow does not
+         * need to be changed.
+         */
+        onScan(
+          result.data
+        );
+
+        setManualId(
+          ''
+        );
+
+        onOpenChange(
+          false
+        );
+      } catch (
+        err: any
+      ) {
+        console.error(
+          'Manual Bill ID lookup failed:',
+          err
+        );
+
+        toast.error(
+          err?.message ||
+            'Failed to look up the Bill ID.'
+        );
+      } finally {
+        setManualLookupLoading(
+          false
+        );
+      }
+    };
+
+  /* ==============================================================
+     INPUT KEYBOARD SUBMIT
+  ============================================================== */
+
+  const handleManualKeyDown =
+    (
+      event: React.KeyboardEvent<HTMLInputElement>
+    ) => {
+      if (
+        event.key !==
+        'Enter'
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (
+        !manualLookupLoading
+      ) {
+        void handleManualSubmit();
+      }
+    };
+
+  /* ==============================================================
+     RENDER
+  ============================================================== */
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={
+        onOpenChange
+      }
+    >
       <DialogContent
         className="
-          w-[calc(100%-1rem)] overflow-hidden rounded-xl
-          border border-border bg-card p-0 shadow-2xl
+          w-[calc(100%-1rem)]
+          overflow-hidden
+          rounded-xl
+          border border-border
+          bg-card
+          p-0
+          shadow-2xl
           sm:max-w-md
         "
       >
+        {/* ========================================================
+            HEADER
+        ========================================================= */}
+
         <div className="border-b border-border bg-background/80 p-4 backdrop-blur-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
@@ -188,17 +516,32 @@ export default function QRScannerModal({
             </DialogTitle>
 
             <DialogDescription>
-              Scan the customer's QR code or enter the Bill ID manually.
+              Scan the customer's QR code or enter the Bill ID from
+              the Final Cost table manually.
             </DialogDescription>
           </DialogHeader>
         </div>
 
+        {/* ========================================================
+            CONTENT
+        ========================================================= */}
+
         <div className="p-4 sm:p-5">
-          <Tabs defaultValue="scan" className="w-full">
+          <Tabs
+            defaultValue="scan"
+            className="w-full"
+          >
+            {/* ====================================================
+                TABS
+            ===================================================== */}
+
             <TabsList className="grid h-11 w-full grid-cols-2 rounded-md bg-muted/60 p-1 md:h-9">
               <TabsTrigger
                 value="scan"
                 className={`rounded-sm text-sm ${focusClass}`}
+                disabled={
+                  manualLookupLoading
+                }
               >
                 <ScanLine className="mr-2 h-4 w-4" />
                 Scan QR
@@ -207,11 +550,18 @@ export default function QRScannerModal({
               <TabsTrigger
                 value="manual"
                 className={`rounded-sm text-sm ${focusClass}`}
+                disabled={
+                  manualLookupLoading
+                }
               >
                 <Keyboard className="mr-2 h-4 w-4" />
                 Manual Entry
               </TabsTrigger>
             </TabsList>
+
+            {/* ====================================================
+                SCAN TAB
+            ===================================================== */}
 
             <TabsContent
               value="scan"
@@ -220,41 +570,59 @@ export default function QRScannerModal({
               {starting && (
                 <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border bg-muted/20">
                   <Loader2 className="mb-3 h-8 w-8 animate-spin text-primary" />
+
                   <p className="text-sm text-muted-foreground">
                     Accessing camera...
                   </p>
                 </div>
               )}
 
-              {scanError && !starting && (
-                <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/[0.03] px-6 text-center">
-                  <X className="mb-3 h-8 w-8 text-destructive" />
-                  <p className="text-sm text-muted-foreground">
-                    {scanError}
-                  </p>
+              {scanError &&
+                !starting && (
+                  <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/[0.03] px-6 text-center">
+                    <X className="mb-3 h-8 w-8 text-destructive" />
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={`mt-4 h-11 rounded-md md:h-9 ${focusClass}`}
-                    onClick={() => {
-                      stopScanner();
-                      startScanner();
-                    }}
-                  >
-                    Try Again
-                  </Button>
-                </div>
-              )}
+                    <p className="text-sm text-muted-foreground">
+                      {
+                        scanError
+                      }
+                    </p>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={`mt-4 h-11 rounded-md md:h-9 ${focusClass}`}
+                      onClick={() => {
+                        void stopScanner();
+
+                        void startScanner();
+                      }}
+                      disabled={
+                        manualLookupLoading
+                      }
+                    >
+                      Try Again
+                    </Button>
+                  </div>
+                )}
 
               <div
-                id={scannerContainerId}
+                id={
+                  scannerContainerId
+                }
                 className="w-full overflow-hidden rounded-lg"
                 style={{
-                  minHeight: scanning ? 300 : 0,
+                  minHeight:
+                    scanning
+                      ? 300
+                      : 0,
                 }}
               />
             </TabsContent>
+
+            {/* ====================================================
+                MANUAL TAB
+            ===================================================== */}
 
             <TabsContent
               value="manual"
@@ -267,33 +635,88 @@ export default function QRScannerModal({
                   </Label>
 
                   <Input
-                    value={manualId}
-                    onChange={(e) =>
-                      setManualId(e.target.value)
+                    value={
+                      manualId
                     }
-                    placeholder="Paste or type the Bill ID"
-                    className={`h-11 rounded-md text-base md:h-9 md:text-sm ${focusClass}`}
+                    onChange={(
+                      event
+                    ) =>
+                      setManualId(
+                        event.target.value
+                      )
+                    }
+                    onKeyDown={
+                      handleManualKeyDown
+                    }
+                    placeholder="e.g. 32DBD79E"
+                    maxLength={
+                      36
+                    }
+                    autoComplete="off"
+                    spellCheck={
+                      false
+                    }
+                    disabled={
+                      manualLookupLoading
+                    }
+                    className={`h-11 rounded-md font-mono text-base uppercase md:h-9 md:text-sm ${focusClass}`}
                   />
+
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Enter the 8-character Bill ID displayed in the
+                    Final Cost table, such as{' '}
+                    <span className="font-mono font-semibold text-foreground">
+                      32DBD79E
+                    </span>
+                    .
+                  </p>
                 </div>
 
                 <Button
                   type="button"
-                  onClick={handleManualSubmit}
+                  onClick={() =>
+                    void handleManualSubmit()
+                  }
+                  disabled={
+                    manualLookupLoading ||
+                    !manualId.trim()
+                  }
                   className={`h-11 w-full rounded-md md:h-9 ${focusClass}`}
                 >
-                  Look Up Bill
+                  {manualLookupLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Looking Up Bill...
+                    </>
+                  ) : (
+                    <>
+                      <Keyboard className="mr-2 h-4 w-4" />
+                      Look Up Bill
+                    </>
+                  )}
                 </Button>
               </div>
             </TabsContent>
           </Tabs>
         </div>
 
+        {/* ========================================================
+            FOOTER
+        ========================================================= */}
+
         <div className="border-t border-border p-4">
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() =>
+                onOpenChange(
+                  false
+                )
+              }
+              disabled={
+                manualLookupLoading
+              }
               className={`h-11 w-full rounded-md md:h-9 md:w-auto ${focusClass}`}
             >
               Cancel

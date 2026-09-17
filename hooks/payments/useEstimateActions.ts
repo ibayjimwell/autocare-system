@@ -1,55 +1,279 @@
 'use client';
 
-import { useCallback } from 'react';
-import { toast } from 'sonner';
-import { estimatesApi } from '@/lib/payments/estimates';
+import {
+  useCallback,
+  useState,
+} from 'react';
 
-export function useEstimateActions(onSuccess: () => void) {
-  const handleSendForApproval = useCallback(async (estimateId: string) => {
-    try {
-      const res = await estimatesApi.sendForApproval(estimateId);
-      if (res.error) {
-        toast.error(res.errorMessage || 'Failed to send for approval.');
-      } else {
-        toast.success('Estimate sent for approval.');
-        onSuccess();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Error.');
-    }
-  }, [onSuccess]);
+import {
+  toast,
+} from 'sonner';
 
-  const handleApproveEstimate = useCallback(async (estimateId: string) => {
-    try {
-      const res = await estimatesApi.approve(estimateId);
-      if (res.error) {
-        toast.error(res.errorMessage || 'Failed to approve estimate.');
-      } else {
-        toast.success('Estimate approved. Work can begin.');
-        onSuccess();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Error.');
-    }
-  }, [onSuccess]);
+import {
+  estimatesApi,
+} from '@/lib/payments/estimates';
 
-  const handleDeclineEstimate = useCallback(async (estimateId: string, reason: string) => {
-    if (!reason) {
-      toast.error('Please provide a reason for declining.');
-      return;
-    }
-    try {
-      const res = await estimatesApi.decline(estimateId, reason);
-      if (res.error) {
-        toast.error(res.errorMessage || 'Failed to decline estimate.');
-      } else {
-        toast.success('Estimate declined.');
-        onSuccess();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Error.');
-    }
-  }, [onSuccess]);
+/* ================================================================
+   HOOK
+================================================================ */
 
-  return { handleSendForApproval, handleApproveEstimate, handleDeclineEstimate };
+export function useEstimateActions(
+  onSuccess: () =>
+    | void
+    | Promise<void>
+) {
+  const [
+    actionLoading,
+    setActionLoading,
+  ] =
+    useState(false);
+
+  /* ==============================================================
+     SEND FOR APPROVAL
+  ============================================================== */
+
+  const handleSendForApproval =
+    useCallback(
+      async (
+        estimateId: string
+      ): Promise<boolean> => {
+        if (
+          !estimateId
+        ) {
+          toast.error(
+            'Missing estimate ID.'
+          );
+
+          return false;
+        }
+
+        setActionLoading(
+          true
+        );
+
+        try {
+          const res =
+            await estimatesApi.sendForApproval(
+              estimateId
+            );
+
+          if (
+            res?.error
+          ) {
+            toast.error(
+              res.errorMessage ||
+                'Failed to send for approval.'
+            );
+
+            return false;
+          }
+
+          toast.success(
+            'Estimate sent for approval.'
+          );
+
+          await onSuccess();
+
+          return true;
+        } catch (
+          error: any
+        ) {
+          console.error(
+            '[useEstimateActions] Send for approval error:',
+            error
+          );
+
+          toast.error(
+            error?.message ||
+              'Error sending estimate.'
+          );
+
+          return false;
+        } finally {
+          setActionLoading(
+            false
+          );
+        }
+      },
+      [
+        onSuccess,
+      ]
+    );
+
+  /* ==============================================================
+     APPROVE
+  ============================================================== */
+
+  const handleApproveEstimate =
+    useCallback(
+      async (
+        estimateId: string
+      ): Promise<boolean> => {
+        if (
+          !estimateId
+        ) {
+          toast.error(
+            'Missing estimate ID.'
+          );
+
+          return false;
+        }
+
+        setActionLoading(
+          true
+        );
+
+        try {
+          const res =
+            await estimatesApi.approve(
+              estimateId
+            );
+
+          if (
+            res?.error
+          ) {
+            toast.error(
+              res.errorMessage ||
+                'Failed to approve estimate.'
+            );
+
+            return false;
+          }
+
+          toast.success(
+            'Estimate approved. Work can begin.'
+          );
+
+          await onSuccess();
+
+          return true;
+        } catch (
+          error: any
+        ) {
+          console.error(
+            '[useEstimateActions] Approve error:',
+            error
+          );
+
+          toast.error(
+            error?.message ||
+              'Error approving estimate.'
+          );
+
+          return false;
+        } finally {
+          setActionLoading(
+            false
+          );
+        }
+      },
+      [
+        onSuccess,
+      ]
+    );
+
+  /* ==============================================================
+     DECLINE
+  ============================================================== */
+
+  const handleDeclineEstimate =
+    useCallback(
+      async (
+        estimateId: string,
+        reason: string
+      ): Promise<boolean> => {
+        const normalizedReason =
+          (
+            reason ||
+            ''
+          ).trim();
+
+        if (
+          !estimateId
+        ) {
+          toast.error(
+            'Missing estimate ID.'
+          );
+
+          return false;
+        }
+
+        if (
+          normalizedReason.length <
+          3
+        ) {
+          toast.error(
+            'Please provide a reason with at least 3 characters.'
+          );
+
+          return false;
+        }
+
+        setActionLoading(
+          true
+        );
+
+        try {
+          const res =
+            await estimatesApi.decline(
+              estimateId,
+              normalizedReason
+            );
+
+          if (
+            res?.error
+          ) {
+            toast.error(
+              res.errorMessage ||
+                'Failed to decline estimate.'
+            );
+
+            return false;
+          }
+
+          toast.success(
+            'Estimate declined.'
+          );
+
+          await onSuccess();
+
+          return true;
+        } catch (
+          error: any
+        ) {
+          console.error(
+            '[useEstimateActions] Decline error:',
+            error
+          );
+
+          toast.error(
+            error?.message ||
+              'Error declining estimate.'
+          );
+
+          return false;
+        } finally {
+          setActionLoading(
+            false
+          );
+        }
+      },
+      [
+        onSuccess,
+      ]
+    );
+
+  /* ==============================================================
+     RETURN
+  ============================================================== */
+
+  return {
+    handleSendForApproval,
+
+    handleApproveEstimate,
+
+    handleDeclineEstimate,
+
+    actionLoading,
+  };
 }
