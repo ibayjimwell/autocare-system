@@ -2,23 +2,22 @@
 
 import React, {
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog';
-
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-
+import { Input } from '@/components/ui/input';
 import {
   CalendarDays,
   Car,
@@ -29,13 +28,13 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-
-import {
-  useHistoryFindings,
-} from '@/hooks/service-tracking/useHistoryFindings';
-
-import { format } from 'date-fns';
+import { useHistoryFindings } from '@/hooks/service-tracking/useHistoryFindings';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+
+/* ================================================================
+   TYPES
+================================================================ */
 
 interface HistoryFindingPickerModalProps {
   open: boolean;
@@ -49,11 +48,16 @@ interface HistoryFindingPickerModalProps {
         priceAtTime: number;
         isPms: boolean;
       }>;
-    }>
+    }>,
   ) => Promise<void>;
   isAdding: boolean;
   phase: 'INSPECTION';
+  excludeAppointmentId?: string;
 }
+
+/* ================================================================
+   COMPONENT
+================================================================ */
 
 export default function HistoryFindingPickerModal({
   open,
@@ -61,413 +65,560 @@ export default function HistoryFindingPickerModal({
   onAddFindings,
   isAdding,
   phase,
+  excludeAppointmentId,
 }: HistoryFindingPickerModalProps) {
-  const [search, setSearch] =
-    useState('');
-
-  const [selectedIds, setSelectedIds] =
-    useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const {
     findings,
     loading,
-    loadFindings,
-  } =
-    useHistoryFindings(
-      search,
-      phase
-    );
+    refreshing,
+  } = useHistoryFindings(
+    search,
+    phase,
+    {
+      enabled: open,
+      excludeAppointmentId,
+      debounceMs: 250,
+    },
+  );
 
   useEffect(() => {
-    if (open) {
-      loadFindings();
-    }
-  }, [open, loadFindings]);
-
-  const handleToggle = (
-    id: string
-  ) => {
-    const newSet = new Set(
-      selectedIds
-    );
-
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
+    if (!open) {
+      setSearch('');
+      setSelectedIds(new Set());
+      return;
     }
 
-    setSelectedIds(newSet);
-  };
+  }, [open]);
 
-  const handleAddSelected =
-    async () => {
-      const selected =
-        findings.filter((f) =>
-          selectedIds.has(f.id)
-        );
+  /* ==============================================================
+     DEDUPLICATE IDENTICAL FINDINGS
 
-      if (selected.length === 0) {
-        toast.warning(
-          'Please select at least one finding.'
-        );
-        return;
+     Historical data can legitimately contain repeated findings for
+     different appointments. For a reuse picker, showing the latest
+     occurrence of each identical description is more useful and
+     avoids accidentally adding the same observation multiple times.
+  ============================================================== */
+
+  const uniqueFindings = useMemo(() => {
+    const seen = new Set<string>();
+
+    return findings.filter((finding: any) => {
+      const key = String(
+        finding?.description || '',
+      )
+        .trim()
+        .toLowerCase();
+
+      if (!key || seen.has(key)) {
+        return false;
       }
 
-      const findingsToAdd =
-        selected.map((f) => ({
-          description: f.description,
-          parts: f.parts.map(
-            (p: any) => ({
-              partName:
-                p.partName,
-              quantity:
-                p.quantity,
-              priceAtTime:
-                parseFloat(
-                  p.priceAtTime
+      seen.add(key);
+      return true;
+    });
+  }, [findings]);
+
+  /* ==============================================================
+     TOGGLE
+  ============================================================== */
+
+  const handleToggle = (id: string) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  };
+
+  /* ==============================================================
+     SELECT ALL
+  ============================================================== */
+
+  const allVisibleSelected =
+    uniqueFindings.length > 0 &&
+    uniqueFindings.every((finding: any) =>
+      selectedIds.has(finding.id),
+    );
+
+  const handleSelectAll = () => {
+    if (uniqueFindings.length === 0) {
+      return;
+    }
+
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+
+      if (allVisibleSelected) {
+        uniqueFindings.forEach((finding: any) =>
+          next.delete(finding.id),
+        );
+      } else {
+        uniqueFindings.forEach((finding: any) =>
+          next.add(finding.id),
+        );
+      }
+
+      return next;
+    });
+  };
+
+  /* ==============================================================
+     ADD SELECTED
+  ============================================================== */
+
+  const handleAddSelected = async () => {
+    const selected = uniqueFindings.filter((finding: any) =>
+      selectedIds.has(finding.id),
+    );
+
+    if (selected.length === 0) {
+      toast.warning(
+        'Select at least one historical finding.',
+      );
+      return;
+    }
+
+    const findingsToAdd = selected
+      .map((finding: any) => ({
+        description: String(
+          finding?.description || '',
+        ).trim(),
+
+        parts: Array.isArray(finding?.parts)
+          ? finding.parts
+              .map((part: any) => ({
+                partName: String(
+                  part?.partName || 'Part',
+                ).trim(),
+                quantity: Math.max(
+                  1,
+                  Number(part?.quantity) || 1,
                 ),
-              isPms:
-                p.isPms,
-            })
-          ),
-        }));
-
-      await onAddFindings(
-        findingsToAdd
+                priceAtTime: Math.max(
+                  0,
+                  Number(part?.priceAtTime) || 0,
+                ),
+                isPms: Boolean(part?.isPms),
+              }))
+              .filter(
+                (part: any) =>
+                  part.partName.length > 0,
+              )
+          : [],
+      }))
+      .filter(
+        (finding) =>
+          finding.description.length > 0,
       );
 
-      setSelectedIds(
-        new Set()
+    if (findingsToAdd.length === 0) {
+      toast.error(
+        'The selected historical findings are invalid.',
       );
-    };
+      return;
+    }
+
+    await onAddFindings(
+      findingsToAdd,
+    );
+
+    setSelectedIds(new Set());
+  };
+
+  /* ==============================================================
+     RENDER
+  ============================================================== */
 
   return (
     <Dialog
       open={open}
-      onOpenChange={
-        onOpenChange
-      }
+      onOpenChange={onOpenChange}
     >
       <DialogContent
         className="
           flex
-          h-[94vh]
+          h-[92vh]
           w-[calc(100%-1rem)]
-          max-w-2xl
+          max-w-3xl
           flex-col
+          overflow-hidden
           rounded-xl
-          border
           border-border
           bg-card
           p-0
           shadow-xl
-          sm:h-auto
-          sm:max-h-[90vh]
+
+          sm:max-h-[88vh]
         "
       >
-        {/* =======================================================
-         * HEADER
-         * ===================================================== */}
-        <DialogHeader className="shrink-0 border-b border-border p-4 sm:p-5">
+        {/* ========================================================
+            HEADER
+        ========================================================= */}
+
+        <DialogHeader
+          className="
+            shrink-0
+            border-b
+            border-border
+            p-4
+
+            sm:p-5
+          "
+        >
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <FileText className="h-5 w-5" />
+            <div
+              className="
+                flex
+                h-10
+                w-10
+                shrink-0
+                items-center
+                justify-center
+                rounded-md
+                bg-primary/10
+                text-primary
+              "
+            >
+              <Wrench className="h-5 w-5" />
             </div>
 
             <div className="min-w-0">
               <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">
-                Add Findings from History
+                Reuse Finding History
               </DialogTitle>
 
-              <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
-                Select previously recorded inspection
-                findings to reuse for this service.
-              </p>
+              <DialogDescription className="mt-1 text-xs leading-5 sm:text-sm">
+                Reuse a previous inspection finding and its recorded
+                parts for this appointment.
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        {/* =======================================================
-         * SEARCH
-         * ===================================================== */}
-        <div className="shrink-0 border-b border-border bg-muted/20 p-4 sm:p-5">
+        {/* ========================================================
+            SEARCH / SELECTION
+        ========================================================= */}
+
+        <div
+          className="
+            shrink-0
+            space-y-3
+            border-b
+            border-border
+            bg-muted/20
+            p-3
+
+            sm:p-4
+          "
+        >
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
             <Input
-              placeholder="Search findings..."
               value={search}
-              onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
+              onChange={(event) =>
+                setSearch(event.target.value)
               }
+              placeholder="Search finding, customer, vehicle, or tracking number..."
               className="
                 h-11
                 rounded-md
                 pl-10
                 text-base
+
                 md:h-9
                 md:text-sm
-                focus-visible:outline-none
-                focus-visible:ring-2
-                focus-visible:ring-ring
-                focus-visible:ring-offset-2
               "
             />
           </div>
 
-          {selectedIds.size > 0 && (
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">
-                {selectedIds.size}{' '}
-                {selectedIds.size === 1
-                  ? 'finding'
-                  : 'findings'}{' '}
-                selected
-              </p>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  setSelectedIds(
-                    new Set()
-                  )
-                }
-                className="h-8 rounded-md px-2 text-xs"
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="secondary"
+                className="rounded-full text-[10px]"
               >
-                Clear selection
-              </Button>
+                {uniqueFindings.length} available
+              </Badge>
+
+              {selectedIds.size > 0 && (
+                <Badge className="rounded-full text-[10px]">
+                  {selectedIds.size} selected
+                </Badge>
+              )}
+
+              {refreshing && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              )}
             </div>
-          )}
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleSelectAll}
+              disabled={uniqueFindings.length === 0}
+              className="h-8 rounded-md px-2.5 text-xs"
+            >
+              {allVisibleSelected
+                ? 'Clear visible'
+                : 'Select visible'}
+            </Button>
+          </div>
         </div>
 
-        {/* =======================================================
-         * CONTENT
-         * ===================================================== */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="space-y-3 p-4 sm:p-5">
-            {loading ? (
-              <div className="flex min-h-[300px] flex-col items-center justify-center text-center">
-                <div className="flex h-11 w-11 items-center justify-center rounded-md bg-muted">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
+        {/* ========================================================
+            CONTENT
+        ========================================================= */}
 
-                <p className="mt-3 text-sm font-medium">
-                  Loading history
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-y-auto
+          "
+        >
+          <div className="space-y-2 p-3 sm:p-4">
+            {loading ? (
+              <div className="flex min-h-[320px] flex-col items-center justify-center text-center">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  Loading finding history...
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Retrieving previous inspection findings...
+                  Retrieving previous inspection observations.
                 </p>
               </div>
-            ) : findings.length === 0 ? (
-              <div className="flex min-h-[300px] flex-col items-center justify-center px-6 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <FileText className="h-5 w-5" />
+            ) : uniqueFindings.length === 0 ? (
+              <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
                 </div>
 
-                <p className="mt-3 text-sm font-medium">
-                  No findings found
+                <p className="mt-3 text-sm font-semibold text-foreground">
+                  No reusable findings
                 </p>
 
-                <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
+                <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
                   {search.trim()
                     ? 'No historical findings match your search.'
-                    : 'There are no previously recorded findings available.'}
+                    : 'Complete previous inspections with findings to build a reusable history library.'}
                 </p>
               </div>
             ) : (
-              findings.map((item) => {
-                const selected =
-                  selectedIds.has(
-                    item.id
-                  );
+              uniqueFindings.map((finding: any) => {
+                const selected = selectedIds.has(
+                  finding.id,
+                );
+
+                const parts = Array.isArray(finding?.parts)
+                  ? finding.parts
+                  : [];
 
                 return (
-                  <div
-                    key={item.id}
-                    className="
-                      overflow-hidden
-                      rounded-lg
-                      border
-                      border-border
-                      bg-background
-                      transition-colors
-                    "
+                  <label
+                    key={finding.id}
+                    htmlFor={`history-finding-${finding.id}`}
+                    className={cn(
+                      'block cursor-pointer overflow-hidden rounded-lg border bg-background transition-colors',
+                      selected
+                        ? 'border-primary/30 bg-primary/5 ring-1 ring-primary/10'
+                        : 'border-border hover:border-primary/20 hover:bg-muted/20',
+                    )}
                   >
-                    {/* Main selection row */}
-                    <label
-                      htmlFor={`finding-${item.id}`}
-                      className="
-                        flex
-                        cursor-pointer
-                        items-start
-                        gap-3
-                        p-4
-                      "
-                    >
-                      <Checkbox
-                        id={`finding-${item.id}`}
-                        checked={selected}
-                        onCheckedChange={() =>
-                          handleToggle(
-                            item.id
-                          )
-                        }
-                        className="mt-1"
-                      />
+                    <div className="p-3 sm:p-4">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id={`history-finding-${finding.id}`}
+                          checked={selected}
+                          onCheckedChange={() =>
+                            handleToggle(
+                              finding.id,
+                            )
+                          }
+                          className="mt-0.5"
+                        />
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-start gap-2">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                              <FileText className="h-4 w-4" />
-                            </div>
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <FileText className="h-4 w-4" />
+                        </div>
 
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Historical finding
+                                Previous finding
                               </p>
 
-                              <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-5 text-foreground">
-                                {item.description}
+                              <p className="mt-0.5 whitespace-pre-wrap text-sm font-semibold leading-5 text-foreground">
+                                {finding.description}
                               </p>
                             </div>
+
+                            {selected && (
+                              <Badge className="shrink-0 rounded-full text-[9px]">
+                                <Check className="mr-1 h-3 w-3" />
+                                Selected
+                              </Badge>
+                            )}
                           </div>
 
-                          {selected && (
-                            <Badge className="shrink-0 rounded-md text-[10px]">
-                              <Check className="mr-1 h-3 w-3" />
-                              Selected
-                            </Badge>
-                          )}
-                        </div>
+                          {/* ======================================
+                              SOURCE APPOINTMENT
+                          ======================================= */}
 
-                        {/* Parts */}
-                        {item.parts &&
-                          item.parts.length >
-                            0 && (
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {item.parts.map(
-                                (
-                                  p: any,
-                                  i: number
-                                ) => (
-                                  <Badge
-                                    key={i}
-                                    variant="secondary"
-                                    className="rounded-md text-[10px] font-medium"
-                                  >
-                                    {p.quantity}x{' '}
-                                    {p.partName}
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {finding.customer?.fullname && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  {finding.customer.fullname}
+                                </span>
+                              </div>
+                            )}
 
-                                    {p.isPms
-                                      ? ' (PMS)'
-                                      : ` · ₱${(
-                                          parseFloat(
-                                            p.priceAtTime
-                                          ) *
-                                          p.quantity
-                                        ).toFixed(2)}`}
-                                  </Badge>
-                                )
-                              )}
+                            {finding.vehicle && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Car className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  {finding.vehicle.make || ''}{' '}
+                                  {finding.vehicle.model || ''}{' '}
+                                  {finding.vehicle.plateNumber
+                                    ? `(${finding.vehicle.plateNumber})`
+                                    : ''}
+                                </span>
+                              </div>
+                            )}
+
+                            {finding.appointment?.trackingNumber && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="truncate font-mono text-[10px] text-muted-foreground">
+                                  #{finding.appointment.trackingNumber}
+                                </span>
+                              </div>
+                            )}
+
+                            {finding.recordedAt && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  {new Date(
+                                    finding.recordedAt,
+                                  ).toLocaleDateString(
+                                    'en-US',
+                                    {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric',
+                                    },
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ======================================
+                              PARTS
+                          ======================================= */}
+
+                          {parts.length > 0 && (
+                            <div className="mt-3 border-t border-border pt-3">
+                              <div className="mb-2 flex items-center justify-between gap-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Recorded parts
+                                </p>
+
+                                <Badge
+                                  variant="secondary"
+                                  className="rounded-md text-[9px]"
+                                >
+                                  {parts.length} part
+                                  {parts.length === 1 ? '' : 's'}
+                                </Badge>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                {parts.map(
+                                  (part: any, index: number) => {
+                                    const total =
+                                      Number(
+                                        part?.priceAtTime || 0,
+                                      ) *
+                                      Math.max(
+                                        1,
+                                        Number(
+                                          part?.quantity || 1,
+                                        ),
+                                      );
+
+                                    return (
+                                      <div
+                                        key={
+                                          part.id ||
+                                          index
+                                        }
+                                        className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2"
+                                      >
+                                        <span className="min-w-0 truncate text-[10px] text-foreground">
+                                          {part.quantity || 1}×{' '}
+                                          {part.partName || 'Part'}
+                                        </span>
+
+                                        <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                                          {part.isPms
+                                            ? 'PMS'
+                                            : `₱${total.toFixed(2)}`}
+                                        </span>
+                                      </div>
+                                    );
+                                  },
+                                )}
+                              </div>
                             </div>
                           )}
-
-                        {/* Historical metadata */}
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate text-xs text-muted-foreground">
-                              {item.customer
-                                ?.fullname ||
-                                'Unknown customer'}
-                            </span>
-                          </div>
-
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Car className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate text-xs text-muted-foreground">
-                              {item.vehicle
-                                ?.make}{' '}
-                              {item.vehicle
-                                ?.model}{' '}
-                              (
-                              {item.vehicle
-                                ?.plateNumber ||
-                                'N/A'}
-                              )
-                            </span>
-                          </div>
-
-                          <div className="flex min-w-0 items-center gap-2">
-                            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate text-xs text-muted-foreground">
-                              {format(
-                                new Date(
-                                  item.recordedAt
-                                ),
-                                'MMM d, yyyy'
-                              )}
-                            </span>
-                          </div>
-
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate text-xs text-muted-foreground">
-                              Inspection history
-                            </span>
-                          </div>
                         </div>
                       </div>
-                    </label>
-                  </div>
+                    </div>
+                  </label>
                 );
               })
             )}
           </div>
         </div>
 
-        {/* =======================================================
-         * FOOTER
-         * ===================================================== */}
-        <DialogFooter className="shrink-0 border-t border-border bg-muted/20 p-4 sm:p-5">
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+        {/* ========================================================
+            FOOTER
+        ========================================================= */}
+
+        <DialogFooter className="shrink-0 border-t border-border bg-muted/20 p-3 sm:p-4">
+          <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                onOpenChange(false)
-              }
+              onClick={() => onOpenChange(false)}
               disabled={isAdding}
-              className="h-11 rounded-md md:h-9"
+              className="h-10 rounded-md md:h-9"
             >
               Cancel
             </Button>
 
             <Button
               type="button"
-              onClick={
-                handleAddSelected
-              }
-              disabled={
-                isAdding ||
-                selectedIds.size === 0
-              }
-              className="
-                h-11
-                rounded-md
-                md:h-9
-                focus-visible:outline-none
-                focus-visible:ring-2
-                focus-visible:ring-ring
-                focus-visible:ring-offset-2
-              "
+              onClick={handleAddSelected}
+              disabled={isAdding || selectedIds.size === 0}
+              className="h-10 rounded-md md:h-9"
             >
               {isAdding ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

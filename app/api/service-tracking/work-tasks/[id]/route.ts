@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
 import { Database } from '@/lib/drizzle';
-import { InspectionTasks } from '@/database/models/service-tracking/inspection-tasks.model';
+import { WorkTasks } from '@/database/models/service-tracking/work-tasks.model';
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 
 /* ================================================================
-   DELETE INSPECTION TASK
+   DELETE WORK TASK
 
-   A task can be removed from the active inspection checklist.
+   A task can be removed from the active repair checklist.
    Remaining tasks are compacted back to a clean 1..N order.
 ================================================================ */
 
@@ -59,14 +59,14 @@ export async function DELETE(
 
   try {
     const [existing] = await Database.select({
-      id: InspectionTasks.id,
+      id: WorkTasks.id,
       appointmentId:
-        InspectionTasks.appointmentId,
+        WorkTasks.appointmentId,
     })
-      .from(InspectionTasks)
+      .from(WorkTasks)
       .where(
         eq(
-          InspectionTasks.id,
+          WorkTasks.id,
           id,
         ),
       );
@@ -77,46 +77,46 @@ export async function DELETE(
           error: true,
           errorType: 'auth',
           errorTitle: 'Task not found',
-          errorMessage: 'Inspection task does not exist.',
+          errorMessage: 'Work task does not exist.',
         },
         { status: 404 },
       );
     }
 
     await Database.delete(
-      InspectionTasks,
+      WorkTasks,
     ).where(
       eq(
-        InspectionTasks.id,
+        WorkTasks.id,
         id,
       ),
     );
 
     const remaining = await Database.select({
-      id: InspectionTasks.id,
-      order: InspectionTasks.order,
+      id: WorkTasks.id,
+      order: WorkTasks.order,
     })
-      .from(InspectionTasks)
+      .from(WorkTasks)
       .where(
         eq(
-          InspectionTasks.appointmentId,
+          WorkTasks.appointmentId,
           existing.appointmentId,
         ),
       )
-      .orderBy(InspectionTasks.order);
+      .orderBy(WorkTasks.order);
 
     for (let index = 0; index < remaining.length; index += 1) {
       const nextOrder = index + 1;
 
       if (remaining[index].order !== nextOrder) {
-        await Database.update(InspectionTasks)
+        await Database.update(WorkTasks)
           .set({
             order: nextOrder,
             updatedAt: new Date(),
           })
           .where(
             eq(
-              InspectionTasks.id,
+              WorkTasks.id,
               remaining[index].id,
             ),
           );
@@ -126,13 +126,13 @@ export async function DELETE(
     return NextResponse.json(
       {
         error: false,
-        message: 'Inspection task deleted.',
+        message: 'Work task deleted.',
       },
       { status: 200 },
     );
   } catch (error) {
     console.error(
-      '[DELETE /api/service-tracking/inspection-tasks/[id]]',
+      '[DELETE /api/service-tracking/work-tasks/[id]]',
       error,
     );
 
@@ -141,7 +141,7 @@ export async function DELETE(
         error: true,
         errorType: 'dbe',
         errorTitle: 'Database error',
-        errorMessage: 'Could not delete inspection task.',
+        errorMessage: 'Could not delete work task.',
         errorLog:
           error instanceof Error
             ? error.message

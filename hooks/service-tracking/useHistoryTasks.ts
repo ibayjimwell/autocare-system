@@ -7,24 +7,16 @@ import {
   useState,
 } from 'react';
 
-import { historyFindingsApi } from '@/lib/service-tracking/history-findings';
+import { taskHistoryApi } from '@/lib/service-tracking/task-history';
 import { toast } from 'sonner';
 
 /* ================================================================
-   TYPES
+   HISTORY TASKS HOOK
 ================================================================ */
 
-type HistoryFindingPhase =
-  | 'INSPECTION'
-  | undefined;
-
-/* ================================================================
-   HISTORY FINDINGS HOOK
-================================================================ */
-
-export function useHistoryFindings(
+export function useHistoryTasks(
   search?: string,
-  phase?: HistoryFindingPhase,
+  phase?: 'INSPECTION' | 'WORK',
   options?: {
     enabled?: boolean;
     appointmentId?: string;
@@ -32,7 +24,7 @@ export function useHistoryFindings(
     debounceMs?: number;
   },
 ) {
-  const [findings, setFindings] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -41,11 +33,7 @@ export function useHistoryFindings(
   const enabled = options?.enabled ?? true;
   const debounceMs = options?.debounceMs ?? 250;
 
-  /* ==============================================================
-     LOAD
-  ============================================================== */
-
-  const loadFindings = useCallback(
+  const loadTasks = useCallback(
     async (loadOptions?: { silent?: boolean }) => {
       if (!enabled) {
         return [];
@@ -64,7 +52,7 @@ export function useHistoryFindings(
       }
 
       try {
-        const res = await historyFindingsApi.list({
+        const res = await taskHistoryApi.list({
           appointmentId:
             options?.appointmentId,
           excludeAppointmentId:
@@ -83,34 +71,34 @@ export function useHistoryFindings(
         if (res?.error) {
           toast.error(
             res.errorMessage ||
-              'Failed to load history findings.',
+              'Failed to load task history.',
           );
-          setFindings([]);
+          setTasks([]);
           return [];
         }
 
-        const nextFindings = Array.isArray(res?.data)
+        const nextTasks = Array.isArray(res?.data)
           ? res.data
           : [];
 
-        setFindings(nextFindings);
-        return nextFindings;
+        setTasks(nextTasks);
+        return nextTasks;
       } catch (err: any) {
         if (requestId !== requestIdRef.current) {
           return [];
         }
 
         console.error(
-          '[useHistoryFindings] Failed to load history findings:',
+          '[useHistoryTasks] Failed to load task history:',
           err,
         );
 
         toast.error(
           err?.message ||
-            'Error loading history findings.',
+            'Error loading task history.',
         );
 
-        setFindings([]);
+        setTasks([]);
         return [];
       } finally {
         if (requestId === requestIdRef.current) {
@@ -131,10 +119,6 @@ export function useHistoryFindings(
     ],
   );
 
-  /* ==============================================================
-     SEARCH / FILTER LOAD
-  ============================================================== */
-
   useEffect(() => {
     if (!enabled) {
       setLoading(false);
@@ -142,7 +126,7 @@ export function useHistoryFindings(
     }
 
     const timer = setTimeout(() => {
-      void loadFindings();
+      void loadTasks();
     }, debounceMs);
 
     return () => {
@@ -152,13 +136,13 @@ export function useHistoryFindings(
   }, [
     enabled,
     debounceMs,
-    loadFindings,
+    loadTasks,
   ]);
 
   return {
-    findings,
+    tasks,
     loading,
     refreshing,
-    loadFindings,
+    loadTasks,
   };
 }

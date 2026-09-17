@@ -2,23 +2,37 @@
 
 import React, {
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog';
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Edit2,
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -26,23 +40,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-import {
-  AlertCircle,
-  ClipboardList,
-  Clock3,
-  Edit2,
-  Loader2,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
-
-import {
-  defaultGroupsApi,
-} from '@/lib/service-tracking/default-groups';
-
+import { defaultGroupsApi } from '@/lib/service-tracking/default-groups';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+
+/* ================================================================
+   TYPES
+================================================================ */
 
 interface DefaultGroupManagerModalProps {
   open: boolean;
@@ -50,63 +54,83 @@ interface DefaultGroupManagerModalProps {
   onSaved: () => void;
 }
 
+type TaskType = 'INSPECTION' | 'WORK';
+
+interface TaskForm {
+  id?: string;
+  title: string;
+  durationMinutes?: number;
+  taskType: TaskType;
+  order?: number;
+}
+
+interface GroupForm {
+  title: string;
+  description: string;
+  isActive: boolean;
+  tasks: TaskForm[];
+}
+
+const EMPTY_FORM: GroupForm = {
+  title: '',
+  description: '',
+  isActive: true,
+  tasks: [],
+};
+
+/* ================================================================
+   COMPONENT
+================================================================ */
+
 export default function DefaultGroupManagerModal({
   open,
   onOpenChange,
   onSaved,
 }: DefaultGroupManagerModalProps) {
-  const [groups, setGroups] =
-    useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(true);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<GroupForm>(EMPTY_FORM);
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [
-    editingGroupId,
-    setEditingGroupId,
-  ] = useState<string | null>(
-    null
-  );
-
-  const [formData, setFormData] =
-    useState<{
-      title: string;
-      description: string;
-      isActive: boolean;
-      tasks: Array<{
-        id?: string;
-        title: string;
-        durationMinutes?: number;
-        taskType?: string;
-      }>;
-    }>({
-      title: '',
-      description: '',
-      isActive: true,
-      tasks: [],
-    });
+  /* ==============================================================
+     LOAD
+  ============================================================== */
 
   const loadGroups = async () => {
     setLoading(true);
 
     try {
-      const res =
-        await defaultGroupsApi.list();
+      const res = await defaultGroupsApi.list();
 
-      if (res.error) {
+      if (res?.error) {
         toast.error(
           res.errorMessage ||
-            'Failed to load groups.'
+            'Failed to load default task groups.',
         );
-      } else {
-        setGroups(
-          res.data || []
-        );
+        setGroups([]);
+        return;
       }
-    } catch (err) {
-      toast.error(
-        'Error loading groups.'
+
+      setGroups(
+        Array.isArray(res?.data)
+          ? res.data
+          : [],
       );
+    } catch (error: any) {
+      console.error(
+        '[DefaultGroupManagerModal] load error:',
+        error,
+      );
+
+      toast.error(
+        error?.message ||
+          'Error loading default task groups.',
+      );
+
+      setGroups([]);
     } finally {
       setLoading(false);
     }
@@ -114,237 +138,309 @@ export default function DefaultGroupManagerModal({
 
   useEffect(() => {
     if (open) {
-      loadGroups();
+      void loadGroups();
     }
   }, [open]);
 
+  /* ==============================================================
+     FILTER
+  ============================================================== */
+
+  const filteredGroups = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return groups.filter((group: any) => {
+      if (!showInactive && group?.isActive === false) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const text = [
+        group?.title,
+        group?.description,
+        ...(Array.isArray(group?.tasks)
+          ? group.tasks.map((task: any) => task?.title)
+          : []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return text.includes(query);
+    });
+  }, [groups, search, showInactive]);
+
+  /* ==============================================================
+     FORM
+  ============================================================== */
+
   const resetForm = () => {
     setFormData({
-      title: '',
-      description: '',
-      isActive: true,
+      ...EMPTY_FORM,
       tasks: [],
     });
 
     setEditingGroupId(null);
   };
 
-  const handleEditGroup = (
-    group: any
-  ) => {
+  const handleEditGroup = (group: any) => {
     setEditingGroupId(group.id);
 
     setFormData({
-      title: group.title,
-      description:
-        group.description || '',
-      isActive: group.isActive,
-
-      tasks: group.tasks.map(
-        (task: any) => ({
+      title: String(group?.title || ''),
+      description: String(group?.description || ''),
+      isActive: group?.isActive !== false,
+      tasks: (Array.isArray(group?.tasks) ? group.tasks : [])
+        .sort(
+          (left: any, right: any) =>
+            Number(left?.order ?? 0) -
+            Number(right?.order ?? 0),
+        )
+        .map((task: any, index: number) => ({
           id: task.id,
-          title: task.title,
+          title: String(task?.title || ''),
           durationMinutes:
-            task.durationMinutes ||
-            undefined,
+            task?.durationMinutes === null ||
+            task?.durationMinutes === undefined
+              ? undefined
+              : Number(task.durationMinutes),
           taskType:
-            task.taskType ||
-            'INSPECTION',
-        })
-      ),
+            task?.taskType === 'WORK'
+              ? 'WORK'
+              : 'INSPECTION',
+          order: Number(task?.order ?? index),
+        })),
     });
   };
 
-  const handleDeleteGroup =
-    async (id: string) => {
-      if (
-        !confirm(
-          'Delete this group and all its tasks?'
-        )
-      ) {
-        return;
-      }
-
-      try {
-        const res =
-          await defaultGroupsApi.delete(
-            id
-          );
-
-        if (res.error) {
-          toast.error(
-            res.errorMessage ||
-              'Failed to delete group.'
-          );
-        } else {
-          toast.success(
-            'Group deleted.'
-          );
-
-          loadGroups();
-        }
-      } catch (err) {
-        toast.error(
-          'Error deleting group.'
-        );
-      }
-    };
-
-  const handleSaveGroup =
-    async () => {
-      if (!formData.title.trim()) {
-        toast.error(
-          'Group title is required.'
-        );
-        return;
-      }
-
-      try {
-        const payload = {
-          title:
-            formData.title.trim(),
-
-          description:
-            formData.description.trim() ||
-            undefined,
-
-          isActive:
-            formData.isActive,
-
-          tasks:
-            formData.tasks.map(
-              (task) => ({
-                title:
-                  task.title.trim(),
-
-                durationMinutes:
-                  task.durationMinutes,
-
-                taskType:
-                  task.taskType ||
-                  'INSPECTION',
-              })
-            ),
-        };
-
-        let res;
-
-        if (editingGroupId) {
-          res =
-            await defaultGroupsApi.update(
-              editingGroupId,
-              payload
-            );
-        } else {
-          res =
-            await defaultGroupsApi.create(
-              payload
-            );
-        }
-
-        if (res.error) {
-          toast.error(
-            res.errorMessage ||
-              'Failed to save group.'
-          );
-        } else {
-          toast.success(
-            editingGroupId
-              ? 'Group updated.'
-              : 'Group created.'
-          );
-
-          resetForm();
-          loadGroups();
-          onSaved();
-        }
-      } catch (err) {
-        toast.error(
-          'Error saving group.'
-        );
-      }
-    };
-
-  const addTask = () => {
-    setFormData({
-      ...formData,
+  const handleAddTask = () => {
+    setFormData((previous) => ({
+      ...previous,
       tasks: [
-        ...formData.tasks,
+        ...previous.tasks,
         {
           title: '',
-          durationMinutes:
-            undefined,
+          durationMinutes: undefined,
           taskType: 'INSPECTION',
+          order: previous.tasks.length,
         },
       ],
+    }));
+  };
+
+  const handleRemoveTask = (index: number) => {
+    setFormData((previous) => ({
+      ...previous,
+      tasks: previous.tasks.filter(
+        (_, taskIndex) => taskIndex !== index,
+      ),
+    }));
+  };
+
+  const handleTaskChange = (
+    index: number,
+    field: keyof TaskForm,
+    value: any,
+  ) => {
+    setFormData((previous) => {
+      const tasks = [...previous.tasks];
+
+      tasks[index] = {
+        ...tasks[index],
+        [field]: value,
+      };
+
+      return {
+        ...previous,
+        tasks,
+      };
     });
   };
 
-  const removeTask = (
-    index: number
-  ) => {
-    const newTasks = [
-      ...formData.tasks,
-    ];
+  /* ==============================================================
+     SAVE
+  ============================================================== */
 
-    newTasks.splice(
-      index,
-      1
+  const handleSave = async () => {
+    const title = formData.title.trim();
+
+    if (!title) {
+      toast.error('Group title is required.');
+      return;
+    }
+
+    const validTasks = formData.tasks
+      .map((task, index) => ({
+        title: task.title.trim(),
+        durationMinutes:
+          task.durationMinutes &&
+          Number(task.durationMinutes) > 0
+            ? Number(task.durationMinutes)
+            : undefined,
+        taskType:
+          task.taskType === 'WORK'
+            ? 'WORK'
+            : 'INSPECTION',
+        order: index,
+      }))
+      .filter((task) => task.title.length > 0);
+
+    setSaving(true);
+
+    try {
+      const payload = {
+        title,
+        description:
+          formData.description.trim() || undefined,
+        isActive: formData.isActive,
+        tasks: validTasks,
+      };
+
+      const res = editingGroupId
+        ? await defaultGroupsApi.update(
+            editingGroupId,
+            payload,
+          )
+        : await defaultGroupsApi.create(
+            payload,
+          );
+
+      if (res?.error) {
+        toast.error(
+          res.errorMessage ||
+            'Failed to save task group.',
+        );
+        return;
+      }
+
+      toast.success(
+        editingGroupId
+          ? 'Default task group updated.'
+          : 'Default task group created.',
+      );
+
+      resetForm();
+      await loadGroups();
+      onSaved();
+    } catch (error: any) {
+      console.error(
+        '[DefaultGroupManagerModal] save error:',
+        error,
+      );
+
+      toast.error(
+        error?.message ||
+          'Error saving task group.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ==============================================================
+     DELETE
+  ============================================================== */
+
+  const handleDeleteGroup = async (group: any) => {
+    const confirmed = window.confirm(
+      `Delete “${group.title}” and all of its template tasks?`,
     );
 
-    setFormData({
-      ...formData,
-      tasks: newTasks,
-    });
+    if (!confirmed) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const res = await defaultGroupsApi.delete(
+        group.id,
+      );
+
+      if (res?.error) {
+        toast.error(
+          res.errorMessage ||
+            'Failed to delete task group.',
+        );
+        return;
+      }
+
+      toast.success('Default task group deleted.');
+
+      if (editingGroupId === group.id) {
+        resetForm();
+      }
+
+      await loadGroups();
+      onSaved();
+    } catch (error: any) {
+      console.error(
+        '[DefaultGroupManagerModal] delete error:',
+        error,
+      );
+
+      toast.error(
+        error?.message ||
+          'Error deleting task group.',
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const updateTask = (
-    index: number,
-    field: string,
-    value: any
-  ) => {
-    const newTasks = [
-      ...formData.tasks,
-    ];
+  /* ==============================================================
+     COUNTS
+  ============================================================== */
 
-    newTasks[index] = {
-      ...newTasks[index],
-      [field]: value,
-    };
+  const activeCount = groups.filter(
+    (group) => group?.isActive !== false,
+  ).length;
 
-    setFormData({
-      ...formData,
-      tasks: newTasks,
-    });
-  };
+  const inactiveCount =
+    groups.length - activeCount;
+
+  /* ==============================================================
+     RENDER
+  ============================================================== */
 
   return (
     <Dialog
       open={open}
-      onOpenChange={
-        onOpenChange
-      }
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !saving) {
+          resetForm();
+        }
+
+        onOpenChange(nextOpen);
+      }}
     >
       <DialogContent
         className="
-          flex
-          h-[94vh]
-          w-[calc(100%-1rem)]
-          max-w-2xl
-          flex-col
-          rounded-xl
-          border
-          border-border
-          bg-card
-          p-0
-          shadow-xl
-          sm:max-h-[92vh]
+          !flex
+          !h-[min(92vh,900px)]
+          !max-h-[92vh]
+          !w-[calc(100vw-1rem)]
+          !max-w-[1400px]
+          sm:!w-[calc(100vw-2rem)]
+          lg:!w-[92vw]
+          xl:!w-[88vw]
+          !flex-col
+          !overflow-hidden
+          !rounded-2xl
+          !border-border
+          !bg-card
+          !p-0
+          !shadow-2xl
         "
       >
-        {/* =====================================================
-         * HEADER
-         * =================================================== */}
-        <DialogHeader className="shrink-0 border-b border-border p-4 sm:p-5">
+        {/* ========================================================
+            HEADER
+        ========================================================= */}
+
+        <DialogHeader className="shrink-0 border-b border-border p-4 sm:p-5 lg:p-6">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
               <ClipboardList className="h-5 w-5" />
@@ -352,72 +448,133 @@ export default function DefaultGroupManagerModal({
 
             <div className="min-w-0">
               <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">
-                Default Task Groups
+                Default Task Library
               </DialogTitle>
 
-              <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
-                Manage reusable inspection and repair task
-                templates.
-              </p>
+              <DialogDescription className="mt-1 text-xs leading-5 sm:text-sm">
+                Build reusable inspection and repair task groups for faster service setup.
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        {/* =====================================================
-         * BODY
-         * =================================================== */}
+        {/* ========================================================
+            TOOLBAR
+        ========================================================= */}
+
+        <div className="shrink-0 space-y-3 border-b border-border bg-muted/20 p-3 sm:p-4 lg:px-6">
+          <div className="flex flex-col gap-2 md:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+              <Input
+                value={search}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
+                placeholder="Search groups or tasks..."
+                className="h-11 rounded-md pl-10 text-base md:h-9 md:text-sm"
+              />
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Badge
+                variant="secondary"
+                className="rounded-full text-[10px]"
+              >
+                {activeCount} active
+              </Badge>
+
+              <Badge
+                variant="outline"
+                className="rounded-full text-[10px]"
+              >
+                {inactiveCount} inactive
+              </Badge>
+
+              <label className="flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-xs">
+                <Checkbox
+                  checked={showInactive}
+                  onCheckedChange={(checked) =>
+                    setShowInactive(Boolean(checked))
+                  }
+                />
+
+                Show inactive
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================
+            BODY
+        ========================================================= */}
+
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="space-y-6 p-4 sm:p-5">
-            {/* Existing groups */}
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
+          <div
+            className="
+              grid
+              gap-4
+              p-3
+              sm:p-4
+              lg:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.8fr)]
+              lg:items-start
+              lg:p-5
+              xl:grid-cols-[minmax(0,1.45fr)_minmax(480px,0.8fr)]
+            "
+          >
+            {/* ====================================================
+                EXISTING GROUPS
+            ===================================================== */}
+
+            <section className="min-w-0 rounded-xl border border-border bg-background">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider">
-                    Existing Groups
+                  <p className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                    Task Groups
                   </p>
 
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Reusable task collections.
+                    Select a group to edit its reusable tasks.
                   </p>
                 </div>
 
-                {groups.length > 0 && (
-                  <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground">
-                    {groups.length}{' '}
-                    {groups.length === 1
-                      ? 'Group'
-                      : 'Groups'}
-                  </span>
-                )}
+                <Badge
+                  variant="secondary"
+                  className="rounded-full text-[10px]"
+                >
+                  {filteredGroups.length} shown
+                </Badge>
               </div>
 
-              {loading ? (
-                <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-border bg-muted/20">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="p-4">
+                {loading ? (
+                  <div className="flex min-h-[280px] items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : filteredGroups.length === 0 ? (
+                  <div className="flex min-h-[280px] flex-col items-center justify-center px-5 text-center">
+                    <ClipboardList className="h-6 w-6 text-muted-foreground" />
 
-                  <p className="mt-3 text-sm font-medium">
-                    Loading groups
-                  </p>
-                </div>
-              ) : groups.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center">
-                  <ClipboardList className="mx-auto h-5 w-5 text-muted-foreground" />
+                    <p className="mt-3 text-sm font-semibold text-foreground">
+                      No task groups found
+                    </p>
 
-                  <p className="mt-2 text-sm font-medium">
-                    No groups yet
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Create a reusable group below.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {groups.map(
-                    (group) => (
+                    <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
+                      Create a group or adjust the current search/filter.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredGroups.map((group: any) => (
                       <div
                         key={group.id}
-                        className="rounded-lg border border-border bg-background p-3"
+                        className={cn(
+                          'rounded-lg border bg-card p-3 transition-colors',
+                          editingGroupId === group.id
+                            ? 'border-primary/30 bg-primary/5 ring-1 ring-primary/10'
+                            : 'border-border hover:border-primary/20',
+                        )}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-start gap-3">
@@ -427,38 +584,60 @@ export default function DefaultGroupManagerModal({
 
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="truncate text-sm font-semibold">
+                                <p className="truncate text-sm font-semibold text-foreground">
                                   {group.title}
                                 </p>
 
-                                <span
-                                  className={
+                                <Badge
+                                  variant={
                                     group.isActive
-                                      ? 'rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-green-700'
-                                      : 'rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground'
+                                      ? 'default'
+                                      : 'secondary'
                                   }
+                                  className="rounded-full text-[9px]"
                                 >
                                   {group.isActive
                                     ? 'Active'
                                     : 'Inactive'}
-                                </span>
+                                </Badge>
                               </div>
 
                               {group.description && (
-                                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
                                   {group.description}
                                 </p>
                               )}
 
-                              <p className="mt-1 text-[11px] text-muted-foreground">
-                                {group.tasks?.length ||
-                                  0}{' '}
-                                task
-                                {group.tasks?.length ===
-                                1
-                                  ? ''
-                                  : 's'}
-                              </p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <Badge
+                                  variant="secondary"
+                                  className="rounded-md text-[9px]"
+                                >
+                                  {group.tasks?.length || 0} tasks
+                                </Badge>
+
+                                <Badge
+                                  variant="outline"
+                                  className="rounded-md text-[9px]"
+                                >
+                                  {group.tasks?.filter(
+                                    (task: any) =>
+                                      task?.taskType !== 'WORK',
+                                  ).length || 0}{' '}
+                                  inspection
+                                </Badge>
+
+                                <Badge
+                                  variant="outline"
+                                  className="rounded-md text-[9px]"
+                                >
+                                  {group.tasks?.filter(
+                                    (task: any) =>
+                                      task?.taskType === 'WORK',
+                                  ).length || 0}{' '}
+                                  repair
+                                </Badge>
+                              </div>
                             </div>
                           </div>
 
@@ -468,23 +647,12 @@ export default function DefaultGroupManagerModal({
                               variant="ghost"
                               size="icon"
                               onClick={() =>
-                                handleEditGroup(
-                                  group
-                                )
+                                handleEditGroup(group)
                               }
-                              className="
-                                h-10
-                                w-10
-                                rounded-md
-                                text-muted-foreground
-                                hover:bg-primary/5
-                                hover:text-primary
-                                md:h-8
-                                md:w-8
-                              "
-                              aria-label="Edit group"
+                              className="h-9 w-9 rounded-md md:h-8 md:w-8"
+                              aria-label={`Edit ${group.title}`}
                             >
-                              <Edit2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                              <Edit2 className="h-4 w-4" />
                             </Button>
 
                             <Button
@@ -492,40 +660,41 @@ export default function DefaultGroupManagerModal({
                               variant="ghost"
                               size="icon"
                               onClick={() =>
-                                handleDeleteGroup(
-                                  group.id
-                                )
+                                void handleDeleteGroup(group)
                               }
-                              className="
-                                h-10
-                                w-10
-                                rounded-md
-                                text-muted-foreground
-                                hover:bg-destructive/10
-                                hover:text-destructive
-                                md:h-8
-                                md:w-8
-                              "
-                              aria-label="Delete group"
+                              disabled={saving}
+                              className="h-9 w-9 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive md:h-8 md:w-8"
+                              aria-label={`Delete ${group.title}`}
                             >
-                              <Trash2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
                       </div>
-                    )
-                  )}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
 
-            {/* =================================================
-             * CREATE / EDIT FORM
-             * =============================================== */}
-            <section className="overflow-hidden rounded-lg border border-border bg-background">
-              <div className="border-b border-border bg-muted/20 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+            {/* ====================================================
+                EDITOR
+            ===================================================== */}
+
+            <section
+              className="
+                min-w-0
+                rounded-xl
+                border
+                border-border
+                bg-background
+                lg:sticky
+                lg:top-0
+              "
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                     {editingGroupId ? (
                       <Edit2 className="h-4 w-4" />
                     ) : (
@@ -533,119 +702,113 @@ export default function DefaultGroupManagerModal({
                     )}
                   </div>
 
-                  <div>
-                    <p className="text-sm font-semibold">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {editingGroupId
                         ? 'Edit Group'
-                        : 'Create Group'}
+                        : 'New Group'}
                     </p>
 
-                    <p className="text-[11px] text-muted-foreground">
-                      Define the reusable task template.
+                    <p className="text-[10px] text-muted-foreground">
+                      {editingGroupId
+                        ? 'Update this reusable task collection.'
+                        : 'Create a reusable task collection.'}
                     </p>
                   </div>
                 </div>
+
+                {editingGroupId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetForm}
+                    className="h-8 rounded-md px-2 text-xs"
+                  >
+                    <X className="mr-1.5 h-3.5 w-3.5" />
+                    Reset
+                  </Button>
+                )}
               </div>
 
-              <div className="space-y-5 p-4">
-                {/* Title */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Title *
+              <div className="space-y-4 p-4 lg:p-5">
+                {/* Group title */}
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Group Title
                   </Label>
 
                   <Input
-                    value={
-                      formData.title
+                    value={formData.title}
+                    onChange={(event) =>
+                      setFormData((previous) => ({
+                        ...previous,
+                        title: event.target.value,
+                      }))
                     }
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        title:
-                          e.target.value,
-                      })
-                    }
-                    placeholder="e.g., Inspection PMS for Toyota Vios"
-                    className="
-                      h-11
-                      rounded-md
-                      text-base
-                      md:h-9
-                      md:text-sm
-                    "
+                    placeholder="e.g. Standard PMS Inspection"
+                    className="h-11 rounded-md text-base md:h-9 md:text-sm"
                   />
                 </div>
 
                 {/* Description */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Description
                   </Label>
 
                   <Textarea
-                    value={
-                      formData.description
+                    value={formData.description}
+                    onChange={(event) =>
+                      setFormData((previous) => ({
+                        ...previous,
+                        description: event.target.value,
+                      }))
                     }
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        description:
-                          e.target.value,
-                      })
-                    }
-                    placeholder="Optional description"
-                    className="
-                      min-h-[90px]
-                      resize-none
-                      rounded-md
-                      text-base
-                      md:text-sm
-                    "
+                    placeholder="Optional explanation of when this group should be used."
+                    className="min-h-[74px] resize-none rounded-md text-base md:text-sm"
                   />
                 </div>
 
                 {/* Active */}
-                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-3">
-                  <div>
-                    <Label
-                      htmlFor="group-active"
-                      className="text-sm font-medium"
-                    >
-                      Active
-                    </Label>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-background text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4" />
+                    </div>
 
-                    <p className="text-[11px] text-muted-foreground">
-                      Allow this group to be reused in the workflow.
-                    </p>
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Active
+                      </Label>
+
+                      <p className="text-[10px] leading-4 text-muted-foreground">
+                        Active groups appear in task pickers.
+                      </p>
+                    </div>
                   </div>
 
                   <Switch
-                    id="group-active"
-                    checked={
-                      formData.isActive
-                    }
-                    onCheckedChange={(
-                      checked
-                    ) =>
-                      setFormData({
-                        ...formData,
-                        isActive:
-                          checked,
-                      })
+                    checked={formData.isActive}
+                    onCheckedChange={(checked) =>
+                      setFormData((previous) => ({
+                        ...previous,
+                        isActive: checked,
+                      }))
                     }
                   />
                 </div>
 
                 {/* Tasks */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
                     <div>
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Tasks
-                      </Label>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Template Tasks
+                      </p>
 
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Define the operations included in this group.
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        Define the order and operational phase for each task.
                       </p>
                     </div>
 
@@ -653,211 +816,160 @@ export default function DefaultGroupManagerModal({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={
-                        addTask
-                      }
-                      className="h-10 rounded-md md:h-9"
+                      onClick={handleAddTask}
+                      className="h-9 rounded-md px-2.5 text-xs"
                     >
-                      <Plus className="mr-1.5 h-4 w-4" />
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
                       Add Task
                     </Button>
                   </div>
 
-                  {formData.tasks.length ===
-                  0 ? (
+                  {formData.tasks.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-border bg-muted/20 p-5 text-center">
                       <ClipboardList className="mx-auto h-5 w-5 text-muted-foreground" />
 
-                      <p className="mt-2 text-xs font-medium">
-                        No tasks configured
+                      <p className="mt-2 text-xs font-medium text-foreground">
+                        No template tasks yet
                       </p>
 
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Add tasks to this reusable group.
+                      <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                        Add inspection or repair tasks to make this group reusable.
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {formData.tasks.map(
-                        (
-                          task,
-                          index
-                        ) => (
+                    <div className="space-y-2">
+                      {formData.tasks.map((task, index) => (
+                        <div
+                          key={task.id || `task-${index}`}
+                          className="rounded-lg border border-border bg-muted/20 p-2.5"
+                        >
                           <div
-                            key={
-                              index
-                            }
-                            className="rounded-lg border border-border bg-muted/20 p-3"
+                            className="
+                              grid
+                              gap-2
+                              md:grid-cols-[minmax(0,1fr)_90px_120px_36px]
+                              md:items-end
+                            "
                           >
-                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_90px_140px_auto] md:items-end">
-                              {/* Task title */}
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Task
-                                </Label>
+                            <div className="space-y-1">
+                              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Task {index + 1}
+                              </Label>
+
+                              <Input
+                                value={task.title}
+                                onChange={(event) =>
+                                  handleTaskChange(
+                                    index,
+                                    'title',
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Task title"
+                                className="h-10 rounded-md text-base md:h-9 md:text-sm"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Minutes
+                              </Label>
+
+                              <div className="relative">
+                                <Clock3 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
 
                                 <Input
+                                  type="number"
+                                  min="1"
                                   value={
-                                    task.title
+                                    task.durationMinutes ?? ''
                                   }
-                                  onChange={(
-                                    e
-                                  ) =>
-                                    updateTask(
+                                  onChange={(event) =>
+                                    handleTaskChange(
                                       index,
-                                      'title',
-                                      e
-                                        .target
-                                        .value
+                                      'durationMinutes',
+                                      event.target.value
+                                        ? Number(
+                                            event.target.value,
+                                          )
+                                        : undefined,
                                     )
                                   }
-                                  placeholder="Task title"
-                                  className="
-                                    h-11
-                                    rounded-md
-                                    text-base
-                                    md:h-9
-                                    md:text-sm
-                                  "
+                                  placeholder="Min"
+                                  className="h-10 rounded-md pl-8 text-base md:h-9 md:text-sm"
                                 />
                               </div>
-
-                              {/* Duration */}
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Minutes
-                                </Label>
-
-                                <div className="relative">
-                                  <Clock3 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-
-                                  <Input
-                                    type="number"
-                                    min="1"
-                                    value={
-                                      task.durationMinutes ||
-                                      ''
-                                    }
-                                    onChange={(
-                                      e
-                                    ) =>
-                                      updateTask(
-                                        index,
-                                        'durationMinutes',
-                                        e
-                                          .target
-                                          .value
-                                          ? Number(
-                                              e
-                                                .target
-                                                .value
-                                            )
-                                          : undefined
-                                      )
-                                    }
-                                    placeholder="Min"
-                                    className="
-                                      h-11
-                                      rounded-md
-                                      pl-9
-                                      text-base
-                                      md:h-9
-                                      md:text-sm
-                                    "
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Type */}
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Type
-                                </Label>
-
-                                <Select
-                                  value={
-                                    task.taskType ||
-                                    'INSPECTION'
-                                  }
-                                  onValueChange={(
-                                    value
-                                  ) =>
-                                    updateTask(
-                                      index,
-                                      'taskType',
-                                      value
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger className="h-11 rounded-md text-base md:h-9 md:text-sm">
-                                    <SelectValue placeholder="Type" />
-                                  </SelectTrigger>
-
-                                  <SelectContent className="rounded-lg">
-                                    <SelectItem value="INSPECTION">
-                                      Inspection
-                                    </SelectItem>
-
-                                    <SelectItem value="WORK">
-                                      Repair Work
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              {/* Delete */}
-                              <div className="flex justify-end md:min-h-9 md:items-center">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() =>
-                                    removeTask(
-                                      index
-                                    )
-                                  }
-                                  className="
-                                    h-10
-                                    w-10
-                                    rounded-md
-                                    text-muted-foreground
-                                    hover:bg-destructive/10
-                                    hover:text-destructive
-                                    md:h-8
-                                    md:w-8
-                                  "
-                                  aria-label="Remove task"
-                                >
-                                  <X className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                                </Button>
-                              </div>
                             </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Type
+                              </Label>
+
+                              <Select
+                                value={task.taskType}
+                                onValueChange={(
+                                  value: TaskType,
+                                ) =>
+                                  handleTaskChange(
+                                    index,
+                                    'taskType',
+                                    value,
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-10 rounded-md md:h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+
+                                <SelectContent>
+                                  <SelectItem value="INSPECTION">
+                                    Inspection
+                                  </SelectItem>
+
+                                  <SelectItem value="WORK">
+                                    Repair Work
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                handleRemoveTask(index)
+                              }
+                              className="h-10 w-10 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive md:h-8 md:w-8"
+                              aria-label={`Remove task ${index + 1}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
-                        )
-                      )}
+                        </div>
+                      ))}
                     </div>
                   )}
-
-                  <div className="flex items-start gap-2 rounded-md bg-muted/30 px-3 py-2">
-                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-
-                    <p className="text-[11px] leading-5 text-muted-foreground">
-                      Inspection tasks are used during diagnosis.
-                      Repair tasks are available during the work phase.
-                    </p>
-                  </div>
                 </div>
 
-                {/* Form actions */}
-                <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+                <div className="flex items-start gap-2 rounded-md bg-muted/30 px-3 py-2">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+
+                  <p className="text-[10px] leading-4 text-muted-foreground">
+                    Inspection tasks are used during diagnosis. Repair tasks are
+                    available once the job enters the work phase.
+                  </p>
+                </div>
+
+                <div className="flex flex-col-reverse gap-2 border-t border-border pt-3 sm:flex-row sm:justify-end">
                   {editingGroupId && (
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={
-                        resetForm
-                      }
-                      className="h-11 rounded-md sm:w-auto md:h-9"
+                      onClick={resetForm}
+                      disabled={saving}
+                      className="h-10 rounded-md md:h-9"
                     >
                       Cancel Edit
                     </Button>
@@ -865,11 +977,14 @@ export default function DefaultGroupManagerModal({
 
                   <Button
                     type="button"
-                    onClick={
-                      handleSaveGroup
-                    }
-                    className="h-11 rounded-md sm:w-auto md:h-9"
+                    onClick={() => void handleSave()}
+                    disabled={saving}
+                    className="h-10 rounded-md md:h-9"
                   >
+                    {saving && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+
                     {editingGroupId
                       ? 'Update Group'
                       : 'Create Group'}
@@ -880,17 +995,17 @@ export default function DefaultGroupManagerModal({
           </div>
         </div>
 
-        {/* =====================================================
-         * FOOTER
-         * =================================================== */}
-        <DialogFooter className="shrink-0 border-t border-border bg-muted/20 p-4 sm:p-5">
+        {/* ========================================================
+            FOOTER
+        ========================================================= */}
+
+        <DialogFooter className="shrink-0 border-t border-border bg-muted/20 p-3 sm:p-4 lg:px-6">
           <Button
             type="button"
             variant="outline"
-            onClick={() =>
-              onOpenChange(false)
-            }
-            className="h-11 w-full rounded-md sm:w-auto md:h-9"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+            className="h-10 w-full rounded-md sm:w-auto md:h-9"
           >
             Close
           </Button>

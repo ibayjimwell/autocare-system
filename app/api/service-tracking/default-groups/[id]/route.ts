@@ -4,155 +4,324 @@ import { authOptions } from '@/lib/auth/staffs/auth';
 import { Database } from '@/lib/drizzle';
 import { DefaultTaskGroups } from '@/database/models/service-tracking/default-task-groups.model';
 import { DefaultTasks } from '@/database/models/service-tracking/default-tasks.model';
-import { eq, and } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 
-// ------------------------------------------------------------------
-// PUT /api/service-tracking/default-groups/:id
-// Update group and its tasks (replace tasks).
-// Body: { title?, description?, isActive?, tasks: [{ id?, title, durationMinutes?, taskType?, order? }] }
-// ------------------------------------------------------------------
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  if (!isValidUUID(id)) {
-    return NextResponse.json(
-      { error: true, errorType: 'fve', errorTitle: 'Invalid ID', errorMessage: 'Invalid group ID.' },
-      { status: 422 }
-    );
-  }
+/* ================================================================
+   AUTHORIZATION
+================================================================ */
 
+async function requireStaff() {
   const session = await getServerSession(authOptions);
+
   if (!session?.user?.id) {
     return NextResponse.json(
-      { error: true, errorType: 'auth', errorTitle: 'Unauthorized', errorMessage: 'You must be logged in.' },
-      { status: 401 }
+      {
+        error: true,
+        errorType: 'auth',
+        errorTitle: 'Unauthorized',
+        errorMessage: 'You must be logged in.',
+      },
+      { status: 401 },
     );
   }
 
-  let body;
+  return null;
+}
+
+/* ================================================================
+   VALIDATE / NORMALIZE TASK
+================================================================ */
+
+function normalizeTask(
+  task: any,
+  index: number,
+  groupId: string,
+) {
+  return {
+    groupId,
+    title: String(
+      task?.title || '',
+    ).trim(),
+    durationMinutes:
+      task?.durationMinutes === undefined ||
+      task?.durationMinutes === null ||
+      task?.durationMinutes === ''
+        ? null
+        : Math.max(
+            0,
+            Number(task.durationMinutes) || 0,
+          ),
+    taskType:
+      task?.taskType === 'WORK'
+        ? 'WORK'
+        : 'INSPECTION',
+    order:
+      task?.order === undefined ||
+      task?.order === null ||
+      task?.order === ''
+        ? index
+        : Math.max(
+            0,
+            Number(task.order) || 0,
+          ),
+  };
+}
+
+/* ================================================================
+   PUT DEFAULT TASK GROUP
+================================================================ */
+
+export async function PUT(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{ id: string }>;
+  },
+) {
+  const { id } = await params;
+
+  if (!isValidUUID(id)) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: 'fve',
+        errorTitle: 'Invalid ID',
+        errorMessage: 'Invalid group ID.',
+      },
+      { status: 422 },
+    );
+  }
+
+  const authError = await requireStaff();
+
+  if (authError) {
+    return authError;
+  }
+
+  let body: any;
+
   try {
     body = await req.json();
   } catch {
     return NextResponse.json(
-      { error: true, errorType: 'fe', errorTitle: 'Invalid JSON', errorMessage: 'Request body must be valid JSON.' },
-      { status: 400 }
+      {
+        error: true,
+        errorType: 'fe',
+        errorTitle: 'Invalid JSON',
+        errorMessage: 'Request body must be valid JSON.',
+      },
+      { status: 400 },
+    );
+  }
+
+  const title =
+    body?.title === undefined
+      ? undefined
+      : String(body.title).trim();
+
+  if (title !== undefined && !title) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: 'fve',
+        errorTitle: 'Invalid title',
+        errorMessage: 'Group title cannot be empty.',
+      },
+      { status: 422 },
     );
   }
 
   try {
-    // Check existence
     const [existing] = await Database.select()
       .from(DefaultTaskGroups)
       .where(eq(DefaultTaskGroups.id, id));
+
     if (!existing) {
       return NextResponse.json(
-        { error: true, errorType: 'auth', errorTitle: 'Not found', errorMessage: 'Group does not exist.' },
-        { status: 404 }
+        {
+          error: true,
+          errorType: 'auth',
+          errorTitle: 'Not found',
+          errorMessage: 'Group does not exist.',
+        },
+        { status: 404 },
       );
     }
 
-    // Update group fields
-    const updateData: any = {};
-    if (body.title !== undefined) updateData.title = body.title.trim();
-    if (body.description !== undefined) updateData.description = body.description?.trim() || null;
-    if (body.isActive !== undefined) updateData.isActive = body.isActive;
-    updateData.updatedAt = new Date();
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
 
-    if (Object.keys(updateData).length > 0) {
-      await Database.update(DefaultTaskGroups)
-        .set(updateData)
-        .where(eq(DefaultTaskGroups.id, id));
+    if (title !== undefined) {
+      updateData.title = title;
     }
 
-    // Replace tasks if provided
-    if (body.tasks !== undefined && Array.isArray(body.tasks)) {
-      // Delete existing tasks
-      await Database.delete(DefaultTasks).where(eq(DefaultTasks.groupId, id));
-      // Insert new tasks
-      if (body.tasks.length > 0) {
-        const taskValues = body.tasks.map((t: any, idx: number) => ({
-          groupId: id,
-          title: t.title?.trim() || `Task ${idx + 1}`,
-          durationMinutes: t.durationMinutes ? parseInt(t.durationMinutes) : null,
-          taskType: t.taskType || 'INSPECTION', // ✅ fixed: include taskType
-          order: t.order !== undefined ? parseInt(t.order) : idx,
-        }));
-        await Database.insert(DefaultTasks).values(taskValues);
+    if (body?.description !== undefined) {
+      updateData.description =
+        String(body.description || '').trim() ||
+        null;
+    }
+
+    if (body?.isActive !== undefined) {
+      updateData.isActive = Boolean(
+        body.isActive,
+      );
+    }
+
+    await Database.update(DefaultTaskGroups)
+      .set(updateData)
+      .where(eq(DefaultTaskGroups.id, id));
+
+    if (body?.tasks !== undefined) {
+      if (!Array.isArray(body.tasks)) {
+        return NextResponse.json(
+          {
+            error: true,
+            errorType: 'fve',
+            errorTitle: 'Invalid tasks',
+            errorMessage: 'tasks must be an array.',
+          },
+          { status: 422 },
+        );
+      }
+
+      const tasks = body.tasks
+        .map((task: any, index: number) =>
+          normalizeTask(task, index, id),
+        )
+        .filter(
+          (task: any) =>
+            task.title.length > 0,
+        );
+
+      await Database.delete(DefaultTasks)
+        .where(eq(DefaultTasks.groupId, id));
+
+      if (tasks.length > 0) {
+        await Database.insert(
+          DefaultTasks,
+        ).values(tasks);
       }
     }
 
-    // Fetch updated group with tasks
     const [updatedGroup] = await Database.select()
       .from(DefaultTaskGroups)
       .where(eq(DefaultTaskGroups.id, id));
-    const groupTasks = await Database.select()
+
+    const tasks = await Database.select()
       .from(DefaultTasks)
       .where(eq(DefaultTasks.groupId, id))
-      .orderBy(DefaultTasks.order);
+      .orderBy(
+        asc(DefaultTasks.order),
+        asc(DefaultTasks.createdAt),
+      );
 
     return NextResponse.json({
       error: false,
       message: 'Default task group updated.',
-      data: { ...updatedGroup, tasks: groupTasks },
+      data: {
+        ...updatedGroup,
+        tasks,
+      },
     });
-  } catch (e) {
-    console.error('[PUT /api/service-tracking/default-groups/[id]]', e);
+  } catch (error) {
+    console.error(
+      '[PUT /api/service-tracking/default-groups/[id]]',
+      error,
+    );
+
     return NextResponse.json(
-      { error: true, errorType: 'dbe', errorTitle: 'Database error', errorMessage: 'Could not update group.' },
-      { status: 500 }
+      {
+        error: true,
+        errorType: 'dbe',
+        errorTitle: 'Database error',
+        errorMessage: 'Could not update group.',
+        errorLog:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      },
+      { status: 500 },
     );
   }
 }
 
-// ------------------------------------------------------------------
-// DELETE /api/service-tracking/default-groups/:id
-// ------------------------------------------------------------------
+/* ================================================================
+   DELETE DEFAULT TASK GROUP
+================================================================ */
+
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {
+    params,
+  }: {
+    params: Promise<{ id: string }>;
+  },
 ) {
   const { id } = await params;
+
   if (!isValidUUID(id)) {
     return NextResponse.json(
-      { error: true, errorType: 'fve', errorTitle: 'Invalid ID', errorMessage: 'Invalid group ID.' },
-      { status: 422 }
+      {
+        error: true,
+        errorType: 'fve',
+        errorTitle: 'Invalid ID',
+        errorMessage: 'Invalid group ID.',
+      },
+      { status: 422 },
     );
   }
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json(
-      { error: true, errorType: 'auth', errorTitle: 'Unauthorized', errorMessage: 'You must be logged in.' },
-      { status: 401 }
-    );
+  const authError = await requireStaff();
+
+  if (authError) {
+    return authError;
   }
 
   try {
-    // Check existence
     const [existing] = await Database.select()
       .from(DefaultTaskGroups)
       .where(eq(DefaultTaskGroups.id, id));
+
     if (!existing) {
       return NextResponse.json(
-        { error: true, errorType: 'auth', errorTitle: 'Not found', errorMessage: 'Group does not exist.' },
-        { status: 404 }
+        {
+          error: true,
+          errorType: 'auth',
+          errorTitle: 'Not found',
+          errorMessage: 'Group does not exist.',
+        },
+        { status: 404 },
       );
     }
 
-    await Database.delete(DefaultTaskGroups).where(eq(DefaultTaskGroups.id, id));
+    await Database.delete(DefaultTaskGroups)
+      .where(eq(DefaultTaskGroups.id, id));
 
     return NextResponse.json({
       error: false,
       message: 'Default task group deleted.',
     });
-  } catch (e) {
-    console.error('[DELETE /api/service-tracking/default-groups/[id]]', e);
+  } catch (error) {
+    console.error(
+      '[DELETE /api/service-tracking/default-groups/[id]]',
+      error,
+    );
+
     return NextResponse.json(
-      { error: true, errorType: 'dbe', errorTitle: 'Database error', errorMessage: 'Could not delete group.' },
-      { status: 500 }
+      {
+        error: true,
+        errorType: 'dbe',
+        errorTitle: 'Database error',
+        errorMessage: 'Could not delete group.',
+        errorLog:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      },
+      { status: 500 },
     );
   }
 }

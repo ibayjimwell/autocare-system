@@ -1,6 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import {
   Dialog,
@@ -10,65 +14,86 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Button,
+} from '@/components/ui/button';
 
 import {
-  AlertCircle,
-  CheckCircle2,
-  Edit2,
+  Checkbox,
+} from '@/components/ui/checkbox';
+
+import {
+  Badge,
+} from '@/components/ui/badge';
+
+import {
   FileText,
+  Search,
   Loader2,
+  Check,
   Package,
-  Plus,
-  Trash2,
+  Database,
   X,
 } from 'lucide-react';
 
-import { defaultFindingsApi } from '@/lib/service-tracking/default-findings';
-import { toast } from 'sonner';
+import {
+  defaultFindingsApi,
+} from '@/lib/service-tracking/default-findings';
 
-interface DefaultFindingManagerModalProps {
+import {
+  toast,
+} from 'sonner';
+
+import {
+  cn,
+} from '@/lib/utils';
+
+/* ================================================================
+   TYPES
+================================================================ */
+
+interface DefaultFindingPickerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSaved: () => void;
+  onAddFindings: (
+    findings: Array<{
+      description: string;
+      parts: Array<{
+        partName: string;
+        quantity: number;
+        priceAtTime: number;
+        isPms: boolean;
+      }>;
+    }>
+  ) => Promise<void>;
+  isAdding: boolean;
 }
 
-interface Part {
-  id: string;
-  partName: string;
-  quantity: number;
-  priceAtTime: number;
-  isPms: boolean;
-}
+/* ================================================================
+   COMPONENT
+================================================================ */
 
-export default function DefaultFindingManagerModal({
+export default function DefaultFindingPickerModal({
   open,
   onOpenChange,
-  onSaved,
-}: DefaultFindingManagerModalProps) {
+  onAddFindings,
+  isAdding,
+}: DefaultFindingPickerModalProps) {
   const [findings, setFindings] =
     useState<any[]>([]);
 
   const [loading, setLoading] =
     useState(false);
 
-  const [editingId, setEditingId] =
-    useState<string | null>(null);
+  const [search, setSearch] =
+    useState('');
 
-  const [formData, setFormData] =
-    useState<{
-      title: string;
-      isActive: boolean;
-      parts: Part[];
-    }>({
-      title: '',
-      isActive: true,
-      parts: [],
-    });
+  const [selectedIds, setSelectedIds] =
+    useState<Set<string>>(new Set());
+
+  /* ==============================================================
+     LOAD DEFAULT FINDINGS
+  ============================================================== */
 
   const loadFindings = async () => {
     setLoading(true);
@@ -77,214 +102,298 @@ export default function DefaultFindingManagerModal({
       const res =
         await defaultFindingsApi.list();
 
-      if (res.error) {
+      if (res?.error) {
         toast.error(
           res.errorMessage ||
-            'Failed to load findings.'
+            'Failed to load default findings.',
         );
+
+        setFindings([]);
       } else {
         setFindings(
-          res.data || []
+          Array.isArray(res?.data)
+            ? res.data
+            : [],
         );
       }
-    } catch (err) {
-      toast.error(
-        'Error loading findings.'
+    } catch (error: any) {
+      console.error(
+        '[DefaultFindingPickerModal] Failed to load findings:',
+        error,
       );
+
+      toast.error(
+        error?.message ||
+          'Error loading default findings.',
+      );
+
+      setFindings([]);
     } finally {
       setLoading(false);
     }
   };
 
+  /* ==============================================================
+     OPEN
+  ============================================================== */
+
   useEffect(() => {
-    if (open) {
-      loadFindings();
+    if (!open) {
+      setSelectedIds(
+        new Set(),
+      );
+      setSearch('');
+      return;
     }
+
+    void loadFindings();
   }, [open]);
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      isActive: true,
-      parts: [],
-    });
+  /* ==============================================================
+     ACTIVE FINDINGS
+  ============================================================== */
 
-    setEditingId(null);
+  const activeFindings =
+    useMemo(
+      () =>
+        findings.filter(
+          (finding) =>
+            finding?.isActive !==
+            false,
+        ),
+      [findings],
+    );
+
+  /* ==============================================================
+     FILTER
+  ============================================================== */
+
+  const filteredFindings =
+    useMemo(() => {
+      const query =
+        search
+          .trim()
+          .toLowerCase();
+
+      if (!query) {
+        return activeFindings;
+      }
+
+      return activeFindings.filter(
+        (finding) => {
+          const title = String(
+            finding?.title ||
+              '',
+          ).toLowerCase();
+
+          const parts =
+            Array.isArray(
+              finding?.parts,
+            )
+              ? finding.parts
+                  .map(
+                    (part: any) =>
+                      part?.partName ||
+                      '',
+                  )
+                  .join(' ')
+                  .toLowerCase()
+              : '';
+
+          return (
+            title.includes(
+              query,
+            ) ||
+            parts.includes(
+              query,
+            )
+          );
+        },
+      );
+    }, [activeFindings, search]);
+
+  /* ==============================================================
+     SELECTION
+  ============================================================== */
+
+  const handleToggle = (
+    id: string,
+  ) => {
+    setSelectedIds(
+      (previous) => {
+        const next = new Set(
+          previous,
+        );
+
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+
+        return next;
+      },
+    );
   };
 
-  const handleEdit = (
-    finding: any
-  ) => {
-    setEditingId(finding.id);
-
-    setFormData({
-      title: finding.title,
-      isActive: finding.isActive,
-      parts: finding.parts.map(
-        (p: any) => ({
-          ...p,
-        })
-      ),
-    });
-  };
-
-  const handleDelete = async (
-    id: string
-  ) => {
+  const handleSelectAll = () => {
     if (
-      !confirm(
-        'Delete this finding and its parts?'
-      )
+      filteredFindings.length ===
+      0
     ) {
       return;
     }
 
-    try {
-      const res =
-        await defaultFindingsApi.delete(
-          id
-        );
-
-      if (res.error) {
-        toast.error(
-          res.errorMessage ||
-            'Failed to delete.'
-        );
-      } else {
-        toast.success(
-          'Deleted.'
-        );
-
-        loadFindings();
-      }
-    } catch (err) {
-      toast.error(
-        'Error deleting.'
+    const visibleIds =
+      filteredFindings.map(
+        (finding) =>
+          finding.id,
       );
-    }
-  };
 
-  const handleSave = async () => {
-    if (!formData.title.trim()) {
-      toast.error(
-        'Title is required.'
+    const everyVisibleSelected =
+      visibleIds.every((id) =>
+        selectedIds.has(id),
       );
-      return;
-    }
 
-    try {
-      const payload = {
-        title:
-          formData.title.trim(),
+    setSelectedIds(
+      (previous) => {
+        const next = new Set(
+          previous,
+        );
 
-        isActive:
-          formData.isActive,
-
-        parts: formData.parts.map(
-          (p) => ({
-            partName:
-              p.partName.trim(),
-
-            quantity:
-              p.quantity,
-
-            priceAtTime:
-              p.priceAtTime,
-
-            isPms:
-              p.isPms,
-          })
-        ),
-      };
-
-      let res;
-
-      if (editingId) {
-        res =
-          await defaultFindingsApi.update(
-            editingId,
-            payload
+        if (
+          everyVisibleSelected
+        ) {
+          visibleIds.forEach(
+            (id) =>
+              next.delete(id),
           );
-      } else {
-        res =
-          await defaultFindingsApi.create(
-            payload
+        } else {
+          visibleIds.forEach(
+            (id) =>
+              next.add(id),
           );
+        }
+
+        return next;
+      },
+    );
+  };
+
+  /* ==============================================================
+     ADD
+  ============================================================== */
+
+  const handleAddSelected =
+    async () => {
+      const selected =
+        activeFindings.filter(
+          (finding) =>
+            selectedIds.has(
+              finding.id,
+            ),
+        );
+
+      if (
+        selected.length ===
+        0
+      ) {
+        toast.warning(
+          'Select at least one default finding.',
+        );
+
+        return;
       }
 
-      if (res.error) {
+      const payload =
+        selected
+          .map(
+            (finding) => ({
+              description: String(
+                finding?.title ||
+                  '',
+              ).trim(),
+
+              parts:
+                Array.isArray(
+                  finding?.parts,
+                )
+                  ? finding.parts
+                      .map(
+                        (part: any) => ({
+                          partName: String(
+                            part?.partName ||
+                              'Part',
+                          ).trim(),
+                          quantity:
+                            Math.max(
+                              1,
+                              Number(
+                                part?.quantity ||
+                                  1,
+                              ),
+                            ),
+                          priceAtTime:
+                            Math.max(
+                              0,
+                              Number(
+                                part?.priceAtTime ||
+                                  0,
+                              ),
+                            ),
+                          isPms:
+                            Boolean(
+                              part?.isPms,
+                            ),
+                        }),
+                      )
+                      .filter(
+                        (part: any) =>
+                          part.partName.length >
+                          0,
+                      )
+                  : [],
+            }),
+          )
+          .filter(
+            (finding) =>
+              finding.description.length >
+              0,
+          );
+
+      if (
+        payload.length ===
+        0
+      ) {
         toast.error(
-          res.errorMessage ||
-            'Failed to save.'
-        );
-      } else {
-        toast.success(
-          editingId
-            ? 'Updated.'
-            : 'Created.'
+          'The selected default findings are invalid.',
         );
 
-        resetForm();
-        loadFindings();
-        onSaved();
+        return;
       }
-    } catch (err) {
-      toast.error(
-        'Error saving.'
+
+      await onAddFindings(
+        payload,
       );
-    }
-  };
 
-  const addPart = () => {
-    setFormData({
-      ...formData,
-      parts: [
-        ...formData.parts,
-        {
-          id: Date.now().toString(),
-          partName: '',
-          quantity: 1,
-          priceAtTime: 0,
-          isPms: false,
-        },
-      ],
-    });
-  };
-
-  const removePart = (
-    index: number
-  ) => {
-    const newParts = [
-      ...formData.parts,
-    ];
-
-    newParts.splice(index, 1);
-
-    setFormData({
-      ...formData,
-      parts: newParts,
-    });
-  };
-
-  const updatePart = (
-    index: number,
-    field: keyof Part,
-    value: any
-  ) => {
-    const newParts = [
-      ...formData.parts,
-    ];
-
-    newParts[index] = {
-      ...newParts[index],
-      [field]: value,
+      setSelectedIds(
+        new Set(),
+      );
     };
 
-    setFormData({
-      ...formData,
-      parts: newParts,
-    });
-  };
+  const allVisibleSelected =
+    filteredFindings.length >
+      0 &&
+    filteredFindings.every(
+      (finding) =>
+        selectedIds.has(
+          finding.id,
+        ),
+    );
+
+  /* ==============================================================
+     RENDER
+  ============================================================== */
 
   return (
     <Dialog
@@ -294,620 +403,429 @@ export default function DefaultFindingManagerModal({
       <DialogContent
         className="
           flex
-          h-[94vh]
+          h-[92vh]
           w-[calc(100%-1rem)]
           max-w-2xl
           flex-col
+          overflow-hidden
           rounded-xl
           border
           border-border
           bg-card
           p-0
           shadow-xl
-          sm:max-h-[90vh]
+
+          sm:max-h-[88vh]
         "
       >
-        {/* =====================================================
-         * HEADER
-         * =================================================== */}
-        <DialogHeader className="shrink-0 border-b border-border p-4 sm:p-5">
+        {/* ========================================================
+            HEADER
+        ========================================================= */}
+
+        <DialogHeader
+          className="
+            shrink-0
+            border-b
+            border-border
+            p-4
+
+            sm:p-5
+          "
+        >
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <FileText className="h-5 w-5" />
+            <div
+              className="
+                flex
+                h-10
+                w-10
+                shrink-0
+                items-center
+                justify-center
+                rounded-md
+                bg-primary/10
+                text-primary
+              "
+            >
+              <Database className="h-5 w-5" />
             </div>
 
             <div className="min-w-0">
               <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">
-                Manage Default Findings
+                Add Default Findings
               </DialogTitle>
 
               <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
-                Create reusable diagnostic findings and
-                their standard parts.
+                Reuse active diagnostic finding templates and their
+                standard parts for this inspection.
               </p>
             </div>
           </div>
         </DialogHeader>
 
-        {/* =====================================================
-         * BODY
-         * =================================================== */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="space-y-6 p-4 sm:p-5">
-            {/* Existing findings */}
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                    Existing Findings
-                  </p>
+        {/* ========================================================
+            SEARCH / SELECTION
+        ========================================================= */}
 
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Reusable findings available to staff.
-                  </p>
-                </div>
+        <div
+          className="
+            shrink-0
+            space-y-3
+            border-b
+            border-border
+            bg-muted/20
+            p-3
 
-                {findings.length > 0 && (
-                  <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground">
-                    {findings.length}{' '}
-                    {findings.length === 1
-                      ? 'Finding'
-                      : 'Findings'}
-                  </span>
-                )}
-              </div>
+            sm:p-4
+          "
+        >
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-              {loading ? (
-                <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-border bg-muted/20 text-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value,
+                )
+              }
+              placeholder="Search findings or parts..."
+              className="
+                h-10
+                w-full
+                rounded-md
+                border
+                border-input
+                bg-background
+                pl-9
+                pr-9
+                text-base
+                outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
 
-                  <p className="mt-3 text-sm font-medium">
-                    Loading findings
-                  </p>
-                </div>
-              ) : findings.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center">
-                  <FileText className="mx-auto h-5 w-5 text-muted-foreground" />
+                md:text-sm
+              "
+            />
 
-                  <p className="mt-2 text-sm font-medium">
-                    No default findings yet
-                  </p>
+            {search && (
+              <button
+                type="button"
+                onClick={() =>
+                  setSearch('')
+                }
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Create your first reusable finding below.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  {findings.map((finding) => (
-                    <div
-                      key={finding.id}
-                      className="
-                        rounded-lg
-                        border
-                        border-border
-                        bg-background
-                        p-3
-                      "
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                            <FileText className="h-4 w-4" />
-                          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="secondary"
+                className="rounded-full text-[10px]"
+              >
+                {
+                  activeFindings.length
+                }{' '}
+                active
+              </Badge>
 
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="truncate text-sm font-semibold">
-                                {finding.title}
-                              </p>
-
-                              <span
-                                className={
-                                  finding.isActive
-                                    ? 'rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-green-700'
-                                    : 'rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground'
-                                }
-                              >
-                                {finding.isActive
-                                  ? 'Active'
-                                  : 'Inactive'}
-                              </span>
-                            </div>
-
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {finding.parts?.length ||
-                                0}{' '}
-                              associated part
-                              {finding.parts?.length ===
-                              1
-                                ? ''
-                                : 's'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              handleEdit(
-                                finding
-                              )
-                            }
-                            className="
-                              h-10
-                              w-10
-                              rounded-md
-                              text-muted-foreground
-                              hover:bg-primary/5
-                              hover:text-primary
-                              md:h-8
-                              md:w-8
-                            "
-                            aria-label="Edit finding"
-                          >
-                            <Edit2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              handleDelete(
-                                finding.id
-                              )
-                            }
-                            className="
-                              h-10
-                              w-10
-                              rounded-md
-                              text-muted-foreground
-                              hover:bg-destructive/10
-                              hover:text-destructive
-                              md:h-8
-                              md:w-8
-                            "
-                            aria-label="Delete finding"
-                          >
-                            <Trash2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {finding.parts &&
-                        finding.parts.length >
-                          0 && (
-                          <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
-                            {finding.parts.map(
-                              (
-                                part: any,
-                                index: number
-                              ) => (
-                                <span
-                                  key={index}
-                                  className={`
-                                    inline-flex
-                                    items-center
-                                    gap-1.5
-                                    rounded-md
-                                    border
-                                    px-2
-                                    py-1
-                                    text-[10px]
-                                    font-medium
-                                    ${
-                                      part.isPms
-                                        ? 'border-green-200 bg-green-50 text-green-700'
-                                        : 'border-border bg-muted/40 text-foreground'
-                                    }
-                                  `}
-                                >
-                                  <Package className="h-3 w-3" />
-
-                                  <span>
-                                    {part.quantity}x{' '}
-                                    {part.partName ||
-                                      'Part'}
-                                  </span>
-
-                                  <span className="font-mono">
-                                    {part.isPms
-                                      ? 'PMS'
-                                      : `₱${(
-                                          Number(
-                                            part.priceAtTime
-                                          ) *
-                                          Number(
-                                            part.quantity
-                                          )
-                                        ).toFixed(2)}`}
-                                  </span>
-                                </span>
-                              )
-                            )}
-                          </div>
-                        )}
-                    </div>
-                  ))}
-                </div>
+              {selectedIds.size >
+                0 && (
+                <Badge className="rounded-full text-[10px]">
+                  {selectedIds.size}{' '}
+                  selected
+                </Badge>
               )}
-            </section>
+            </div>
 
-            {/* =================================================
-             * CREATE / EDIT
-             * =============================================== */}
-            <section className="overflow-hidden rounded-lg border border-border bg-background">
-              <div className="border-b border-border bg-muted/20 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    {editingId ? (
-                      <Edit2 className="h-4 w-4" />
-                    ) : (
-                      <Plus className="h-4 w-4" />
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-semibold">
-                      {editingId
-                        ? 'Edit Finding'
-                        : 'Create Finding'}
-                    </p>
-
-                    <p className="text-[11px] text-muted-foreground">
-                      Configure the reusable finding below.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-5 p-4">
-                {/* Title */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Title *
-                  </Label>
-
-                  <Input
-                    value={formData.title}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        title:
-                          e.target.value,
-                      })
-                    }
-                    placeholder="e.g., Engine noise diagnosis"
-                    className="
-                      h-11
-                      rounded-md
-                      text-base
-                      md:h-9
-                      md:text-sm
-                    "
-                  />
-                </div>
-
-                {/* Active */}
-                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-background text-muted-foreground">
-                      <CheckCircle2 className="h-4 w-4" />
-                    </div>
-
-                    <div>
-                      <Label
-                        htmlFor="default-finding-active"
-                        className="text-sm font-medium"
-                      >
-                        Active
-                      </Label>
-
-                      <p className="text-[11px] text-muted-foreground">
-                        Make this finding available for reuse.
-                      </p>
-                    </div>
-                  </div>
-
-                  <Switch
-                    id="default-finding-active"
-                    checked={
-                      formData.isActive
-                    }
-                    onCheckedChange={(
-                      checked
-                    ) =>
-                      setFormData({
-                        ...formData,
-                        isActive:
-                          checked,
-                      })
-                    }
-                  />
-                </div>
-
-                {/* Parts */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Parts
-                      </Label>
-
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Standard parts associated with this finding.
-                      </p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addPart}
-                      className="
-                        h-10
-                        rounded-md
-                        md:h-9
-                      "
-                    >
-                      <Plus className="mr-1.5 h-4 w-4" />
-                      Add Part
-                    </Button>
-                  </div>
-
-                  {formData.parts.length ===
-                  0 ? (
-                    <div className="rounded-lg border border-dashed border-border bg-muted/20 p-5 text-center">
-                      <Package className="mx-auto h-5 w-5 text-muted-foreground" />
-
-                      <p className="mt-2 text-xs font-medium">
-                        No parts configured
-                      </p>
-
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Parts can be added to automatically include them with the finding.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {formData.parts.map(
-                        (
-                          part,
-                          idx
-                        ) => (
-                          <div
-                            key={
-                              part.id
-                            }
-                            className="rounded-lg border border-border bg-muted/20 p-3"
-                          >
-                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_90px_120px_auto] md:items-end">
-                              {/* Part */}
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Part Name
-                                </Label>
-
-                                <Input
-                                  value={
-                                    part.partName
-                                  }
-                                  onChange={(
-                                    e
-                                  ) =>
-                                    updatePart(
-                                      idx,
-                                      'partName',
-                                      e
-                                        .target
-                                        .value
-                                    )
-                                  }
-                                  placeholder="Part name"
-                                  className="
-                                    h-11
-                                    rounded-md
-                                    text-base
-                                    md:h-9
-                                    md:text-sm
-                                  "
-                                />
-                              </div>
-
-                              {/* Quantity */}
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Qty
-                                </Label>
-
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  value={
-                                    part.quantity
-                                  }
-                                  onChange={(
-                                    e
-                                  ) =>
-                                    updatePart(
-                                      idx,
-                                      'quantity',
-                                      parseInt(
-                                        e
-                                          .target
-                                          .value
-                                      ) ||
-                                        1
-                                    )
-                                  }
-                                  className="
-                                    h-11
-                                    rounded-md
-                                    text-base
-                                    md:h-9
-                                    md:text-sm
-                                  "
-                                />
-                              </div>
-
-                              {/* Price */}
-                              <div className="space-y-1.5">
-                                <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Price
-                                </Label>
-
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={
-                                    part.priceAtTime
-                                  }
-                                  onChange={(
-                                    e
-                                  ) =>
-                                    updatePart(
-                                      idx,
-                                      'priceAtTime',
-                                      parseFloat(
-                                        e
-                                          .target
-                                          .value
-                                      ) ||
-                                        0
-                                    )
-                                  }
-                                  disabled={
-                                    part.isPms
-                                  }
-                                  placeholder="0.00"
-                                  className="
-                                    h-11
-                                    rounded-md
-                                    text-base
-                                    md:h-9
-                                    md:text-sm
-                                  "
-                                />
-                              </div>
-
-                              {/* PMS / delete */}
-                              <div className="flex min-h-11 items-center justify-between gap-3 md:min-h-9 md:justify-end">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={
-                                      part.isPms
-                                    }
-                                    onCheckedChange={(
-                                      checked
-                                    ) =>
-                                      updatePart(
-                                        idx,
-                                        'isPms',
-                                        !!checked
-                                      )
-                                    }
-                                    id={`pms-${part.id}`}
-                                  />
-
-                                  <Label
-                                    htmlFor={`pms-${part.id}`}
-                                    className="cursor-pointer text-xs font-semibold"
-                                  >
-                                    PMS
-                                  </Label>
-                                </div>
-
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() =>
-                                    removePart(
-                                      idx
-                                    )
-                                  }
-                                  className="
-                                    h-10
-                                    w-10
-                                    rounded-md
-                                    text-muted-foreground
-                                    hover:bg-destructive/10
-                                    hover:text-destructive
-                                    md:h-8
-                                    md:w-8
-                                  "
-                                  aria-label="Remove part"
-                                >
-                                  <X className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex items-start gap-2 rounded-md bg-muted/30 px-3 py-2">
-                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-
-                    <p className="text-[11px] leading-5 text-muted-foreground">
-                      Checking PMS makes the part free by setting
-                      its price to ₱0.00.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Form actions */}
-                <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
-                  {editingId && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={
-                        resetForm
-                      }
-                      className="h-11 rounded-md sm:w-auto md:h-9"
-                    >
-                      Cancel Edit
-                    </Button>
-                  )}
-
-                  <Button
-                    type="button"
-                    onClick={
-                      handleSave
-                    }
-                    className="h-11 rounded-md sm:w-auto md:h-9"
-                  >
-                    {editingId
-                      ? 'Update Finding'
-                      : 'Create Finding'}
-                  </Button>
-                </div>
-              </div>
-            </section>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={
+                handleSelectAll
+              }
+              disabled={
+                filteredFindings.length ===
+                0
+              }
+              className="h-8 rounded-md px-2.5 text-xs"
+            >
+              {allVisibleSelected
+                ? 'Clear visible'
+                : 'Select visible'}
+            </Button>
           </div>
         </div>
 
-        {/* =====================================================
-         * FOOTER
-         * =================================================== */}
-        <DialogFooter className="shrink-0 border-t border-border bg-muted/20 p-4 sm:p-5">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              onOpenChange(false)
-            }
-            className="h-11 w-full rounded-md sm:w-auto md:h-9"
-          >
-            Close
-          </Button>
+        {/* ========================================================
+            CONTENT
+        ========================================================= */}
+
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-y-auto
+          "
+        >
+          <div className="space-y-2 p-3 sm:p-4">
+            {loading ? (
+              <div className="flex min-h-[280px] flex-col items-center justify-center text-center">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  Loading default findings...
+                </p>
+              </div>
+            ) : activeFindings.length ===
+              0 ? (
+              <div className="flex min-h-[280px] flex-col items-center justify-center px-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                </div>
+
+                <p className="mt-3 text-sm font-semibold text-foreground">
+                  No active default findings
+                </p>
+
+                <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
+                  Create or activate a default finding in the Default
+                  Findings manager first.
+                </p>
+              </div>
+            ) : filteredFindings.length ===
+              0 ? (
+              <div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center">
+                <Search className="h-5 w-5 text-muted-foreground" />
+
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  No matching findings
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try a different finding or part name.
+                </p>
+              </div>
+            ) : (
+              filteredFindings.map(
+                (finding) => {
+                  const selected =
+                    selectedIds.has(
+                      finding.id,
+                    );
+
+                  const parts =
+                    Array.isArray(
+                      finding?.parts,
+                    )
+                      ? finding.parts
+                      : [];
+
+                  const partsTotal =
+                    parts.reduce(
+                      (
+                        total: number,
+                        part: any,
+                      ) =>
+                        total +
+                        (part?.isPms
+                          ? 0
+                          : Number(
+                              part?.priceAtTime ||
+                                0,
+                            ) *
+                            Math.max(
+                              1,
+                              Number(
+                                part?.quantity ||
+                                  1,
+                              ),
+                            )),
+                      0,
+                    );
+
+                  return (
+                    <label
+                      key={
+                        finding.id
+                      }
+                      htmlFor={`default-finding-${finding.id}`}
+                      className={cn(
+                        'block cursor-pointer rounded-lg border bg-background p-3 transition-colors',
+                        'hover:border-primary/30 hover:bg-primary/[0.02]',
+                        selected
+                          ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/15'
+                          : 'border-border',
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id={`default-finding-${finding.id}`}
+                          checked={
+                            selected
+                          }
+                          onCheckedChange={() =>
+                            handleToggle(
+                              finding.id,
+                            )
+                          }
+                          className="mt-1"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex min-w-0 items-start gap-2">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                <FileText className="h-4 w-4" />
+                              </div>
+
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Default finding
+                                </p>
+
+                                <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+                                  {
+                                    finding.title
+                                  }
+                                </p>
+                              </div>
+                            </div>
+
+                            {selected && (
+                              <Badge className="shrink-0 rounded-full px-2 text-[9px]">
+                                <Check className="mr-1 h-3 w-3" />
+                                Selected
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                            <Badge
+                              variant="secondary"
+                              className="rounded-md text-[9px]"
+                            >
+                              {parts.length}{' '}
+                              part
+                              {parts.length ===
+                              1
+                                ? ''
+                                : 's'}
+                            </Badge>
+
+                            {partsTotal >
+                              0 && (
+                              <Badge
+                                variant="secondary"
+                                className="rounded-md font-mono text-[9px]"
+                              >
+                                ₱
+                                {partsTotal.toFixed(
+                                  2,
+                                )}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {parts.length >
+                            0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {parts.map(
+                                (
+                                  part: any,
+                                  index: number,
+                                ) => (
+                                  <Badge
+                                    key={
+                                      part.id ||
+                                      index
+                                    }
+                                    variant="outline"
+                                    className="max-w-full rounded-md text-[9px] font-normal"
+                                  >
+                                    <Package className="mr-1 h-3 w-3 shrink-0" />
+                                    <span className="truncate">
+                                      {part.quantity ||
+                                        1}{' '}
+                                      ×{' '}
+                                      {part.partName ||
+                                        'Part'}
+                                    </span>
+                                  </Badge>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                },
+              )
+            )}
+          </div>
+        </div>
+
+        {/* ========================================================
+            FOOTER
+        ========================================================= */}
+
+        <DialogFooter
+          className="
+            shrink-0
+            border-t
+            border-border
+            bg-muted/20
+            p-3
+
+            sm:p-4
+          "
+        >
+          <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                onOpenChange(
+                  false,
+                )
+              }
+              disabled={
+                isAdding
+              }
+              className="h-10 rounded-md sm:w-auto md:h-9"
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              onClick={
+                handleAddSelected
+              }
+              disabled={
+                isAdding ||
+                selectedIds.size ===
+                  0
+              }
+              className="h-10 rounded-md sm:w-auto md:h-9"
+            >
+              {isAdding ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+
+              {isAdding
+                ? 'Adding...'
+                : `Add Selected (${selectedIds.size})`}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

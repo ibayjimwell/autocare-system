@@ -1,34 +1,60 @@
+/* ================================================================
+   DEFAULT TASK GROUPS API
+================================================================ */
+
+export interface DefaultTaskInput {
+  id?: string;
+  title: string;
+  durationMinutes?: number;
+  taskType?: 'INSPECTION' | 'WORK' | string;
+  order?: number;
+}
+
+export interface DefaultGroupInput {
+  title: string;
+  description?: string;
+  isActive?: boolean;
+  tasks?: DefaultTaskInput[];
+}
+
 export const defaultGroupsApi = {
-  // GET all groups with tasks
   list: async () => {
-    const res = await fetch('/api/service-tracking/default-groups');
+    const res = await fetch('/api/service-tracking/default-groups', {
+      method: 'GET',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    });
     return res.json();
   },
 
-  // CREATE a new group
-  create: async (data: { title: string; description?: string; isActive?: boolean; tasks?: Array<{ title: string; durationMinutes?: number }> }) => {
+  create: async (data: DefaultGroupInput) => {
     const res = await fetch('/api/service-tracking/default-groups', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
       body: JSON.stringify(data),
     });
     return res.json();
   },
 
-  // UPDATE a group (tasks replaced)
-  update: async (id: string, data: { title?: string; description?: string; isActive?: boolean; tasks?: Array<{ id?: string; title: string; durationMinutes?: number; order?: number }> }) => {
+  update: async (id: string, data: Partial<DefaultGroupInput>) => {
     const res = await fetch(`/api/service-tracking/default-groups/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
       body: JSON.stringify(data),
     });
     return res.json();
   },
 
-  // DELETE a group
   delete: async (id: string) => {
     const res = await fetch(`/api/service-tracking/default-groups/${id}`, {
       method: 'DELETE',
+      headers: { Accept: 'application/json' },
     });
     return res.json();
   },

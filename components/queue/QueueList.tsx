@@ -7,30 +7,38 @@ import {
 } from '@/components/ui/button';
 
 import {
-  Card,
-} from '@/components/ui/card';
-
-import {
   Badge,
 } from '@/components/ui/badge';
 
 import {
   Play,
+  ListOrdered,
+  Sparkles,
 } from 'lucide-react';
 
 import {
   cn,
 } from '@/lib/utils';
 
-import ServiceCard from '@/components/services/service-card';
+import AppointmentCard from '@/components/appointments/appointment-card';
+
+/* ================================================================
+   PROPS
+================================================================ */
 
 interface QueueListProps {
   queue: any[];
+
   loading: boolean;
+
   onStartInspection: (
     appointmentId: string,
   ) => void;
 }
+
+/* ================================================================
+   QUEUE LIST
+================================================================ */
 
 export default function QueueList({
   queue,
@@ -45,9 +53,51 @@ export default function QueueList({
     loading
   ) {
     return (
-      <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-border bg-background">
-        <div className="text-sm text-muted-foreground">
-          Loading queue...
+      <div
+        className="
+          flex
+          min-h-[180px]
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-border
+          bg-background
+        "
+      >
+        <div className="text-center">
+          <div
+            className="
+              mx-auto
+              mb-3
+              flex
+              h-12
+              w-12
+              items-center
+              justify-center
+              rounded-full
+              bg-primary/10
+            "
+          >
+            <ListOrdered
+              className="
+                h-5
+                w-5
+                animate-pulse
+                text-primary
+              "
+            />
+          </div>
+
+          <p
+            className="
+              text-sm
+              font-medium
+              text-muted-foreground
+            "
+          >
+            Loading workshop queue...
+          </p>
         </div>
       </div>
     );
@@ -62,17 +112,64 @@ export default function QueueList({
     0
   ) {
     return (
-      <div className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background px-6 text-center">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Play className="h-5 w-5 text-muted-foreground" />
+      <div
+        className="
+          flex
+          min-h-[180px]
+          flex-col
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-dashed
+          border-border
+          bg-background
+          px-6
+          text-center
+        "
+      >
+        <div
+          className="
+            mb-3
+            flex
+            h-12
+            w-12
+            items-center
+            justify-center
+            rounded-full
+            bg-muted
+          "
+        >
+          <Play
+            className="
+              h-5
+              w-5
+              text-muted-foreground
+            "
+          />
         </div>
 
-        <p className="text-sm font-semibold text-foreground">
+        <p
+          className="
+            text-sm
+            font-semibold
+            text-foreground
+          "
+        >
           No confirmed appointments
         </p>
 
-        <p className="mt-1 max-w-md text-xs text-muted-foreground">
-          There are no confirmed appointments waiting in today&apos;s service queue.
+        <p
+          className="
+            mt-1
+            max-w-md
+            text-xs
+            leading-5
+            text-muted-foreground
+          "
+        >
+          There are no confirmed appointments waiting in today&apos;s
+          service queue.
         </p>
       </div>
     );
@@ -83,189 +180,440 @@ export default function QueueList({
   ============================================================== */
 
   return (
-    <div className="space-y-3">
+    <div
+      className="
+        space-y-3
+      "
+    >
       {queue.map(
         (
           item,
           index,
         ) => {
-          /*
-           * The API is authoritative.
-           *
-           * queueNumber is supplied by the API based on the current
-           * queue ordering. The fallback index keeps the UI safe if
-           * a response does not contain queueNumber.
-           */
+          /* ======================================================
+             QUEUE NUMBER
+          ======================================================= */
+
           const queueNumber =
             item.queueNumber ??
-            index + 1;
+            index +
+              1;
+
+          /* ======================================================
+             PRIORITY
+             
+             1st = strongest red
+             2nd = lighter secondary red
+             Rest = standard appointment card
+          ======================================================= */
+
+          const isFirst =
+            index ===
+            0;
+
+          const isSecond =
+            index ===
+            1;
+
+          /* ======================================================
+             NORMALIZED APPOINTMENT
+             
+             Queue API data already contains the appointment
+             information needed by AppointmentCard.
+          ======================================================= */
+
+          const appointment =
+            {
+              ...item,
+
+              /*
+               * AppointmentCard uses appointment.id.
+               */
+              id:
+                item.appointmentId ||
+                item.id,
+
+              /*
+               * Preserve the queue's appointment ID explicitly.
+               */
+              appointmentId:
+                item.appointmentId ||
+                item.id,
+            };
 
           return (
-            <Card
+            <div
               key={
                 item.queueId ||
-                item.appointmentId
+                item.appointmentId ||
+                item.id
               }
-              className={cn(
-                'overflow-hidden rounded-xl border border-border bg-card shadow-sm',
-                'transition-shadow hover:shadow-md',
-              )}
+              className="
+                relative
+              "
             >
-              <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
-                {/* ==================================================
-                    QUEUE NUMBER
+              {/* ==================================================
+                  QUEUE PRIORITY MARKER
+              =================================================== */}
+
+              <div
+                className={cn(
+                  `
+                    pointer-events-none
+                    absolute
+                    -left-2
+                    top-3
+                    z-20
+                    flex
+                    items-center
+                    gap-1.5
+                    rounded-full
+                    border
+                    px-2.5
+                    py-1
+                    text-[10px]
+                    font-bold
+                    uppercase
+                    tracking-wider
+                    shadow-sm
+                  `,
+
+                  isFirst &&
+                    `
+                      border-primary
+                      bg-primary
+                      text-primary-foreground
+                      shadow-md
+                    `,
+
+                  isSecond &&
+                    `
+                      border-primary/35
+                      bg-primary/10
+                      text-primary
+                    `,
+
+                  !isFirst &&
+                    !isSecond &&
+                    `
+                      border-border
+                      bg-card
+                      text-muted-foreground
+                    `,
+                )}
+              >
+                <ListOrdered className="h-3 w-3" />
+
+                {isFirst
+                  ? '1st in line'
+                  : isSecond
+                    ? '2nd in line'
+                    : `Queue #${queueNumber}`}
+              </div>
+
+              {/* ==================================================
+                  APPOINTMENT CARD
+              =================================================== */}
+
+              <AppointmentCard
+                appointment={
+                  appointment
+                }
+                className={cn(
+                  `
+                    w-full
+                    overflow-hidden
+                    rounded-xl
+                    border
+                    bg-card
+                    pt-1
+                    shadow-sm
+                    transition-all
+                  `,
+
+                  /*
+                   * FIRST:
+                   * Strong red emphasis.
+                   */
+                  isFirst &&
+                    `
+                      border-primary
+                      ring-2
+                      ring-primary/25
+                      shadow-md
+                      hover:shadow-lg
+                    `,
+
+                  /*
+                   * SECOND:
+                   * Still red, but clearly subordinate to #1.
+                   */
+                  isSecond &&
+                    `
+                      border-primary/35
+                      ring-1
+                      ring-primary/15
+                      shadow-sm
+                      hover:shadow-md
+                    `,
+
+                  /*
+                   * Remaining queue.
+                   */
+                  !isFirst &&
+                    !isSecond &&
+                    `
+                      border-border
+                      hover:shadow-md
+                    `,
+                )}
+              >
+                {/* =================================================
+                    QUEUE / INSPECTION CONTROLS
+
+                    This is the only queue-specific content added
+                    to AppointmentCard.
+
+                    The customer, vehicle, tracking, date, time,
+                    and status are already supplied by the existing
+                    AppointmentCard.
                 ================================================== */}
 
-                <div className="flex shrink-0 items-center gap-4">
+                <div
+                  className="
+                    flex
+                    flex-col
+                    gap-3
+                    rounded-lg
+                    border
+                    border-border
+                    bg-background/60
+                    p-3
+
+                    sm:flex-row
+                    sm:items-center
+                    sm:justify-between
+                  "
+                >
+                  {/* ===============================================
+                      QUEUE POSITION
+                  ============================================== */}
+
                   <div
                     className="
                       flex
-                      h-14
-                      w-14
+                      min-w-0
                       items-center
-                      justify-center
-                      rounded-xl
-                      bg-primary/10
-                      text-primary
+                      gap-3
                     "
-                    aria-label={`Queue number ${queueNumber}`}
                   >
-                    <span className="text-2xl font-black tracking-tight">
-                      {queueNumber}
-                    </span>
-                  </div>
+                    <div
+                      className={cn(
+                        `
+                          flex
+                          h-10
+                          w-10
+                          shrink-0
+                          items-center
+                          justify-center
+                          rounded-xl
+                          text-lg
+                          font-black
+                          tabular-nums
+                        `,
 
-                  <div className="sm:hidden">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-foreground">
-                        {item.customer?.fullname ||
-                          'Customer'}
-                      </span>
+                        isFirst &&
+                          `
+                            bg-primary
+                            text-primary-foreground
+                          `,
 
-                      <Badge
-                        variant="outline"
-                        className="rounded-md"
-                      >
-                        {item.vehicle?.plateNumber ||
-                          'N/A'}
-                      </Badge>
-                    </div>
+                        isSecond &&
+                          `
+                            border
+                            border-primary/25
+                            bg-primary/10
+                            text-primary
+                          `,
 
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Appointment at{' '}
-                      <span className="font-medium text-foreground">
-                        {item.appointmentTime}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                {/* ==================================================
-                    APPOINTMENT INFORMATION
-                ================================================== */}
-
-                <div className="min-w-0 flex-1">
-                  <div className="hidden flex-wrap items-center gap-2 sm:flex">
-                    <span className="text-sm font-bold text-foreground">
-                      {item.customer?.fullname ||
-                        'Customer'}
-                    </span>
-
-                    <Badge
-                      variant="outline"
-                      className="rounded-md"
-                    >
-                      {item.vehicle?.plateNumber ||
-                        'N/A'}
-                    </Badge>
-                  </div>
-
-                  <div className="mt-1 hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
-                    <span>
-                      Scheduled for
-                    </span>
-
-                    <span className="font-semibold text-foreground">
-                      {item.appointmentTime}
-                    </span>
-
-                    {item.trackingNumber && (
-                      <>
-                        <span>
-                          •
-                        </span>
-
-                        <span>
-                          {item.trackingNumber}
-                        </span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* ==================================================
-                      SERVICES
-                  ================================================== */}
-
-                  {Array.isArray(
-                    item.services,
-                  ) &&
-                  item.services.length >
-                    0 ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {item.services.map(
-                        (
-                          serviceId: string,
-                        ) => (
-                          <ServiceCard
-                            key={
-                              serviceId
-                            }
-                            serviceId={
-                              serviceId
-                            }
-                          />
-                        ),
+                        !isFirst &&
+                          !isSecond &&
+                          `
+                            bg-muted
+                            text-foreground
+                          `,
                       )}
+                      aria-label={`Queue position ${queueNumber}`}
+                    >
+                      {
+                        queueNumber
+                      }
                     </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      No service information available.
-                    </p>
-                  )}
-                </div>
 
-                {/* ==================================================
-                    ACTION
-                ================================================== */}
+                    <div
+                      className="
+                        min-w-0
+                      "
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className="
+                            text-xs
+                            font-semibold
+                            uppercase
+                            tracking-wider
+                            text-muted-foreground
+                          "
+                        >
+                          Workshop Queue
+                        </span>
 
-                <div className="flex w-full shrink-0 sm:w-auto sm:justify-end">
+                        {isFirst && (
+                          <Badge
+                            className="
+                              rounded-full
+                              bg-primary
+                              px-2
+                              py-0.5
+                              text-[9px]
+                              font-bold
+                              uppercase
+                              tracking-wider
+                              text-primary-foreground
+                              hover:bg-primary
+                            "
+                          >
+                            Priority
+                          </Badge>
+                        )}
+
+                        {isSecond && (
+                          <Badge
+                            variant="outline"
+                            className="
+                              rounded-full
+                              border-primary/25
+                              bg-primary/5
+                              px-2
+                              py-0.5
+                              text-[9px]
+                              font-bold
+                              uppercase
+                              tracking-wider
+                              text-primary
+                            "
+                          >
+                            Next
+                          </Badge>
+                        )}
+                      </div>
+
+                      <p
+                        className="
+                          mt-0.5
+                          text-xs
+                          text-muted-foreground
+                        "
+                      >
+                        {isFirst
+                          ? 'First appointment in line.'
+                          : isSecond
+                            ? 'Second appointment in line.'
+                            : 'Waiting in scheduled order.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* ===============================================
+                      ACTION
+                  ============================================== */}
+
                   <Button
                     type="button"
-                    className="
-                      h-10
-                      w-full
-                      rounded-md
-                      bg-primary
-                      px-4
-                      text-xs
-                      font-semibold
-                      text-white
-                      hover:bg-primary/90
-                      sm:w-auto
-                    "
+                    className={cn(
+                      `
+                        h-11
+                        w-full
+                        shrink-0
+                        rounded-md
+                        px-4
+                        text-sm
+                        font-semibold
+                        text-white
+
+                        focus-visible:outline-none
+                        focus-visible:ring-2
+                        focus-visible:ring-ring
+                        focus-visible:ring-offset-2
+
+                        sm:w-auto
+                        md:h-9
+                        md:text-xs
+                      `,
+
+                      isFirst
+                        ? `
+                          bg-primary
+                          hover:bg-primary/90
+                        `
+                        : `
+                          bg-primary
+                          hover:bg-primary/90
+                        `,
+                    )}
                     onClick={() =>
                       onStartInspection(
-                        item.appointmentId,
+                        item.appointmentId ||
+                          item.id,
                       )
                     }
                   >
-                    <Play className="mr-1.5 h-3.5 w-3.5" />
+                    <Play className="mr-2 h-4 w-4" />
 
                     Inspect
                   </Button>
                 </div>
-              </div>
-            </Card>
+
+                {/* =================================================
+                    QUEUE ORDER NOTE
+                ================================================== */}
+
+                {(isFirst ||
+                  isSecond) && (
+                  <div
+                    className={cn(
+                      `
+                        mt-2
+                        flex
+                        items-center
+                        gap-2
+                        rounded-md
+                        px-2.5
+                        py-2
+                        text-[10px]
+                        font-medium
+                      `,
+
+                      isFirst
+                        ? `
+                          bg-primary/5
+                          text-primary
+                        `
+                        : `
+                          bg-primary/5
+                          text-primary/80
+                        `,
+                    )}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" />
+
+                    {isFirst
+                      ? 'Next vehicle to be inspected.'
+                      : 'Immediately after the first vehicle.'}
+                  </div>
+                )}
+              </AppointmentCard>
+            </div>
           );
         },
       )}

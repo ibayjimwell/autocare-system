@@ -192,16 +192,18 @@ export default function TaskCard({
                   <Pencil className="h-4 w-4" />
                 </Button>
 
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setDeleteDialogOpen(true)}
-                  className="h-11 w-11 rounded-md text-destructive hover:text-destructive md:h-9 md:w-9"
-                  aria-label="Delete task"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {task.status === 'PENDING' && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setDeleteDialogOpen(true)}
+                    className="h-11 w-11 rounded-md text-destructive hover:text-destructive md:h-9 md:w-9"
+                    aria-label="Delete task"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
 

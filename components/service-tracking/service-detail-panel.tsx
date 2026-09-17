@@ -11,6 +11,9 @@ import LoadingSpinner from "@/components/shared/loading-spinner";
 import ConfirmationDialog from "@/components/shared/confimation-dialog";
 import AddTaskModal from "@/components/shared/add-task-modal";
 import TaskCard from "./task-card";
+import CustomerCard from "@/components/customers/customer-card";
+import VehicleCard from "@/components/customers/vehicle-card";
+import ServiceCard from "@/components/services/service-card";
 import TaskCardSkeleton from "@/components/skeleton/task-card-skeleton";
 import FindingModal from "./finding-modal";
 import FindingsList from "./findings-list";
@@ -19,7 +22,10 @@ import DefaultGroupManagerModal from "./default-group-manager-modal";
 import DefaultTaskPickerModal from "./default-task-picker-modal";
 import HistoryTaskPickerModal from "./history-task-picker-modal";
 import DefaultFindingManagerModal from "./default-finding-manager-modal";
+import DefaultFindingPickerModal from "./default-finding-picker-modal";
+import HistoryFindingPickerModal from "./history-finding-picker-modal";
 import { useRealtimeTask } from "@/connections/useRealtimeTask";
+import { useRealtimeAppointment } from "@/connections/useRealtimeAppointment";
 import { appointmentsApi } from "@/lib/appointments/appointments";
 import { inspectionTasksApi } from "@/lib/service-tracking/inspection-tasks";
 import { workTasksApi } from "@/lib/service-tracking/work-tasks";
@@ -42,6 +48,9 @@ import {
   Layers,
   Settings,
   History,
+  Database,
+  Archive,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -58,7 +67,7 @@ const STATUS_LABELS = {
   PENDING: "Pending",
   UNDER_INSPECTION: "Inspection",
   WAITING_FOR_APPROVAL: "Approval",
-  IN_PROGRESS: "Repairing",
+  IN_PROGRESS: "Working",
   COMPLETED: "Done",
 };
 
@@ -78,6 +87,15 @@ export default function ServiceDetailPanel({
   const [workTasks, setWorkTasks] = useState<any[]>([]);
   const [findings, setFindings] = useState<any[]>([]);
   const [estimate, setEstimate] = useState<any>(null);
+
+  // History data is kept separate from active task/finding data so staff
+  // can review completed work without mixing it into the current job.
+  const [taskHistory, setTaskHistory] = useState<any[]>([]);
+  const [findingHistory, setFindingHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+
   const [initialLoading, setInitialLoading] = useState(true);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,16 +117,45 @@ export default function ServiceDetailPanel({
 
   // Default findings manager
   const [defaultFindingManagerOpen, setDefaultFindingManagerOpen] = useState(false);
+  const [defaultFindingPickerOpen, setDefaultFindingPickerOpen] = useState(false);
+  const [historyFindingPickerOpen, setHistoryFindingPickerOpen] = useState(false);
+  const [isAddingHistoryFindings, setIsAddingHistoryFindings] = useState(false);
+
+  // Source refresh versions ensure open picker dialogs can be recreated
+  // immediately after a manager dialog creates/updates/deactivates data.
+  const [taskSourceVersion, setTaskSourceVersion] = useState(0);
+  const [findingSourceVersion, setFindingSourceVersion] = useState(0);
 
   const isInspection = appointment.status === "UNDER_INSPECTION";
+  const isWaitingForApproval = appointment.status === "WAITING_FOR_APPROVAL";
   const isInProgress = appointment.status === "IN_PROGRESS";
   const isCompleted = appointment.status === "COMPLETED";
 
-  const currentTasks = isInspection ? inspectionTasks : workTasks;
+  const isInspectionPhase =
+    isInspection ||
+    isWaitingForApproval ||
+    appointment.status === "PENDING" ||
+    appointment.status === "CONFIRMED";
+
+  const taskPhase: "INSPECTION" | "WORK" =
+    isInProgress || isCompleted
+      ? "WORK"
+      : "INSPECTION";
+
+  const currentTasks =
+    taskPhase === "INSPECTION"
+      ? inspectionTasks
+      : workTasks;
   const allTasksDone = currentTasks.length > 0 && currentTasks.every((t) => t.status === "DONE");
 
   // Ref to track if this is the initial load
   const isInitial = useRef(true);
+
+  // Prevent the same phase from being archived multiple times during the
+  // same detail-panel session. The backend schema has no source-task ID,
+  // so the UI records history at phase finalization only.
+  const historyRecordedPhasesRef = useRef<Set<"INSPECTION" | "WORK">>(new Set());
+  const findingsHistoryRecordedRef = useRef(false);
 
   // Load data function – used for both initial and subsequent refreshes
   const loadData = useCallback(async (showSkeleton: boolean = false) => {
@@ -117,17 +164,79 @@ export default function ServiceDetailPanel({
     }
 
     try {
-      if (isInspection) {
-        const tasksRes = await inspectionTasksApi.list(appointment.id);
-        setInspectionTasks(tasksRes.error ? [] : (tasksRes.data || []));
-        const findingsRes = await findingsApi.list(appointment.id);
-        setFindings(findingsRes.error ? [] : (findingsRes.data || []));
-      } else if (isInProgress) {
+      /* ----------------------------------------------------------
+         CURRENT TASKS / FINDINGS
+
+         Inspection tasks remain the active task set through the
+         inspection and customer-approval stages. This fixes the old
+         behavior where WAITING_FOR_APPROVAL accidentally switched to
+         the work-task collection.
+      ----------------------------------------------------------- */
+
+      if (taskPhase === "INSPECTION") {
+        const [tasksRes, findingsRes] = await Promise.all([
+          inspectionTasksApi.list(appointment.id),
+          findingsApi.list(appointment.id),
+        ]);
+
+        setInspectionTasks(
+          tasksRes?.error ? [] : tasksRes?.data || [],
+        );
+
+        setFindings(
+          findingsRes?.error ? [] : findingsRes?.data || [],
+        );
+      } else {
         const tasksRes = await workTasksApi.list(appointment.id);
-        setWorkTasks(tasksRes.error ? [] : (tasksRes.data || []));
+
+        setWorkTasks(
+          tasksRes?.error ? [] : tasksRes?.data || [],
+        );
       }
+
+      /* ----------------------------------------------------------
+         HISTORY
+
+         History is loaded independently so a history-picker failure
+         never prevents current tasks from appearing.
+      ----------------------------------------------------------- */
+
+      setHistoryLoading(true);
+
+      const taskHistoryRes = await taskHistoryApi.list({
+        appointmentId: appointment.id,
+        phase: taskPhase,
+      });
+
+      setTaskHistory(
+        taskHistoryRes?.error
+          ? []
+          : Array.isArray(taskHistoryRes?.data)
+            ? taskHistoryRes.data
+            : [],
+      );
+
+      if (taskPhase === "INSPECTION") {
+        const historyFindingsRes = await historyFindingsApi.list({
+          appointmentId: appointment.id,
+          phase: "INSPECTION",
+        });
+
+        setFindingHistory(
+          historyFindingsRes?.error
+            ? []
+            : Array.isArray(historyFindingsRes?.data)
+              ? historyFindingsRes.data
+              : [],
+        );
+      } else {
+        setFindingHistory([]);
+      }
+
+      setHistoryLoading(false);
     } catch (err) {
-      console.error("Failed to load data", err);
+      console.error("Failed to load service tracking data", err);
+      setHistoryLoading(false);
     } finally {
       if (isInitial.current) {
         setInitialLoading(false);
@@ -135,7 +244,7 @@ export default function ServiceDetailPanel({
       }
       setTasksLoading(false);
     }
-  }, [appointment.id, isInspection, isInProgress]);
+  }, [appointment.id, taskPhase]);
 
   // Initial load on mount (full page spinner)
   useEffect(() => {
@@ -145,12 +254,39 @@ export default function ServiceDetailPanel({
   // Realtime subscription – refresh with skeleton cards
   useRealtimeTask({
     appointmentId: appointment.id,
-    isInspection,
+    isInspection: taskPhase === "INSPECTION",
     onDataChanged: () => loadData(true),
+  });
+
+  useRealtimeAppointment({
+    onDataChanged: async () => {
+      try {
+        const res = await appointmentsApi.get(appointment.id);
+
+        if (!res?.error) {
+          const nextAppointment = res?.data || res;
+
+          if (nextAppointment) {
+            setAppointment(nextAppointment);
+          }
+        }
+      } catch (error) {
+        console.error(
+          "Failed to refresh appointment:",
+          error,
+        );
+      } finally {
+        void loadData(false);
+      }
+    },
   });
 
   // Helper: record completed tasks to history
   const recordTasksToHistory = useCallback(async (phase: 'INSPECTION' | 'WORK', tasks: any[]) => {
+    if (historyRecordedPhasesRef.current.has(phase)) {
+      return;
+    }
+
     const doneTasks = tasks.filter(t => t.status === 'DONE');
     if (doneTasks.length === 0) return;
     try {
@@ -163,67 +299,153 @@ export default function ServiceDetailPanel({
         })),
       };
       const res = await taskHistoryApi.createMany(payload);
-      if (res.error) {
+      if (res?.error) {
         console.error('Failed to record task history:', res.errorMessage);
-        // Don't block the flow, just log
+        // Do not block the phase transition; the current operation can continue.
+      } else {
+        historyRecordedPhasesRef.current.add(phase);
       }
     } catch (err) {
       console.error('Failed to record task history:', err);
     }
   }, [appointment.id]);
 
-  // Handlers – API calls fire-and-forget, realtime refreshes the list
-  const handleAddTask = async (title: string, durationMinutes?: number) => {
+  // Handlers – current task operations stay on the captured phase so a
+  // first inspection task changing CONFIRMED -> UNDER_INSPECTION does not
+  // switch the API used by the remaining template/history tasks.
+  const handleAddTask = async (
+    title: string,
+    durationMinutes?: number,
+    phase: "INSPECTION" | "WORK" = taskPhase,
+  ) => {
+    const trimmedTitle = title.trim();
+
+    if (!trimmedTitle) {
+      toast.error("Task title is required.");
+      return false;
+    }
+
     try {
-      const res = isInspection
-        ? await inspectionTasksApi.create({
-            appointmentId: appointment.id,
-            title,
-            durationMinutes,
-          })
-        : await workTasksApi.create({
-            appointmentId: appointment.id,
-            title,
-            durationMinutes,
-          });
-      if (res.error) {
-        toast.error(res.errorMessage || "Failed to add task.");
-      } else {
-        toast.success("Task added.");
-        // Realtime will refresh the list
+      const res =
+        phase === "INSPECTION"
+          ? await inspectionTasksApi.create({
+              appointmentId: appointment.id,
+              title: trimmedTitle,
+              durationMinutes,
+            })
+          : await workTasksApi.create({
+              appointmentId: appointment.id,
+              title: trimmedTitle,
+              durationMinutes,
+            });
+
+      if (res?.error) {
+        toast.error(
+          res.errorMessage ||
+            `Failed to add task: ${trimmedTitle}`,
+        );
+        return false;
       }
+
+      return true;
     } catch (err: any) {
-      toast.error(err.message || "Error adding task.");
+      toast.error(
+        err?.message ||
+          "Error adding task.",
+      );
+      return false;
     }
   };
 
-  // Handle adding multiple tasks from default template
-  const handleAddTasksFromTemplate = async (tasks: Array<{ title: string; durationMinutes?: number }>) => {
+  // Handle adding multiple tasks from a default template.
+  const handleAddTasksFromTemplate = async (
+    tasks: Array<{
+      title: string;
+      durationMinutes?: number;
+    }>,
+  ) => {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return;
+    }
+
     setIsAddingTemplateTasks(true);
+
     try {
+      const sourcePhase = taskPhase;
+      let addedCount = 0;
+
       for (const task of tasks) {
-        await handleAddTask(task.title, task.durationMinutes);
+        const added = await handleAddTask(
+          task.title,
+          task.durationMinutes,
+          sourcePhase,
+        );
+
+        if (added) {
+          addedCount += 1;
+        }
       }
-      toast.success(`${tasks.length} task(s) added from template.`);
+
       setTaskPickerOpen(false);
+      await loadData(false);
+
+      if (addedCount > 0) {
+        toast.success(
+          `${addedCount} task(s) added from template.`,
+        );
+      }
     } catch (err: any) {
-      toast.error(err.message || "Error adding tasks from template.");
+      toast.error(
+        err?.message ||
+          "Error adding tasks from template.",
+      );
     } finally {
       setIsAddingTemplateTasks(false);
     }
   };
 
-  // Handle adding multiple tasks from history
-  const handleAddTasksFromHistory = async (tasks: Array<{ title: string; durationMinutes?: number }>) => {
+  // Handle adding multiple tasks from history.
+  const handleAddTasksFromHistory = async (
+    tasks: Array<{
+      title: string;
+      durationMinutes?: number;
+    }>,
+  ) => {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return;
+    }
+
     setIsAddingHistoryTasks(true);
+
     try {
+      const sourcePhase = taskPhase;
+      let addedCount = 0;
+
       for (const task of tasks) {
-        await handleAddTask(task.title, task.durationMinutes);
+        const added = await handleAddTask(
+          task.title,
+          task.durationMinutes,
+          sourcePhase,
+        );
+
+        if (added) {
+          addedCount += 1;
+        }
       }
-      toast.success(`${tasks.length} task(s) added from history.`);
+
       setHistoryPickerOpen(false);
+      await loadData(false);
+
+      if (addedCount > 0) {
+        toast.success(
+          `${addedCount} task(s) added from history.`,
+        );
+      }
     } catch (err: any) {
-      toast.error(err.message || "Error adding tasks from history.");
+      toast.error(
+        err?.message ||
+          "Error adding tasks from history.",
+      );
     } finally {
       setIsAddingHistoryTasks(false);
     }
@@ -231,7 +453,7 @@ export default function ServiceDetailPanel({
 
   const handleTaskUpdate = async (taskId: string, status: string) => {
     try {
-      const res = isInspection
+      const res = taskPhase === "INSPECTION"
         ? await inspectionTasksApi.updateStatus(taskId, status)
         : await workTasksApi.updateStatus(taskId, status);
       if (res.error) {
@@ -244,29 +466,127 @@ export default function ServiceDetailPanel({
   };
 
   const handleTaskDelete = async (taskId: string) => {
-    toast.info("Delete functionality not yet implemented.");
+    try {
+      const api =
+        taskPhase === "INSPECTION"
+          ? inspectionTasksApi
+          : workTasksApi;
+
+      if (typeof api.delete !== "function") {
+        toast.error("Task deletion is not available.");
+        return;
+      }
+
+      const res = await api.delete(taskId);
+
+      if (res?.error) {
+        toast.error(
+          res.errorMessage ||
+            "Failed to delete task.",
+        );
+        return;
+      }
+
+      toast.success("Task deleted.");
+      await loadData(true);
+    } catch (err: any) {
+      toast.error(
+        err?.message ||
+          "Error deleting task.",
+      );
+    }
   };
 
   // Submit estimate to billing
   const handleSubmitToBilling = async () => {
     setIsSubmitting(true);
+
     try {
+      await recordTasksToHistory(
+        "INSPECTION",
+        inspectionTasks,
+      );
+
+      /* ------------------------------------------------------------
+         Findings are archived exactly once when the inspection is
+         finalized. Editing findings before submission does not create
+         duplicate history rows.
+      ------------------------------------------------------------- */
+
+      if (
+        findings.length > 0 &&
+        !findingsHistoryRecordedRef.current
+      ) {
+        const historyRes =
+          await historyFindingsApi.createMany({
+            appointmentId: appointment.id,
+            phase: "INSPECTION",
+            findings: findings.map((finding: any) => ({
+              description: String(
+                finding?.description ||
+                  "",
+              ).trim(),
+              parts: Array.isArray(finding?.parts)
+                ? finding.parts.map((part: any) => ({
+                    partName: String(
+                      part?.partName ||
+                        "Part",
+                    ).trim(),
+                    quantity: Math.max(
+                      1,
+                      Number(part?.quantity) ||
+                        1,
+                    ),
+                    priceAtTime: Math.max(
+                      0,
+                      Number(
+                        part?.priceAtTime,
+                      ) || 0,
+                    ),
+                    isPms: Boolean(
+                      part?.isPms,
+                    ),
+                  }))
+                : [],
+            })),
+          });
+
+        if (!historyRes?.error) {
+          findingsHistoryRecordedRef.current = true;
+        }
+      }
+
       let est = estimate;
+
       if (!est) {
-        const genRes = await estimatesApi.create(appointment.id);
-        if (genRes.error) {
-          toast.error(genRes.errorMessage || "Failed to generate estimate.");
+        const genRes =
+          await estimatesApi.create(
+            appointment.id,
+          );
+
+        if (genRes?.error) {
+          toast.error(
+            genRes.errorMessage ||
+              "Failed to generate estimate.",
+          );
           return;
         }
+
         est = genRes.data;
         setEstimate(est);
-        // Record inspection tasks to history
-        await recordTasksToHistory('INSPECTION', inspectionTasks);
-        onStatusChanged();
-        onBack();
       }
+
+      await loadData(false);
+      toast.success(
+        "Estimate submitted to billing.",
+      );
+      onStatusChanged();
+      onBack();
     } catch (err: any) {
-      toast.error(err.message || "Error submitting estimate.");
+      toast.error(
+        err?.message ||
+          "Error submitting estimate.",
+      );
     } finally {
       setIsSubmitting(false);
       setSendConfirmOpen(false);
@@ -280,33 +600,80 @@ export default function ServiceDetailPanel({
   const handleFindingsSaved = async () => {
     setFindingModalOpen(false);
     await loadData(true);
-    toast.success("Findings saved. You can now generate estimate by clicking 'Submit to Billing'.");
+    toast.success(
+      "Findings saved. You can now generate the estimate by clicking 'Submit to Billing'.",
+    );
+  };
 
-    // Record findings to history
+  /* ================================================================
+     ADD FINDINGS FROM DEFAULT / HISTORY PICKERS
+  ================================================================= */
+
+  const handleAddFindings = async (
+    selectedFindings: Array<{
+      description: string;
+      parts: Array<{
+        partName: string;
+        quantity: number;
+        priceAtTime: number;
+        isPms: boolean;
+      }>;
+    }>,
+  ) => {
+    if (selectedFindings.length === 0) {
+      return;
+    }
+
     try {
-      if (findings.length > 0) {
-        const payload = {
-          appointmentId: appointment.id,
-          phase: 'INSPECTION',
-          findings: findings.map(f => ({
-            description: f.description,
-            parts: f.parts.map(p => ({
-              partName: p.partName,
-              quantity: p.quantity,
-              priceAtTime: p.priceAtTime,
-              isPms: p.isPms,
-            })),
-          })),
-        };
-        const res = await historyFindingsApi.createMany(payload);
-        if (res.error) {
-          console.error('Failed to record findings history:', res.errorMessage);
-        }
+      const res = await findingsApi.create({
+        appointmentId: appointment.id,
+        findings: selectedFindings,
+      });
+
+      if (res?.error) {
+        toast.error(
+          res.errorMessage ||
+            "Failed to add findings.",
+        );
+        return;
       }
-    } catch (err) {
-      console.error('Failed to record findings history:', err);
+
+      await loadData(true);
+      toast.success(
+        `${selectedFindings.length} finding(s) added.`,
+      );
+    } catch (err: any) {
+      toast.error(
+        err?.message ||
+          "Error adding findings.",
+      );
     }
   };
+
+  const handleAddHistoryFindings = async (
+    selectedFindings: Array<{
+      description: string;
+      parts: Array<{
+        partName: string;
+        quantity: number;
+        priceAtTime: number;
+        isPms: boolean;
+      }>;
+    }>,
+  ) => {
+    setIsAddingHistoryFindings(true);
+
+    try {
+      await handleAddFindings(
+        selectedFindings,
+      );
+      setHistoryFindingPickerOpen(false);
+    } finally {
+      setIsAddingHistoryFindings(false);
+    }
+  };
+
+
 
   const handleWorkDone = async () => {
     setIsSubmitting(true);
@@ -316,8 +683,9 @@ export default function ServiceDetailPanel({
         toast.error(billRes.errorMessage || "Failed to generate final bill.");
       } else {
         toast.success("Job completed! Final bill generated.");
-        // Record work tasks to history
+        // Record work tasks to history exactly once when work is finalized.
         await recordTasksToHistory('WORK', workTasks);
+
         await appointmentsApi.updateStatus(appointment.id, "COMPLETED");
         onStatusChanged();
         onBack();
@@ -348,71 +716,166 @@ export default function ServiceDetailPanel({
   }, 0);
   const subtotal = servicePrice + findingsTotal;
 
+  /* ==============================================================
+     HISTORY DISPLAY DATA
+
+     The history preview is intentionally compact. The dedicated
+     History buttons still open the full reusable pickers, while this
+     section gives staff an immediate audit view for this appointment.
+  ============================================================== */
+
+  const normalizedHistorySearch =
+    historySearch.trim().toLowerCase();
+
+  const filteredTaskHistory = taskHistory.filter((item) => {
+    if (!normalizedHistorySearch) {
+      return true;
+    }
+
+    return [
+      item?.title,
+      item?.appointment?.trackingNumber,
+      item?.customer?.fullname,
+      item?.vehicle?.make,
+      item?.vehicle?.model,
+      item?.vehicle?.plateNumber,
+      item?.phase,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedHistorySearch);
+  });
+
+  const filteredFindingHistory = findingHistory.filter((item) => {
+    if (!normalizedHistorySearch) {
+      return true;
+    }
+
+    return [
+      item?.description,
+      item?.appointment?.trackingNumber,
+      item?.customer?.fullname,
+      item?.vehicle?.make,
+      item?.vehicle?.model,
+      item?.vehicle?.plateNumber,
+      item?.phase,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedHistorySearch);
+  });
+
+  const displayedTaskHistory =
+    filteredTaskHistory.slice(0, 8);
+
+  const displayedFindingHistory =
+    filteredFindingHistory.slice(0, 6);
+
   return (
   <div className="min-h-full bg-background">
-    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-3 sm:p-5 lg:p-8">
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 p-2.5 sm:p-4 lg:p-5">
       {/* -------------------------------------------------------
        * WORK ORDER HEADER
+       *
+       * The customer name is no longer the dominant title in the
+       * detail panel. The header now identifies the appointment
+       * context, while the actual customer / vehicle / service
+       * records are displayed using their official information
+       * cards below.
        * ----------------------------------------------------- */}
       <section className="rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={onBack}
-              className="h-11 w-11 shrink-0 rounded-md md:h-9 md:w-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+        <div className="flex flex-col gap-3 p-3 sm:p-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onBack}
+                className="h-11 w-11 shrink-0 rounded-md md:h-9 md:w-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground md:text-xl lg:text-2xl">
-                  {appointment.customer?.fullname || 'Customer'}
-                </h1>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
+                    Booked Services
+                  </h1>
 
-                <StatusBadge
-                  status={appointment.status || 'PENDING'}
-                  className="shrink-0 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide"
-                />
+                  <StatusBadge
+                    status={appointment.status || 'PENDING'}
+                    className="shrink-0 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide"
+                  />
+                </div>
+
+                <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">
+                  {appointment.trackingNumber
+                    ? `Tracking #${appointment.trackingNumber}`
+                    : 'Current service appointment'}
+                </p>
               </div>
+            </div>
 
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
-                  <Car className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Vehicle
-                    </p>
-                    <p className="truncate text-xs font-semibold text-foreground">
-                      {appointment.vehicle?.plateNumber || 'N/A'}
-                    </p>
-                  </div>
+            {/* ---------------------------------------------------
+             * BOOKED SERVICES
+             * ------------------------------------------------- */}
+            <div className="mt-4">
+              {Array.isArray(appointment.services) &&
+              appointment.services.length > 0 ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {appointment.services.map((service: any) => (
+                    <ServiceCard
+                      key={service.id}
+                      serviceId={service.id}
+                    />
+                  ))}
                 </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-5">
+                  <p className="text-sm font-medium text-foreground">
+                    No booked service information
+                  </p>
 
-                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
-                  <Wrench className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Service
-                    </p>
-                    <p className="truncate text-xs font-semibold text-foreground">
-                      {appointment.services
-                        ?.map((s: any) => s.name)
-                        .join(', ') || 'Service'}
-                    </p>
-                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This appointment does not currently contain a linked service record.
+                  </p>
                 </div>
+              )}
+            </div>
 
-                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
-                  <Clock className="h-4 w-4 shrink-0 text-primary" />
+            {/* ---------------------------------------------------
+             * OFFICIAL APPOINTMENT INFORMATION
+             * ------------------------------------------------- */}
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              <CustomerCard
+                customerId={appointment.customerId}
+              />
+
+              <VehicleCard
+                vehicleId={appointment.vehicleId}
+                customerId={appointment.customerId}
+              />
+            </div>
+
+            {/* ---------------------------------------------------
+             * SCHEDULE INFORMATION
+             * ------------------------------------------------- */}
+            <div className="mt-3 rounded-lg border border-border bg-background p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Clock className="h-4 w-4" />
+                  </div>
+
                   <div className="min-w-0">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Appointment
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Appointment Schedule
                     </p>
-                    <p className="truncate text-xs font-semibold text-foreground">
+
+                    <p className="mt-0.5 text-sm font-semibold text-foreground">
                       {appointment.appointmentDate || '—'}
                       {appointment.appointmentTime
                         ? ` • ${appointment.appointmentTime}`
@@ -421,29 +884,16 @@ export default function ServiceDetailPanel({
                   </div>
                 </div>
 
-                <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
-                  <User className="h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Customer
-                    </p>
-                    <p className="truncate text-xs font-semibold text-foreground">
-                      {appointment.customer?.fullname || 'Customer'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {appointment.notes && (
-                <div className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2">
-                  <div className="flex items-start gap-2">
+                {appointment.notes && (
+                  <div className="flex min-w-0 items-start gap-2 sm:max-w-[55%]">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+
                     <p className="text-xs leading-5 text-muted-foreground">
                       {appointment.notes}
                     </p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
@@ -477,13 +927,13 @@ export default function ServiceDetailPanel({
        * SERVICE JOURNEY
        * ----------------------------------------------------- */}
       <section className="rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-4 py-3 sm:px-5">
+        <div className="border-b border-border px-3 py-2.5 sm:px-4">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Service Journey
           </p>
         </div>
 
-        <div className="overflow-x-auto px-4 py-5 sm:px-6">
+        <div className="overflow-x-auto px-3 py-3.5 sm:px-4">
           <div className="flex min-w-[620px] items-start">
             {TRACKING_STATUSES.map((s, i) => {
               const completed = currentStatusIdx > i;
@@ -542,15 +992,15 @@ export default function ServiceDetailPanel({
        * ----------------------------------------------------- */}
       <div
         className={cn(
-          'grid gap-5',
-          isInspection
-            ? 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]'
+          'grid gap-3.5',
+          (isInspection || isWaitingForApproval)
+            ? 'grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]'
             : 'grid-cols-1'
         )}
       >
         {/* TASK WORKSPACE */}
         <section className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
-          <div className="border-b border-border p-4 sm:p-5">
+          <div className="border-b border-border p-3 sm:p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -559,7 +1009,7 @@ export default function ServiceDetailPanel({
 
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">
-                    {isInspection
+                    {taskPhase === 'INSPECTION'
                       ? 'Inspection Checklist'
                       : 'Repair Operations'}
                   </h2>
@@ -611,9 +1061,9 @@ export default function ServiceDetailPanel({
             </div>
           </div>
 
-          <div className="space-y-5 p-4 sm:p-5">
+          <div className="space-y-3.5 p-3 sm:p-4">
             {currentTasks.length > 0 && (
-              <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
                 <OverallProgressBar tasks={currentTasks} />
               </div>
             )}
@@ -699,10 +1149,10 @@ export default function ServiceDetailPanel({
         </section>
 
         {/* ESTIMATE */}
-        {isInspection && (
-          <aside className="lg:sticky lg:top-6 lg:self-start">
+        {(isInspection || isWaitingForApproval) && (
+          <aside className="lg:sticky lg:top-4 lg:self-start">
             <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-              <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-5">
+              <div className="flex items-center justify-between border-b border-border px-3 py-3 sm:px-4">
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
                     <Receipt className="h-4 w-4" />
@@ -720,7 +1170,7 @@ export default function ServiceDetailPanel({
               </div>
 
               <ScrollArea className="max-h-[520px]">
-                <div className="space-y-4 p-4 sm:p-5">
+                <div className="space-y-3 p-3 sm:p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
@@ -785,7 +1235,7 @@ export default function ServiceDetailPanel({
                 </div>
               </ScrollArea>
 
-              <div className="border-t border-border p-4 sm:p-5">
+              <div className="border-t border-border p-3 sm:p-4">
                 {!isCompleted && (
                   <Button
                     type="button"
@@ -815,12 +1265,340 @@ export default function ServiceDetailPanel({
         )}
       </div>
 
+      {/* =============================================================
+          APPOINTMENT HISTORY
+
+          Current task/finding history is separated from the active
+          workflow so staff can audit what has already been recorded
+          without confusing it with live tasks.
+      ============================================================= */}
+
+      {(taskHistory.length > 0 || findingHistory.length > 0) && (
+        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div
+            className="
+              border-b
+              border-border
+              p-3
+
+              sm:p-4
+            "
+          >
+            <div
+              className="
+                flex
+                flex-col
+                gap-3
+
+                lg:flex-row
+                lg:items-center
+                lg:justify-between
+              "
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="
+                    flex
+                    h-9
+                    w-9
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-md
+                    bg-muted
+                    text-muted-foreground
+                  "
+                >
+                  <Archive className="h-4 w-4" />
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Appointment History
+                  </h2>
+
+                  <p className="text-xs text-muted-foreground">
+                    Previously completed tasks and recorded findings for this appointment.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex w-full items-center gap-2 lg:w-auto">
+                <div className="relative min-w-0 flex-1 lg:w-[260px] lg:flex-none">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                  <input
+                    value={historySearch}
+                    onChange={(event) =>
+                      setHistorySearch(event.target.value)
+                    }
+                    placeholder="Search history..."
+                    aria-label="Search appointment history"
+                    className="
+                      h-10
+                      w-full
+                      rounded-md
+                      border
+                      border-input
+                      bg-background
+                      pl-9
+                      pr-3
+                      text-base
+                      shadow-sm
+                      outline-none
+                      transition-shadow
+                      placeholder:text-muted-foreground
+                      focus-visible:ring-2
+                      focus-visible:ring-ring
+                      focus-visible:ring-offset-2
+                      md:h-9
+                      md:text-sm
+                    "
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setHistoryOpen((value) => !value)
+                  }
+                  className="
+                    h-10
+                    shrink-0
+                    rounded-md
+                    px-3
+                    text-xs
+                    md:h-9
+                  "
+                >
+                  {historyOpen
+                    ? 'Collapse'
+                    : 'View History'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge
+                variant="secondary"
+                className="rounded-full text-[10px]"
+              >
+                {taskHistory.length} {taskHistory.length === 1 ? 'task' : 'tasks'}
+              </Badge>
+
+              {taskPhase === 'INSPECTION' && (
+                <Badge
+                  variant="secondary"
+                  className="rounded-full text-[10px]"
+                >
+                  {findingHistory.length}{' '}
+                  {findingHistory.length === 1 ? 'finding' : 'findings'}
+                </Badge>
+              )}
+
+              {historyLoading && (
+                <span className="text-[10px] text-muted-foreground">
+                  Refreshing history...
+                </span>
+              )}
+            </div>
+          </div>
+
+          {historyOpen && (
+            <div className="grid gap-3 p-3 sm:p-4 lg:grid-cols-2">
+              {/* ------------------------------------------------------
+                  TASK HISTORY
+              ------------------------------------------------------- */}
+
+              <section className="min-w-0 rounded-lg border border-border bg-background">
+                <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-primary" />
+
+                    <p className="text-xs font-semibold text-foreground">
+                      Task History
+                    </p>
+                  </div>
+
+                  <span className="text-[10px] text-muted-foreground">
+                    {filteredTaskHistory.length} shown
+                  </span>
+                </div>
+
+                <div className="max-h-[360px] space-y-2 overflow-y-auto p-3">
+                  {displayedTaskHistory.length === 0 ? (
+                    <p className="py-8 text-center text-xs text-muted-foreground">
+                      No task history matches this search.
+                    </p>
+                  ) : (
+                    displayedTaskHistory.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-md border border-border bg-card p-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-foreground">
+                              {item.title || 'Task'}
+                            </p>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                              <span>
+                                {item.phase || 'WORK'}
+                              </span>
+
+                              {item.durationMinutes != null && (
+                                <span>
+                                  {item.durationMinutes} min
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 rounded-full text-[9px]"
+                          >
+                            Completed
+                          </Badge>
+                        </div>
+
+                        {item.completedAt && (
+                          <p className="mt-2 text-[10px] text-muted-foreground">
+                            {new Date(item.completedAt).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              {/* ------------------------------------------------------
+                  FINDING HISTORY
+              ------------------------------------------------------- */}
+
+              {taskPhase === 'INSPECTION' ? (
+                <section className="min-w-0 rounded-lg border border-border bg-background">
+                  <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+
+                      <p className="text-xs font-semibold text-foreground">
+                        Finding History
+                      </p>
+                    </div>
+
+                    <span className="text-[10px] text-muted-foreground">
+                      {filteredFindingHistory.length} shown
+                    </span>
+                  </div>
+
+                  <div className="max-h-[360px] space-y-2 overflow-y-auto p-3">
+                    {displayedFindingHistory.length === 0 ? (
+                      <p className="py-8 text-center text-xs text-muted-foreground">
+                        No finding history matches this search.
+                      </p>
+                    ) : (
+                      displayedFindingHistory.map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-md border border-border bg-card p-3"
+                        >
+                          <p className="whitespace-pre-wrap text-xs font-medium leading-5 text-foreground">
+                            {item.description || 'Finding'}
+                          </p>
+
+                          {item.parts?.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {item.parts.slice(0, 6).map((part: any) => (
+                                <Badge
+                                  key={part.id}
+                                  variant="secondary"
+                                  className="rounded-md text-[9px]"
+                                >
+                                  {part.quantity}x {part.partName || 'Part'}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+
+                          {item.recordedAt && (
+                            <p className="mt-2 text-[10px] text-muted-foreground">
+                              {new Date(item.recordedAt).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          )}
+        </section>
+      )}
+
       {isInspection && (
-        <FindingsList
-          findings={findings}
-          appointmentId={appointment.id}
-          onFindingsUpdated={() => loadData(true)}
-        />
+        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <FileText className="h-4 w-4" />
+              </span>
+
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Inspection Findings
+                </h2>
+
+                <p className="text-xs text-muted-foreground">
+                  Record observations, reuse known findings, and review previous findings.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHistoryFindingPickerOpen(true)}
+                className="h-10 rounded-md md:h-9"
+              >
+                <History className="mr-2 h-4 w-4" />
+                Previous Findings
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDefaultFindingPickerOpen(true)}
+                className="h-10 rounded-md md:h-9"
+              >
+                <Database className="mr-2 h-4 w-4" />
+                Default Findings
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => setFindingModalOpen(true)}
+                className="h-10 rounded-md md:h-9"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Finding
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-4">
+            <FindingsList
+              findings={findings}
+              appointmentId={appointment.id}
+              onFindingsUpdated={() => loadData(true)}
+            />
+          </div>
+        </section>
       )}
 
       {/* Existing modal components remain exactly wired to their
@@ -841,15 +1619,18 @@ export default function ServiceDetailPanel({
       <DefaultGroupManagerModal
         open={groupManagerOpen}
         onOpenChange={setGroupManagerOpen}
-        onSaved={() => {}}
+        onSaved={() => {
+          setTaskSourceVersion((value) => value + 1);
+        }}
       />
 
       <DefaultTaskPickerModal
+        key={`default-task-picker-${taskSourceVersion}`}
         open={taskPickerOpen}
         onOpenChange={setTaskPickerOpen}
         onAddTasks={handleAddTasksFromTemplate}
         isAdding={isAddingTemplateTasks}
-        phase={isInspection ? 'INSPECTION' : 'WORK'}
+        phase={taskPhase}
       />
 
       <HistoryTaskPickerModal
@@ -857,13 +1638,33 @@ export default function ServiceDetailPanel({
         onOpenChange={setHistoryPickerOpen}
         onAddTasks={handleAddTasksFromHistory}
         isAdding={isAddingHistoryTasks}
-        phase={isInspection ? 'INSPECTION' : 'WORK'}
+        phase={taskPhase}
+        currentAppointmentId={appointment.id}
       />
 
       <DefaultFindingManagerModal
         open={defaultFindingManagerOpen}
         onOpenChange={setDefaultFindingManagerOpen}
-        onSaved={() => {}}
+        onSaved={() => {
+          setFindingSourceVersion((value) => value + 1);
+        }}
+      />
+
+      <DefaultFindingPickerModal
+        key={`default-finding-picker-${findingSourceVersion}`}
+        open={defaultFindingPickerOpen}
+        onOpenChange={setDefaultFindingPickerOpen}
+        onAddFindings={handleAddFindings}
+        isAdding={false}
+      />
+
+      <HistoryFindingPickerModal
+        open={historyFindingPickerOpen}
+        onOpenChange={setHistoryFindingPickerOpen}
+        onAddFindings={handleAddHistoryFindings}
+        isAdding={isAddingHistoryFindings}
+        phase="INSPECTION"
+        excludeAppointmentId={appointment.id}
       />
 
       <ConfirmationDialog
