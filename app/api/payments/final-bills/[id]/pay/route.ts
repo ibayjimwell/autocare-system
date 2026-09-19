@@ -4,6 +4,9 @@ import { isValidUUID } from '@/utils/shared';
 import { generatePaymentReceipt } from '@/utils/payments/generate-payment-receipt';
 import { mobilePaymentsTriggers } from '@/app-triggers/payments';
 
+// --------------------------------------------------------------
+// POST /api/payments/final-bills/[id]/pay
+// --------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

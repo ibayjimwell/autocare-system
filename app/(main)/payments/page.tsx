@@ -16,8 +16,8 @@ import {
   FileCheck2,
   QrCode,
   ReceiptText,
-  Search,
   WalletCards,
+  Settings2,
 } from 'lucide-react';
 
 import PageContainer from '@/components/shared/page-container';
@@ -34,10 +34,6 @@ import {
   Card,
   CardContent,
 } from '@/components/ui/card';
-
-import {
-  Input,
-} from '@/components/ui/input';
 
 /* ================================================================
    HOOKS
@@ -89,7 +85,11 @@ import CashierModal from '@/components/payments/cashier-modal';
 
 import QRScannerModal from '@/components/payments/QRScannerModal';
 
-import ReceiptModal from '@/components/payments/cashier-modal';
+import ReceiptModal from '@/components/payments/receipt-modal';
+
+import PaymentsConfigurationModal from '@/components/payments/PaymentsConfigurationModal';
+
+import { useReceipt } from '@/hooks/receipt/useReceipt';
 
 /* ================================================================
    CONFIRMATION MODALS
@@ -123,6 +123,9 @@ import {
 
 import type {
   Estimate,
+  PaymentSearchField,
+  PaymentSortDirection,
+  PaymentSortKey,
 } from '@/hooks/payments/usePaymentsData';
 
 /* ================================================================
@@ -131,7 +134,7 @@ import type {
 
 export default function PaymentsPage() {
   /* ==============================================================
-     FILTER / TAB STATE
+     FILTER / SORT STATE
   ============================================================== */
 
   const [
@@ -160,6 +163,30 @@ export default function PaymentsPage() {
       '',
     );
 
+  const [
+    searchField,
+    setSearchField,
+  ] =
+    useState<PaymentSearchField>(
+      'ALL',
+    );
+
+  const [
+    sortBy,
+    setSortBy,
+  ] =
+    useState<PaymentSortKey>(
+      'date',
+    );
+
+  const [
+    sortDirection,
+    setSortDirection,
+  ] =
+    useState<PaymentSortDirection>(
+      'desc',
+    );
+
   /* ==============================================================
      PAYMENTS DATA
   ============================================================== */
@@ -174,6 +201,9 @@ export default function PaymentsPage() {
     usePaymentsData(
       statusFilter,
       search,
+      searchField,
+      sortBy,
+      sortDirection,
     );
 
   /* ==============================================================
@@ -223,35 +253,24 @@ export default function PaymentsPage() {
     });
 
   /* ==============================================================
-     RECEIPT STATE
+     RECEIPT
   ============================================================== */
 
   const [
-    receiptModalOpen,
-    setReceiptModalOpen,
-  ] =
-    useState(
-      false,
-    );
+    receiptBillId,
+    setReceiptBillId,
+  ] = useState<string | null>(null);
 
-  const [
-    receiptData,
-    setReceiptData,
-  ] =
-    useState<any>(
-      null,
-    );
-
-  const [
-    receiptReference,
-    setReceiptReference,
-  ] =
-    useState(
-      '',
-    );
+  const {
+    receipt,
+    loading: receiptLoading,
+    error: receiptError,
+  } = useReceipt(
+    receiptBillId,
+  );
 
   /* ==============================================================
-     QR SCANNER STATE
+     QR STATE
   ============================================================== */
 
   const [
@@ -263,17 +282,16 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
+     PAYMENTS CONFIGURATION
+  ============================================================== */
+
+  const [
+    paymentsConfigurationOpen,
+    setPaymentsConfigurationOpen,
+  ] = useState(false);
+
+  /* ==============================================================
      ESTIMATE CONFIRMATION STATE
-
-     The page owns the three consequential estimate
-     confirmation flows:
-
-       1. Send Pending estimate
-       2. Approve estimate
-       3. Decline estimate
-
-     We keep ONE selected estimate so the confirmation components
-     always operate on the exact estimate the staff selected.
   ============================================================== */
 
   const [
@@ -308,10 +326,6 @@ export default function PaymentsPage() {
       false,
     );
 
-  /*
-   * Loading while we fetch the full estimate + appointment details
-   * before opening a confirmation modal.
-   */
   const [
     confirmationLoading,
     setConfirmationLoading,
@@ -320,10 +334,6 @@ export default function PaymentsPage() {
       false,
     );
 
-  /*
-   * Loading while the selected confirmation action is actually
-   * being submitted.
-   */
   const [
     confirmationActionLoading,
     setConfirmationActionLoading,
@@ -333,22 +343,7 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     LOAD FULL ESTIMATE FOR CONFIRMATION
-
-     EstimatesList normally receives the list representation.
-     The detailed confirmation modal needs the full estimate:
-
-       - services
-       - findings
-       - parts
-       - tasks
-       - fees
-       - discounts
-       - totals
-       - appointment / customer / vehicle
-
-     Therefore we explicitly refresh the estimate before displaying
-     the confirmation UI.
+     LOAD FULL ESTIMATE
   ============================================================== */
 
   const loadEstimateForConfirmation =
@@ -390,33 +385,22 @@ export default function PaymentsPage() {
           const fullEstimate =
             estimateResponse.data;
 
-          /*
-           * The estimate endpoint provides customer and vehicle
-           * information, while the appointment endpoint provides
-           * the complete appointment object including services.
-           *
-           * Merge both sources so the confirmation component gets
-           * the most complete representation.
-           */
           const appointmentData =
             appointmentResponse?.error
               ? {}
               : appointmentResponse?.data ||
                 {};
 
-          const mergedEstimate =
-            {
-              ...fullEstimate,
+          return {
+            ...fullEstimate,
 
-              appointment: {
-                ...(fullEstimate?.appointment ||
-                  {}),
+            appointment: {
+              ...(fullEstimate?.appointment ||
+                {}),
 
-                ...appointmentData,
-              },
-            };
-
-          return mergedEstimate as Estimate;
+              ...appointmentData,
+            },
+          } as Estimate;
         } catch (
           error: any
         ) {
@@ -441,10 +425,7 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     OPEN SEND CONFIRMATION
-
-     Pending estimates must be explicitly reviewed before they are
-     sent to the customer.
+     REQUEST SEND
   ============================================================== */
 
   const handleRequestSendForApproval =
@@ -488,7 +469,7 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     OPEN APPROVE CONFIRMATION
+     REQUEST APPROVE
   ============================================================== */
 
   const handleRequestApprove =
@@ -532,7 +513,7 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     OPEN DECLINE CONFIRMATION
+     REQUEST DECLINE
   ============================================================== */
 
   const handleRequestDecline =
@@ -576,41 +557,7 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     CLOSE ALL ESTIMATE CONFIRMATIONS
-  ============================================================== */
-
-  const closeEstimateConfirmations =
-    useCallback(
-      () => {
-        if (
-          confirmationActionLoading
-        ) {
-          return;
-        }
-
-        setSendConfirmationOpen(
-          false,
-        );
-
-        setApproveConfirmationOpen(
-          false,
-        );
-
-        setDeclineConfirmationOpen(
-          false,
-        );
-
-        setConfirmationEstimate(
-          null,
-        );
-      },
-      [
-        confirmationActionLoading,
-      ],
-    );
-
-  /* ==============================================================
-     CONFIRM SEND FOR APPROVAL
+     CONFIRM SEND
   ============================================================== */
 
   const handleConfirmSendForApproval =
@@ -757,22 +704,22 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     HOLD
+     PARK VEHICLE
   ============================================================== */
 
-  const handleHold =
-    (
-      id: string,
-      rate: number,
-      unit: string,
-    ) => {
-      billActions.updateStatus(
-        id,
-        'HOLD',
-        rate,
-        unit,
-      );
-    };
+  const handlePark =
+    useCallback(
+      async (
+        id: string,
+        addParkingFee: boolean,
+      ) => {
+        return billActions.parkVehicle(
+          id,
+          addParkingFee,
+        );
+      },
+      [billActions],
+    );
 
   /* ==============================================================
      MAKE OFFICIAL
@@ -782,25 +729,27 @@ export default function PaymentsPage() {
     (
       id: string,
     ) => {
-      billActions.updateStatus(
+      void billActions.updateStatus(
         id,
         'OFFICIAL',
       );
     };
 
   /* ==============================================================
-     BACK TO PENDING
+     STOP PARKING
   ============================================================== */
 
-  const handleBackToPending =
-    (
-      id: string,
-    ) => {
-      billActions.updateStatus(
-        id,
-        'PENDING',
-      );
-    };
+  const handleStopParking =
+    useCallback(
+      async (
+        id: string,
+      ) => {
+        return billActions.stopParking(
+          id,
+        );
+      },
+      [billActions],
+    );
 
   /* ==============================================================
      PAYMENT SUCCESS
@@ -814,8 +763,29 @@ export default function PaymentsPage() {
         `Payment processed! Receipt ${referenceNumber} generated.`,
       );
 
-      reload();
+      void reload();
     };
+
+  /* ==============================================================
+     VIEW RECEIPT
+  ============================================================== */
+
+  const handleViewReceipt =
+    useCallback(
+      (billId: string) => {
+        if (!billId) {
+          toast.error(
+            'Missing final bill ID.',
+          );
+          return;
+        }
+
+        setReceiptBillId(
+          billId,
+        );
+      },
+      [],
+    );
 
   /* ==============================================================
      QR SCAN
@@ -857,13 +827,81 @@ export default function PaymentsPage() {
     };
 
   /* ==============================================================
-     LOADING
+     TAB CHANGE
+  ============================================================== */
+
+  const handleTabChange =
+    (
+      value:
+        | 'estimates'
+        | 'final-bills',
+    ) => {
+      setActiveTab(
+        value,
+      );
+
+      /*
+       * Reset tab-specific status/search state so a status from
+       * Estimates is never accidentally carried into Final Bills.
+       */
+      setStatusFilter(
+        'ALL',
+      );
+
+      setSearch(
+        '',
+      );
+
+      setSearchField(
+        'ALL',
+      );
+
+      setSortBy(
+        'date',
+      );
+
+      setSortDirection(
+        'desc',
+      );
+    };
+
+  /* ==============================================================
+     CLEAR FILTERS
+  ============================================================== */
+
+  const handleClearFilters =
+    () => {
+      setStatusFilter(
+        'ALL',
+      );
+
+      setSearch(
+        '',
+      );
+
+      setSearchField(
+        'ALL',
+      );
+
+      setSortBy(
+        'date',
+      );
+
+      setSortDirection(
+        'desc',
+      );
+    };
+
+  /* ==============================================================
+     INITIAL LOADING
   ============================================================== */
 
   if (
     loading &&
-    estimates.length === 0 &&
-    finalBills.length === 0
+    estimates.length ===
+      0 &&
+    finalBills.length ===
+      0
   ) {
     return (
       <LoadingSpinner />
@@ -871,7 +909,7 @@ export default function PaymentsPage() {
   }
 
   /* ==============================================================
-     SUMMARY COUNTS
+     SUMMARY
   ============================================================== */
 
   const totalRecords =
@@ -899,6 +937,7 @@ export default function PaymentsPage() {
             w-full
             flex-col
             gap-2
+
             sm:w-auto
             sm:flex-row
           "
@@ -915,21 +954,9 @@ export default function PaymentsPage() {
               md:h-9
               md:w-auto
               md:px-3
-
-              focus-visible:outline-none
-              focus-visible:ring-2
-              focus-visible:ring-ring
-              focus-visible:ring-offset-2
             "
           >
-            <ArrowDownToLine
-              className="
-                mr-2
-                h-4
-                w-4
-              "
-            />
-
+            <ArrowDownToLine className="mr-2 h-4 w-4" />
             Export
           </Button>
 
@@ -945,50 +972,22 @@ export default function PaymentsPage() {
               md:h-9
               md:w-auto
               md:px-3
-
-              focus-visible:outline-none
-              focus-visible:ring-2
-              focus-visible:ring-ring
-              focus-visible:ring-offset-2
             "
           >
-            <ArrowUpFromLine
-              className="
-                mr-2
-                h-4
-                w-4
-              "
-            />
-
+            <ArrowUpFromLine className="mr-2 h-4 w-4" />
             Import
           </Button>
         </div>
       }
     >
-      <div
-        className="
-          space-y-4
-          md:space-y-5
-          lg:space-y-6
-        "
-      >
+      <div className="space-y-4 md:space-y-5 lg:space-y-6">
         {/* ========================================================
             ERROR
         ========================================================= */}
 
         {error && (
-          <Card
-            className="
-              border-destructive/20
-              bg-card
-              shadow-sm
-            "
-          >
-            <CardContent
-              className="
-                p-0
-              "
-            >
+          <Card className="border-destructive/20 bg-card shadow-sm">
+            <CardContent className="p-0">
               <ErrorHandler
                 type={
                   error.type
@@ -1039,8 +1038,10 @@ export default function PaymentsPage() {
                 WalletCards
               }
               label="Total Records"
-              value={totalRecords.toLocaleString()}
-              description="Current loaded records"
+              value={
+                totalRecords.toLocaleString()
+              }
+              description="Current filtered records"
             />
 
             <SummaryMetric
@@ -1048,8 +1049,10 @@ export default function PaymentsPage() {
                 ClipboardList
               }
               label="Estimates"
-              value={estimates.length.toLocaleString()}
-              description="Estimate records"
+              value={
+                estimates.length.toLocaleString()
+              }
+              description="Current estimate results"
               active={
                 activeTab ===
                 'estimates'
@@ -1061,8 +1064,10 @@ export default function PaymentsPage() {
                 FileCheck2
               }
               label="Final Bills"
-              value={finalBills.length.toLocaleString()}
-              description="Generated bills"
+              value={
+                finalBills.length.toLocaleString()
+              }
+              description="Current final bill results"
               active={
                 activeTab ===
                 'final-bills'
@@ -1074,7 +1079,9 @@ export default function PaymentsPage() {
                 ReceiptText
               }
               label="Visible Records"
-              value={currentRecords.toLocaleString()}
+              value={
+                currentRecords.toLocaleString()
+              }
               description={
                 statusFilter ===
                 'ALL'
@@ -1101,174 +1108,125 @@ export default function PaymentsPage() {
             sm:p-4
           "
         >
-          <div
-            className="
-              mb-4
-            "
-          >
-            <PaymentsTabs
-              activeTab={
-                activeTab
-              }
-              onTabChange={(
-                value,
-              ) =>
-                setActiveTab(
-                  value as
-                    | 'estimates'
-                    | 'final-bills',
-                )
-              }
-            />
-          </div>
-
-          <div
-            className="
-              flex
-              flex-col
-              gap-3
-
-              lg:flex-row
-              lg:items-center
-              lg:justify-between
-            "
-          >
-            <div
-              className="
-                w-full
-                lg:w-auto
-              "
-            >
-              <FilterBar
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <PaymentsTabs
                 activeTab={
                   activeTab
                 }
-                statusFilter={
-                  statusFilter
-                }
-                onStatusChange={
-                  setStatusFilter
-                }
-                search={
-                  search
-                }
-                onSearchChange={
-                  setSearch
+                onTabChange={(
+                  value,
+                ) =>
+                  handleTabChange(
+                    value as
+                      | 'estimates'
+                      | 'final-bills',
+                  )
                 }
               />
             </div>
 
-            <div
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setPaymentsConfigurationOpen(
+                  true,
+                )
+              }
+              aria-label="Open Payments Configuration"
               className="
-                flex
+                h-11
                 w-full
-                flex-col
-                gap-2
-
-                sm:flex-row
-
+                shrink-0
+                rounded-md
+                border-primary/30
+                bg-card
+                px-4
+                text-foreground
+                shadow-sm
+                hover:border-primary/50
+                hover:bg-primary/5
+                hover:text-primary
                 lg:w-auto
-                lg:min-w-[440px]
+                md:h-9
               "
             >
-              <div
-                className="
-                  relative
-                  min-w-0
-                  flex-1
-                "
-              >
-                <Search
-                  aria-hidden="true"
-                  className="
-                    pointer-events-none
-                    absolute
-                    left-3
-                    top-1/2
-                    h-4
-                    w-4
-                    -translate-y-1/2
-                    text-muted-foreground
-                  "
-                />
+              <Settings2 className="mr-2 h-4 w-4" />
+              Configuration
+            </Button>
+          </div>
 
-                <Input
-                  value={
-                    search
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setSearch(
-                      event.target
-                        .value,
-                    )
-                  }
-                  placeholder="Search by plate, customer, or tracking..."
-                  className="
-                    h-11
-                    w-full
-                    rounded-md
-                    pl-9
-                    text-base
+          <FilterBar
+            activeTab={
+              activeTab
+            }
+            statusFilter={
+              statusFilter
+            }
+            onStatusChange={
+              setStatusFilter
+            }
+            search={
+              search
+            }
+            onSearchChange={
+              setSearch
+            }
+            searchField={
+              searchField
+            }
+            onSearchFieldChange={
+              setSearchField
+            }
+            sortBy={
+              sortBy
+            }
+            onSortByChange={
+              setSortBy
+            }
+            sortDirection={
+              sortDirection
+            }
+            onSortDirectionChange={
+              setSortDirection
+            }
+            onClear={
+              handleClearFilters
+            }
+          />
 
-                    md:h-9
-                    md:text-sm
+          <div className="mt-3 flex justify-end">
+            <Button
+              type="button"
+              onClick={() =>
+                setQrScannerOpen(
+                  true,
+                )
+              }
+              className="
+                h-11
+                w-full
+                rounded-md
+                bg-primary
+                px-4
+                text-primary-foreground
+                shadow-sm
+                hover:bg-primary/90
 
-                    focus-visible:outline-none
-                    focus-visible:ring-2
-                    focus-visible:ring-ring
-                    focus-visible:ring-offset-2
-                  "
-                />
-              </div>
+                sm:w-auto
 
-              <Button
-                type="button"
-                onClick={() =>
-                  setQrScannerOpen(
-                    true,
-                  )
-                }
-                className="
-                  h-11
-                  w-full
-                  shrink-0
-                  rounded-md
-                  bg-primary
-                  px-4
-                  text-primary-foreground
-                  shadow-sm
-                  transition-colors
-                  hover:bg-primary/90
-
-                  sm:w-auto
-
-                  md:h-9
-                  md:px-4
-
-                  focus-visible:outline-none
-                  focus-visible:ring-2
-                  focus-visible:ring-ring
-                  focus-visible:ring-offset-2
-                "
-              >
-                <QrCode
-                  className="
-                    mr-2
-                    h-4
-                    w-4
-                  "
-                />
-
-                Scan QR
-              </Button>
-            </div>
+                md:h-9
+              "
+            >
+              <QrCode className="mr-2 h-4 w-4" />
+              Scan QR
+            </Button>
           </div>
         </section>
 
         {/* ========================================================
-            CONTENT
+            PAYMENT TABLES
         ========================================================= */}
 
         <section
@@ -1280,23 +1238,18 @@ export default function PaymentsPage() {
               estimates={
                 estimates
               }
-
               statusFilter={
                 statusFilter
               }
-
               onRequestSendForApproval={
                 handleRequestSendForApproval
               }
-
               onRequestApprove={
                 handleRequestApprove
               }
-
               onRequestDecline={
                 handleRequestDecline
               }
-
               onOpenDetail={(
                 item,
               ) =>
@@ -1311,15 +1264,15 @@ export default function PaymentsPage() {
               bills={
                 finalBills
               }
-
               statusFilter={
                 statusFilter
               }
-
               onPay={
                 billActions.handleOpenCashier
               }
-
+              onViewReceipt={
+                handleViewReceipt
+              }
               onOpenDetail={(
                 item,
               ) =>
@@ -1328,23 +1281,18 @@ export default function PaymentsPage() {
                   'final-bill',
                 )
               }
-
               onDelete={
                 billActions.confirmDelete
               }
-
-              onHold={
-                handleHold
+              onPark={
+                handlePark
               }
-
               onMakeOfficial={
                 handleMakeOfficial
               }
-
-              onBackToPending={
-                handleBackToPending
+              onStopParking={
+                handleStopParking
               }
-
               actionLoading={
                 billActions.actionLoading
               }
@@ -1361,99 +1309,75 @@ export default function PaymentsPage() {
         open={
           detail.detailModalOpen
         }
-
         onOpenChange={
           detail.setDetailModalOpen
         }
-
         detailType={
           detail.detailType
         }
-
         selectedItem={
           detail.selectedItem
         }
-
         detailLoading={
           detail.detailLoading
         }
-
         onAddFee={
           adjustments.handleAddFee
         }
-
         onAddDiscount={
           adjustments.handleAddDiscount
         }
-
         onEditPart={
           adjustments.handleEditPartOpen
         }
-
         feeModalOpen={
           adjustments.feeModalOpen
         }
-
         setFeeModalOpen={
           adjustments.setFeeModalOpen
         }
-
         feeForm={
           adjustments.feeForm
         }
-
         setFeeForm={
           adjustments.setFeeForm
         }
-
         discountModalOpen={
           adjustments.discountModalOpen
         }
-
         setDiscountModalOpen={
           adjustments.setDiscountModalOpen
         }
-
         discountForm={
           adjustments.discountForm
         }
-
         setDiscountForm={
           adjustments.setDiscountForm
         }
-
         editPartModalOpen={
           adjustments.editPartModalOpen
         }
-
         setEditPartModalOpen={
           adjustments.setEditPartModalOpen
         }
-
         editingPart={
           adjustments.editingPart
         }
-
         editPartForm={
           adjustments.editPartForm
         }
-
         setEditPartForm={
           adjustments.setEditPartForm
         }
-
         submittingAdjustment={
           adjustments.submittingAdjustment
         }
-
         onSaveFee={
           adjustments.handleAddFee
         }
-
         onSaveDiscount={
           adjustments.handleAddDiscount
         }
-
         onSavePart={
           adjustments.handleEditPartSave
         }
@@ -1467,27 +1391,21 @@ export default function PaymentsPage() {
         open={
           adjustments.feeModalOpen
         }
-
         onOpenChange={
           adjustments.setFeeModalOpen
         }
-
         form={
           adjustments.feeForm
         }
-
         setForm={
           adjustments.setFeeForm
         }
-
         onSave={
           adjustments.handleAddFee
         }
-
         saving={
           adjustments.submittingAdjustment
         }
-
         findings={
           detail.selectedItem
             ?.findings
@@ -1502,23 +1420,18 @@ export default function PaymentsPage() {
         open={
           adjustments.discountModalOpen
         }
-
         onOpenChange={
           adjustments.setDiscountModalOpen
         }
-
         form={
           adjustments.discountForm
         }
-
         setForm={
           adjustments.setDiscountForm
         }
-
         onSave={
           adjustments.handleAddDiscount
         }
-
         saving={
           adjustments.submittingAdjustment
         }
@@ -1532,27 +1445,21 @@ export default function PaymentsPage() {
         open={
           adjustments.editPartModalOpen
         }
-
         onOpenChange={
           adjustments.setEditPartModalOpen
         }
-
         part={
           adjustments.editingPart
         }
-
         form={
           adjustments.editPartForm
         }
-
         setForm={
           adjustments.setEditPartForm
         }
-
         onSave={
           adjustments.handleEditPartSave
         }
-
         saving={
           adjustments.submittingAdjustment
         }
@@ -1566,11 +1473,9 @@ export default function PaymentsPage() {
         open={
           billActions.deleteDialogOpen
         }
-
         onOpenChange={
           billActions.setDeleteDialogOpen
         }
-
         onConfirm={() =>
           billActions.handleDelete(
             activeTab,
@@ -1586,15 +1491,12 @@ export default function PaymentsPage() {
         open={
           billActions.cashierModalOpen
         }
-
         onOpenChange={
           billActions.setCashierModalOpen
         }
-
         bill={
           billActions.selectedBillForPayment
         }
-
         onPaid={
           handlePaymentSuccess
         }
@@ -1608,11 +1510,9 @@ export default function PaymentsPage() {
         open={
           qrScannerOpen
         }
-
         onOpenChange={
           setQrScannerOpen
         }
-
         onScan={
           handleQrScan
         }
@@ -1624,34 +1524,41 @@ export default function PaymentsPage() {
 
       <ReceiptModal
         open={
-          receiptModalOpen
+          Boolean(
+            receiptBillId,
+          )
         }
-
-        onOpenChange={
-          setReceiptModalOpen
+        onOpenChange={(
+          open,
+        ) => {
+          if (!open) {
+            setReceiptBillId(
+              null,
+            );
+          }
+        }}
+        billId={
+          receiptBillId
         }
-
-        receiptData={
-          receiptData
+        receipt={
+          receipt
         }
-
-        referenceNumber={
-          receiptReference
+        loading={
+          receiptLoading
+        }
+        error={
+          receiptError
         }
       />
 
       {/* ==========================================================
           SEND ESTIMATE CONFIRMATION
-
-          Pending estimate -> detailed review -> consent ->
-          actual Send For Approval API call.
       =========================================================== */}
 
       <SendEstimateConfirmationModal
         open={
           sendConfirmationOpen
         }
-
         onOpenChange={(
           open,
         ) => {
@@ -1673,15 +1580,12 @@ export default function PaymentsPage() {
             );
           }
         }}
-
         estimate={
           confirmationEstimate
         }
-
         onConfirm={
           handleConfirmSendForApproval
         }
-
         saving={
           confirmationActionLoading ||
           confirmationLoading
@@ -1690,16 +1594,12 @@ export default function PaymentsPage() {
 
       {/* ==========================================================
           APPROVE ESTIMATE CONFIRMATION
-
-          Includes explicit consent that the action cannot be
-          undone and that the staff member is responsible.
       =========================================================== */}
 
       <ApproveEstimateConfirmationModal
         open={
           approveConfirmationOpen
         }
-
         onOpenChange={(
           open,
         ) => {
@@ -1721,15 +1621,12 @@ export default function PaymentsPage() {
             );
           }
         }}
-
         estimate={
           confirmationEstimate
         }
-
         onConfirm={
           handleConfirmApprove
         }
-
         saving={
           confirmationActionLoading ||
           confirmationLoading
@@ -1738,18 +1635,12 @@ export default function PaymentsPage() {
 
       {/* ==========================================================
           DECLINE ESTIMATE CONFIRMATION
-
-          Includes:
-            - decline reason
-            - irreversible-action warning
-            - explicit responsibility consent
       =========================================================== */}
 
       <DeclineEstimateConfirmationModal
         open={
           declineConfirmationOpen
         }
-
         onOpenChange={(
           open,
         ) => {
@@ -1771,18 +1662,28 @@ export default function PaymentsPage() {
             );
           }
         }}
-
         estimate={
           confirmationEstimate
         }
-
         onConfirm={
           handleConfirmDecline
         }
-
         saving={
           confirmationActionLoading ||
           confirmationLoading
+        }
+      />
+
+      {/* ==========================================================
+          PAYMENTS CONFIGURATION
+      =========================================================== */}
+
+      <PaymentsConfigurationModal
+        open={
+          paymentsConfigurationOpen
+        }
+        onOpenChange={
+          setPaymentsConfigurationOpen
         }
       />
     </PageContainer>
@@ -1846,58 +1747,23 @@ function SummaryMetric({
           }
         `}
       >
-        <Icon
-          className="
-            h-4
-            w-4
-          "
-        />
+        <Icon className="h-4 w-4" />
       </div>
 
-      <div
-        className="
-          min-w-0
-        "
-      >
-        <p
-          className="
-            truncate
-            text-xs
-            font-medium
-            text-muted-foreground
-          "
-        >
+      <div className="min-w-0">
+        <p className="truncate text-xs font-medium text-muted-foreground">
           {
             label
           }
         </p>
 
-        <p
-          className="
-            mt-0.5
-            text-xl
-            font-semibold
-            tracking-tight
-            text-foreground
-
-            md:text-lg
-
-            lg:text-xl
-          "
-        >
+        <p className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">
           {
             value
           }
         </p>
 
-        <p
-          className="
-            mt-0.5
-            truncate
-            text-[11px]
-            text-muted-foreground
-          "
-        >
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
           {
             description
           }

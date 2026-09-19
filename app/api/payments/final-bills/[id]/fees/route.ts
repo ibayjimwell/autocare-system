@@ -5,6 +5,9 @@ import { FinalBillFees } from '@/database/models/payments/final-bill-fees.model'
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 
+// --------------------------------------------------------------
+// POST /api/payments/final-bills/[id]/fees 
+// --------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

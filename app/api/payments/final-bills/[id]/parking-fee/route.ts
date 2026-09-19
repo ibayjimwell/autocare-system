@@ -4,6 +4,9 @@ import { FinalBill } from '@/database/models/payments/final-bill.model';
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 
+// --------------------------------------------------------------
+// GET /api/payments/final-bills/[id]/parking-fee
+// --------------------------------------------------------------
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

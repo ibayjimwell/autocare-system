@@ -232,6 +232,13 @@
       "when": 1789036414451,
       "tag": "0032_cultured_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789726191296,
+      "tag": "0033_public_lionheart",
+      "breakpoints": true
     }
   ]
 }

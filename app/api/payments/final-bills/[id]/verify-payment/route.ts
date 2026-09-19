@@ -11,6 +11,9 @@ import { generatePaymentReceipt } from '@/utils/payments/generate-payment-receip
 import { sendPushToCustomer } from '@/lib/push/customer-push';
 import { mobilePaymentsTriggers } from '@/app-triggers/payments';
 
+// --------------------------------------------------------------
+// POST /api/payments/final-bills/[id]/verify-payment
+// --------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

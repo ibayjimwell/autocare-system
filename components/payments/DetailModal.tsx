@@ -1,3 +1,7 @@
+'use client';
+
+import React from 'react';
+
 import {
   Dialog,
   DialogContent,
@@ -5,13 +9,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/app-utils/payments/payments';
-import { format } from 'date-fns';
+
+import {
+  Button,
+} from '@/components/ui/button';
+
+import {
+  cn,
+} from '@/lib/utils';
+
+import {
+  formatCurrency,
+} from '@/app-utils/payments/payments';
+
+import {
+  format,
+} from 'date-fns';
+
 import StatusBadge from '@/components/shared/status-badge';
+
 import LoadingSpinner from '@/components/shared/loading-spinner';
+
 import ServiceCard from '@/components/services/service-card';
 
 import {
@@ -22,75 +40,383 @@ import {
   Percent,
   Plus,
   PlusCircle,
+  ReceiptText,
   Tag,
   Wrench,
 } from 'lucide-react';
 
-import FeeModal from './FeeModal';
-import DiscountModal from './DiscountModal';
-import EditPartModal from './EditPartModal';
+/* ================================================================
+   PROPS
+================================================================ */
 
 interface DetailModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  detailType: 'estimate' | 'final-bill';
+
+  onOpenChange: (
+    open: boolean,
+  ) => void;
+
+  detailType:
+    | 'estimate'
+    | 'final-bill';
+
   selectedItem: any;
+
   detailLoading: boolean;
+
   onAddFee: (form: {
     title: string;
     amount: string;
     findingId: string;
   }) => void;
+
   onAddDiscount: (form: {
     title: string;
     type: string;
     value: string;
   }) => void;
+
   onEditPart: (
     part: any,
     findingId: string,
-    billId: string
+    billId: string,
   ) => void;
+
   feeModalOpen: boolean;
-  setFeeModalOpen: (open: boolean) => void;
+
+  setFeeModalOpen: (
+    open: boolean,
+  ) => void;
+
   feeForm: {
     title: string;
     amount: string;
     findingId: string;
   };
-  setFeeForm: (form: {
-    title: string;
-    amount: string;
-    findingId: string;
-  }) => void;
+
+  setFeeForm: (
+    form: {
+      title: string;
+      amount: string;
+      findingId: string;
+    },
+  ) => void;
+
   discountModalOpen: boolean;
-  setDiscountModalOpen: (open: boolean) => void;
+
+  setDiscountModalOpen: (
+    open: boolean,
+  ) => void;
+
   discountForm: {
     title: string;
     type: string;
     value: string;
   };
-  setDiscountForm: (form: {
-    title: string;
-    type: string;
-    value: string;
-  }) => void;
+
+  setDiscountForm: (
+    form: {
+      title: string;
+      type: string;
+      value: string;
+    },
+  ) => void;
+
   editPartModalOpen: boolean;
-  setEditPartModalOpen: (open: boolean) => void;
+
+  setEditPartModalOpen: (
+    open: boolean,
+  ) => void;
+
   editingPart: any;
+
   editPartForm: {
     quantity: number;
     priceAtTime: number;
   };
-  setEditPartForm: (form: {
-    quantity: number;
-    priceAtTime: number;
-  }) => void;
+
+  setEditPartForm: (
+    form: {
+      quantity: number;
+      priceAtTime: number;
+    },
+  ) => void;
+
   submittingAdjustment: boolean;
+
   onSaveFee: () => void;
+
   onSaveDiscount: () => void;
+
   onSavePart: () => void;
 }
+
+/* ================================================================
+   SAFE HELPERS
+================================================================ */
+
+/**
+ * Convert unknown numeric values into a safe number.
+ */
+function toSafeNumber(
+  value: unknown,
+): number {
+  const parsed =
+    Number(
+      value,
+    );
+
+  return Number.isFinite(
+    parsed,
+  )
+    ? parsed
+    : 0;
+}
+
+/**
+ * Normalize arrays before rendering.
+ */
+function safeArray(
+  value: unknown,
+): any[] {
+  return Array.isArray(
+    value,
+  )
+    ? value
+    : [];
+}
+
+/**
+ * Safely format a money value.
+ *
+ * The payment utility already handles normal numeric/string values,
+ * but this wrapper guarantees the modal never receives an invalid
+ * numeric value.
+ */
+function safeCurrency(
+  value: unknown,
+): string {
+  return formatCurrency(
+    toSafeNumber(
+      value,
+    ),
+  );
+}
+
+/**
+ * Safely format a date.
+ *
+ * date-fns can throw when passed an invalid date. Never allow an
+ * invalid database value to crash the entire payment page.
+ */
+function safeDate(
+  value: unknown,
+): string {
+  if (
+    !value
+  ) {
+    return 'Not available';
+  }
+
+  try {
+    const date =
+      new Date(
+        String(
+          value,
+        ),
+      );
+
+    if (
+      Number.isNaN(
+        date.getTime(),
+      )
+    ) {
+      return 'Not available';
+    }
+
+    return format(
+      date,
+      'MMM dd, yyyy',
+    );
+  } catch (
+    error
+  ) {
+    console.error(
+      '[DetailModal] Invalid date:',
+      error,
+    );
+
+    return 'Not available';
+  }
+}
+
+/**
+ * Normalize services for rendering.
+ */
+function getServiceIds(
+  appointment: any,
+): string[] {
+  const services =
+    safeArray(
+      appointment?.services,
+    );
+
+  return services
+    .map(
+      (
+        service: any,
+      ) => {
+        if (
+          typeof service ===
+          'string'
+        ) {
+          return service;
+        }
+
+        return (
+          service?.id ??
+          service?.serviceId ??
+          null
+        );
+      },
+    )
+    .filter(
+      (
+        id,
+      ): id is string =>
+        Boolean(
+          id,
+        ),
+    );
+}
+
+/**
+ * Normalize finding parts for rendering.
+ */
+function getFindingParts(
+  finding: any,
+): any[] {
+  if (
+    Array.isArray(
+      finding?.parts,
+    )
+  ) {
+    return finding.parts;
+  }
+
+  if (
+    Array.isArray(
+      finding?.products,
+    )
+  ) {
+    return finding.products;
+  }
+
+  return [];
+}
+
+/**
+ * Safely calculate finding subtotal when the API doesn't provide it.
+ */
+function getFindingSubtotal(
+  finding: any,
+): number {
+  const explicit =
+    toSafeNumber(
+      finding?.partsSubtotal,
+    );
+
+  if (
+    explicit > 0
+  ) {
+    return explicit;
+  }
+
+  return getFindingParts(
+    finding,
+  ).reduce(
+    (
+      total: number,
+      part: any,
+    ) => {
+      if (
+        part?.isPms
+      ) {
+        return total;
+      }
+
+      const quantity =
+        Math.max(
+          1,
+          toSafeNumber(
+            part?.quantity,
+          ) ||
+            1,
+        );
+
+      const price =
+        Math.max(
+          0,
+          toSafeNumber(
+            part?.priceAtTime ??
+              part?.price,
+          ),
+        );
+
+      return (
+        total +
+        quantity *
+          price
+      );
+    },
+    0,
+  );
+}
+
+/**
+ * Safely get the final bill findings.
+ */
+function getFindings(
+  selectedItem: any,
+): any[] {
+  const source =
+    Array.isArray(
+      selectedItem?.findings,
+    )
+      ? selectedItem.findings
+      : [];
+
+  return source.map(
+    (
+      finding: any,
+      index: number,
+    ) => ({
+      ...finding,
+
+      id:
+        finding?.id ??
+        `finding-${index}`,
+
+      description:
+        finding?.description ??
+        finding?.title ??
+        'Finding',
+
+      included:
+        finding?.included !==
+        false,
+
+      parts:
+        getFindingParts(
+          finding,
+        ),
+    }),
+  );
+}
+
+/* ================================================================
+   COMPONENT
+================================================================ */
 
 export default function DetailModal({
   open,
@@ -119,41 +445,137 @@ export default function DetailModal({
   onSaveDiscount,
   onSavePart,
 }: DetailModalProps) {
-  if (!selectedItem && !detailLoading) return null;
+  /*
+   * Keep the existing behavior:
+   *
+   * no selected record + no loading = nothing to show.
+   */
+  if (
+    !selectedItem &&
+    !detailLoading
+  ) {
+    return null;
+  }
 
   const isEditable =
-    detailType === 'estimate' ||
-    (detailType === 'final-bill' &&
-      selectedItem?.status === 'PENDING');
+    detailType ===
+      'estimate' ||
+    (detailType ===
+      'final-bill' &&
+      selectedItem?.status ===
+        'PENDING');
+
+  /*
+   * Safe data references.
+   */
+  const findings =
+    getFindings(
+      selectedItem,
+    );
+
+  const fees =
+    safeArray(
+      selectedItem?.fees,
+    );
+
+  const discounts =
+    safeArray(
+      selectedItem?.discounts,
+    );
+
+  const workTasks =
+    safeArray(
+      selectedItem?.workTasks,
+    );
+
+  const inspectionTasks =
+    safeArray(
+      selectedItem?.tasks,
+    );
+
+  const serviceIds =
+    getServiceIds(
+      selectedItem?.appointment,
+    );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={
+        onOpenChange
+      }
+    >
       <DialogContent
         className="
-          max-h-[92vh] w-[calc(100%-1rem)] overflow-y-auto
-          rounded-xl border border-border bg-card p-0 shadow-2xl
+          flex
+          max-h-[92vh]
+          w-[calc(100%-1rem)]
+          flex-col
+          overflow-hidden
+          rounded-xl
+          border
+          border-border
+          bg-card
+          p-0
+          shadow-2xl
+
           sm:max-w-4xl
+
           md:w-[calc(100%-2rem)]
         "
       >
-        <div className="sticky top-0 z-10 border-b border-border bg-background/80 p-4 backdrop-blur-xl sm:p-5">
+        {/* ========================================================
+            HEADER
+        ========================================================= */}
+
+        <div
+          className="
+            shrink-0
+            border-b
+            border-border
+            bg-background/80
+            p-4
+            backdrop-blur-xl
+
+            sm:p-5
+          "
+        >
           <DialogHeader>
-            <DialogTitle className="flex flex-col gap-3 text-lg font-semibold sm:flex-row sm:items-center sm:justify-between md:text-xl">
+            <DialogTitle
+              className="
+                flex
+                flex-col
+                gap-3
+                text-lg
+                font-semibold
+
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+
+                md:text-xl
+              "
+            >
               <span className="flex items-center gap-2">
-                {detailType === 'estimate' ? (
+                {detailType ===
+                'estimate' ? (
                   <FileText className="h-5 w-5 text-primary" />
                 ) : (
-                  <ReceiptIcon />
+                  <ReceiptText className="h-5 w-5 text-primary" />
                 )}
 
-                {detailType === 'estimate'
+                {detailType ===
+                'estimate'
                   ? 'Estimate Details'
                   : 'Final Bill Details'}
               </span>
 
               {selectedItem && (
                 <StatusBadge
-                  status={selectedItem.status}
+                  status={
+                    selectedItem.status ||
+                    'PENDING'
+                  }
                   className="w-fit text-[10px]"
                 />
               )}
@@ -161,225 +583,427 @@ export default function DetailModal({
           </DialogHeader>
         </div>
 
-        <div className="p-4 sm:p-5">
+        {/* ========================================================
+            BODY
+        ========================================================= */}
+
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-y-auto
+            overscroll-contain
+            p-4
+
+            sm:p-5
+
+            [-webkit-overflow-scrolling:touch]
+          "
+        >
           {detailLoading ? (
-            <div className="flex min-h-[280px] items-center justify-center">
+            <div
+              className="
+                flex
+                min-h-[320px]
+                items-center
+                justify-center
+              "
+            >
               <LoadingSpinner />
             </div>
           ) : selectedItem ? (
             <div className="space-y-6">
-              {/* SUMMARY */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-primary/15 bg-primary/[0.04] p-4">
+              {/* ==================================================
+                  SUMMARY
+              =================================================== */}
+
+              <div
+                className="
+                  grid
+                  grid-cols-1
+                  gap-3
+
+                  sm:grid-cols-2
+                "
+              >
+                <div
+                  className="
+                    rounded-lg
+                    border
+                    border-primary/15
+                    bg-primary/[0.04]
+                    p-4
+                  "
+                >
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Total Amount
                   </p>
 
-                  <p className="mt-1 text-2xl font-semibold tracking-tight text-primary">
-                    ₱{formatCurrency(selectedItem.grandTotal)}
+                  <p
+                    className="
+                      mt-1
+                      text-2xl
+                      font-semibold
+                      tracking-tight
+                      text-primary
+                    "
+                  >
+                    ₱
+                    {safeCurrency(
+                      selectedItem.grandTotal,
+                    )}
                   </p>
                 </div>
 
-                <div className="rounded-lg border bg-muted/20 p-4 sm:text-right">
+                <div
+                  className="
+                    rounded-lg
+                    border
+                    border-border
+                    bg-muted/20
+                    p-4
+
+                    sm:text-right
+                  "
+                >
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Created
                   </p>
 
-                  <p className="mt-1 font-medium">
-                    {format(
-                      new Date(selectedItem.createdAt),
-                      'MMM dd, yyyy'
+                  <p className="mt-1 font-medium text-foreground">
+                    {safeDate(
+                      selectedItem.createdAt,
                     )}
                   </p>
                 </div>
               </div>
 
-              {/* SERVICES */}
-              {selectedItem.appointment?.services &&
-                selectedItem.appointment.services.length > 0 && (
-                  <DetailSection
-                    icon={Tag}
-                    title="Services"
-                    action={
-                      isEditable ? (
-                        <span className="text-xs text-muted-foreground">
-                          Included services
-                        </span>
-                      ) : undefined
+              {/* ==================================================
+                  SERVICES
+              =================================================== */}
+
+              {serviceIds.length >
+                0 && (
+                <DetailSection
+                  icon={
+                    Tag
+                  }
+                  title="Services"
+                  action={
+                    isEditable ? (
+                      <span className="text-xs text-muted-foreground">
+                        Included services
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  <div className="space-y-2">
+                    {serviceIds.map(
+                      (
+                        serviceId,
+                      ) => (
+                        <ServiceCard
+                          key={
+                            serviceId
+                          }
+                          serviceId={
+                            serviceId
+                          }
+                        />
+                      ),
+                    )}
+                  </div>
+
+                  <SubtotalRow
+                    label="Service Subtotal"
+                    amount={
+                      selectedItem.serviceSubtotal
                     }
+                  />
+                </DetailSection>
+              )}
+
+              {/* ==================================================
+                  FINDINGS
+              =================================================== */}
+
+              {findings.length >
+                0 && (
+                <DetailSection
+                  icon={
+                    FileText
+                  }
+                  title="Findings"
+                >
+                  <div className="space-y-2">
+                    {findings.map(
+                      (
+                        finding: any,
+                      ) => {
+                        const parts =
+                          getFindingParts(
+                            finding,
+                          );
+
+                        const findingSubtotal =
+                          getFindingSubtotal(
+                            finding,
+                          );
+
+                        return (
+                          <div
+                            key={
+                              finding.id
+                            }
+                            className={cn(
+                              'rounded-lg border p-3',
+                              finding.included !==
+                                false
+                                ? 'bg-card'
+                                : 'bg-muted/30 opacity-60',
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="min-w-0 whitespace-pre-wrap text-sm font-medium text-foreground">
+                                {
+                                  finding.description
+                                }
+                              </p>
+
+                              <span className="shrink-0 text-xs font-semibold text-foreground">
+                                ₱
+                                {safeCurrency(
+                                  findingSubtotal,
+                                )}
+                              </span>
+                            </div>
+
+                            {parts.length >
+                              0 && (
+                              <div className="mt-3 space-y-1">
+                                {parts.map(
+                                  (
+                                    part: any,
+                                    index: number,
+                                  ) => {
+                                    const quantity =
+                                      Math.max(
+                                        1,
+                                        toSafeNumber(
+                                          part?.quantity,
+                                        ) ||
+                                          1,
+                                      );
+
+                                    const unitPrice =
+                                      Math.max(
+                                        0,
+                                        toSafeNumber(
+                                          part?.priceAtTime ??
+                                            part?.price,
+                                        ),
+                                      );
+
+                                    const totalPrice =
+                                      toSafeNumber(
+                                        part?.totalPrice,
+                                      ) ||
+                                      unitPrice *
+                                        quantity;
+
+                                    return (
+                                      <div
+                                        key={
+                                          part?.id ??
+                                          `${finding.id}-part-${index}`
+                                        }
+                                        className="
+                                          flex
+                                          items-center
+                                          justify-between
+                                          gap-2
+                                          rounded-md
+                                          border
+                                          border-border/60
+                                          bg-muted/20
+                                          px-3
+                                          py-2
+                                        "
+                                      >
+                                        <span className="min-w-0 text-xs text-foreground">
+                                          {
+                                            quantity
+                                          }
+                                          x{' '}
+                                          {
+                                            part?.partName ||
+                                            part?.name ||
+                                            part?.productName ||
+                                            'Part'
+                                          }
+
+                                          {!part?.isPms &&
+                                            ` (₱${safeCurrency(
+                                              unitPrice,
+                                            )} each)`}
+
+                                          {part?.isPms &&
+                                            ' (PMS)'}
+                                        </span>
+
+                                        <div className="flex shrink-0 items-center gap-1">
+                                          <span className="text-xs font-semibold text-foreground">
+                                            ₱
+                                            {safeCurrency(
+                                              totalPrice,
+                                            )}
+                                          </span>
+
+                                          {detailType ===
+                                            'final-bill' &&
+                                            selectedItem?.status ===
+                                              'PENDING' && (
+                                              <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="ghost"
+                                                aria-label="Edit part"
+                                                className="
+                                                  h-8
+                                                  w-8
+                                                  rounded-md
+
+                                                  focus-visible:outline-none
+                                                  focus-visible:ring-2
+                                                  focus-visible:ring-ring
+                                                  focus-visible:ring-offset-2
+                                                "
+                                                onClick={() =>
+                                                  onEditPart(
+                                                    part,
+                                                    finding.id,
+                                                    selectedItem.id,
+                                                  )
+                                                }
+                                              >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                              </Button>
+                                            )}
+                                        </div>
+                                      </div>
+                                    );
+                                  },
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+
+                  <SubtotalRow
+                    label="Findings Subtotal"
+                    amount={
+                      selectedItem.findingsSubtotal
+                    }
+                  />
+                </DetailSection>
+              )}
+
+              {/* ==================================================
+                  INSPECTION TASKS
+              =================================================== */}
+
+              {detailType ===
+                'estimate' &&
+                inspectionTasks.length >
+                  0 && (
+                  <DetailSection
+                    icon={
+                      Wrench
+                    }
+                    title="Completed Inspection Tasks"
                   >
                     <div className="space-y-2">
-                      {selectedItem.appointment.services.map(
-                        (service: any) => (
-                          <ServiceCard
-                            key={service.id}
-                            serviceId={service.id}
+                      {inspectionTasks.map(
+                        (
+                          task: any,
+                          index: number,
+                        ) => (
+                          <TaskRow
+                            key={
+                              task?.id ??
+                              `inspection-task-${index}`
+                            }
+                            title={
+                              task?.title ||
+                              'Inspection Task'
+                            }
+                            duration={
+                              task?.durationMinutes
+                                ? `${task.durationMinutes} min`
+                                : undefined
+                            }
                           />
-                        )
+                        ),
+                      )}
+                    </div>
+                  </DetailSection>
+                )}
+
+              {/* ==================================================
+                  WORK TASKS
+              =================================================== */}
+
+              {detailType ===
+                'final-bill' &&
+                workTasks.length >
+                  0 && (
+                  <DetailSection
+                    icon={
+                      Wrench
+                    }
+                    title="Completed Work Tasks"
+                  >
+                    <div className="space-y-2">
+                      {workTasks.map(
+                        (
+                          task: any,
+                          index: number,
+                        ) => (
+                          <TaskRow
+                            key={
+                              task?.id ??
+                              `work-task-${index}`
+                            }
+                            title={
+                              task?.title ||
+                              task?.name ||
+                              'Work Task'
+                            }
+                          />
+                        ),
                       )}
                     </div>
 
                     <SubtotalRow
-                      label="Service Subtotal"
-                      amount={selectedItem.serviceSubtotal}
-                    />
-                  </DetailSection>
-                )}
-
-              {/* FINDINGS */}
-              {selectedItem.findings &&
-                selectedItem.findings.length > 0 && (
-                  <DetailSection
-                    icon={FileText}
-                    title="Findings"
-                  >
-                    <div className="space-y-2">
-                      {selectedItem.findings.map((finding: any) => (
-                        <div
-                          key={finding.id}
-                          className={cn(
-                            'rounded-lg border p-3',
-                            finding.included
-                              ? 'bg-card'
-                              : 'bg-muted/30 opacity-60'
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm font-medium">
-                              {finding.description}
-                            </p>
-
-                            <span className="shrink-0 text-xs font-semibold">
-                              ₱{formatCurrency(
-                                finding.partsSubtotal
-                              )}
-                            </span>
-                          </div>
-
-                          {finding.parts &&
-                            finding.parts.length > 0 && (
-                              <div className="mt-3 space-y-1">
-                                {finding.parts.map(
-                                  (part: any, idx: number) => (
-                                    <div
-                                      key={idx}
-                                      className="
-                                        flex items-center justify-between
-                                        gap-2 rounded-md border border-border/60
-                                        bg-muted/20 px-3 py-2
-                                      "
-                                    >
-                                      <span className="min-w-0 text-xs">
-                                        {part.quantity}x{' '}
-                                        {part.partName || 'Part'}
-                                        {!part.isPms &&
-                                          ` (₱${formatCurrency(
-                                            part.priceAtTime
-                                          )} each)`}
-                                        {part.isPms && ' (PMS)'}
-                                      </span>
-
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-xs font-semibold">
-                                          ₱{formatCurrency(
-                                            part.totalPrice
-                                          )}
-                                        </span>
-
-                                        {detailType === 'final-bill' &&
-                                          selectedItem?.status ===
-                                            'PENDING' && (
-                                            <Button
-                                              type="button"
-                                              size="icon"
-                                              variant="ghost"
-                                              aria-label="Edit part"
-                                              className="
-                                                h-8 w-8 rounded-md
-                                                focus-visible:outline-none
-                                                focus-visible:ring-2
-                                                focus-visible:ring-ring
-                                                focus-visible:ring-offset-2
-                                              "
-                                              onClick={() =>
-                                                onEditPart(
-                                                  part,
-                                                  finding.id,
-                                                  selectedItem.id
-                                                )
-                                              }
-                                            >
-                                              <Pencil className="h-3.5 w-3.5" />
-                                            </Button>
-                                          )}
-                                      </div>
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            )}
-                        </div>
-                      ))}
-                    </div>
-
-                    <SubtotalRow
-                      label="Findings Subtotal"
-                      amount={selectedItem.findingsSubtotal}
-                    />
-                  </DetailSection>
-                )}
-
-              {/* INSPECTION TASKS */}
-              {detailType === 'estimate' &&
-                selectedItem.tasks &&
-                selectedItem.tasks.length > 0 && (
-                  <DetailSection
-                    icon={Wrench}
-                    title="Completed Inspection Tasks"
-                  >
-                    <div className="space-y-2">
-                      {selectedItem.tasks.map((task: any) => (
-                        <TaskRow
-                          key={task.id}
-                          title={task.title}
-                          duration={
-                            task.durationMinutes
-                              ? `${task.durationMinutes} min`
-                              : undefined
-                          }
-                        />
-                      ))}
-                    </div>
-                  </DetailSection>
-                )}
-
-              {/* WORK TASKS */}
-              {detailType === 'final-bill' &&
-                selectedItem.workTasks &&
-                selectedItem.workTasks.length > 0 && (
-                  <DetailSection
-                    icon={Wrench}
-                    title="Completed Work Tasks"
-                  >
-                    <div className="space-y-2">
-                      {selectedItem.workTasks.map((task: any) => (
-                        <TaskRow
-                          key={task.id}
-                          title={task.title}
-                        />
-                      ))}
-                    </div>
-
-                    <SubtotalRow
                       label="Work Tasks Subtotal"
-                      amount={selectedItem.workTasksSubtotal}
+                      amount={
+                        selectedItem.workTasksSubtotal
+                      }
                     />
                   </DetailSection>
                 )}
 
-              {/* FEES */}
+              {/* ==================================================
+                  FEES
+              =================================================== */}
+
               <DetailSection
-                icon={PlusCircle}
+                icon={
+                  PlusCircle
+                }
                 title="Fees"
                 action={
                   isEditable ? (
@@ -387,11 +1011,21 @@ export default function DetailModal({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setFeeModalOpen(true)}
+                      onClick={() =>
+                        setFeeModalOpen(
+                          true,
+                        )
+                      }
                       className="
-                        h-9 rounded-md px-3 text-xs
-                        focus-visible:outline-none focus-visible:ring-2
-                        focus-visible:ring-ring focus-visible:ring-offset-2
+                        h-9
+                        rounded-md
+                        px-3
+                        text-xs
+
+                        focus-visible:outline-none
+                        focus-visible:ring-2
+                        focus-visible:ring-ring
+                        focus-visible:ring-offset-2
                       "
                     >
                       <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -400,26 +1034,48 @@ export default function DetailModal({
                   ) : undefined
                 }
               >
-                {selectedItem.fees &&
-                selectedItem.fees.length > 0 ? (
+                {fees.length >
+                0 ? (
                   <div className="space-y-2">
-                    {selectedItem.fees.map((fee: any) => (
-                      <div
-                        key={fee.id}
-                        className="
-                          flex items-center justify-between
-                          rounded-lg border bg-muted/20 px-3 py-2.5
-                        "
-                      >
-                        <span className="text-sm font-medium">
-                          {fee.title}
-                        </span>
+                    {fees.map(
+                      (
+                        fee: any,
+                        index: number,
+                      ) => (
+                        <div
+                          key={
+                            fee?.id ??
+                            `fee-${index}`
+                          }
+                          className="
+                            flex
+                            items-center
+                            justify-between
+                            gap-3
+                            rounded-lg
+                            border
+                            border-border
+                            bg-muted/20
+                            px-3
+                            py-2.5
+                          "
+                        >
+                          <span className="min-w-0 text-sm font-medium text-foreground">
+                            {
+                              fee?.title ||
+                              'Fee'
+                            }
+                          </span>
 
-                        <span className="text-sm font-semibold">
-                          ₱{formatCurrency(fee.amount)}
-                        </span>
-                      </div>
-                    ))}
+                          <span className="shrink-0 text-sm font-semibold text-foreground">
+                            ₱
+                            {safeCurrency(
+                              fee?.amount,
+                            )}
+                          </span>
+                        </div>
+                      ),
+                    )}
                   </div>
                 ) : (
                   <EmptyLine text="No fees added." />
@@ -427,13 +1083,20 @@ export default function DetailModal({
 
                 <SubtotalRow
                   label="Fees Total"
-                  amount={selectedItem.feesTotal}
+                  amount={
+                    selectedItem.feesTotal
+                  }
                 />
               </DetailSection>
 
-              {/* DISCOUNTS */}
+              {/* ==================================================
+                  DISCOUNTS
+              =================================================== */}
+
               <DetailSection
-                icon={Percent}
+                icon={
+                  Percent
+                }
                 title="Discounts"
                 action={
                   isEditable ? (
@@ -441,11 +1104,21 @@ export default function DetailModal({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setDiscountModalOpen(true)}
+                      onClick={() =>
+                        setDiscountModalOpen(
+                          true,
+                        )
+                      }
                       className="
-                        h-9 rounded-md px-3 text-xs
-                        focus-visible:outline-none focus-visible:ring-2
-                        focus-visible:ring-ring focus-visible:ring-offset-2
+                        h-9
+                        rounded-md
+                        px-3
+                        text-xs
+
+                        focus-visible:outline-none
+                        focus-visible:ring-2
+                        focus-visible:ring-ring
+                        focus-visible:ring-offset-2
                       "
                     >
                       <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -454,94 +1127,236 @@ export default function DetailModal({
                   ) : undefined
                 }
               >
-                {selectedItem.discounts &&
-                selectedItem.discounts.length > 0 ? (
+                {discounts.length >
+                0 ? (
                   <div className="space-y-2">
-                    {selectedItem.discounts.map(
-                      (discount: any) => (
+                    {discounts.map(
+                      (
+                        discount: any,
+                        index: number,
+                      ) => (
                         <div
-                          key={discount.id}
+                          key={
+                            discount?.id ??
+                            `discount-${index}`
+                          }
                           className="
-                            flex items-center justify-between gap-3
-                            rounded-lg border bg-muted/20 px-3 py-2.5
+                            flex
+                            items-center
+                            justify-between
+                            gap-3
+                            rounded-lg
+                            border
+                            border-border
+                            bg-muted/20
+                            px-3
+                            py-2.5
                           "
                         >
-                          <div>
-                            <span className="text-sm font-medium">
-                              {discount.title}
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium text-foreground">
+                              {
+                                discount?.title ||
+                                'Discount'
+                              }
                             </span>
 
                             <span className="ml-2 text-xs text-muted-foreground">
                               (
-                              {discount.type === 'fixed'
+                              {discount?.type ===
+                              'fixed'
                                 ? 'Fixed'
                                 : 'Percentage'}
                               )
                             </span>
                           </div>
 
-                          <span className="text-sm font-semibold text-red-500">
-                            -₱{formatCurrency(discount.amount)}
+                          <span className="shrink-0 text-sm font-semibold text-red-500">
+                            -₱
+                            {safeCurrency(
+                              Math.abs(
+                                toSafeNumber(
+                                  discount?.amount ??
+                                    discount?.value,
+                                ),
+                              ),
+                            )}
                           </span>
                         </div>
-                      )
+                      ),
                     )}
                   </div>
                 ) : (
                   <EmptyLine text="No discounts applied." />
                 )}
 
-                <div className="flex items-center justify-between border-t pt-3 text-sm font-semibold">
-                  <span>Discount Total</span>
+                <div
+                  className="
+                    flex
+                    items-center
+                    justify-between
+                    border-t
+                    border-border
+                    pt-3
+                    text-sm
+                    font-semibold
+                  "
+                >
+                  <span>
+                    Discount Total
+                  </span>
+
                   <span className="text-red-500">
-                    -₱{formatCurrency(selectedItem.discountTotal)}
+                    -₱
+                    {safeCurrency(
+                      Math.abs(
+                        toSafeNumber(
+                          selectedItem.discountTotal,
+                        ),
+                      ),
+                    )}
                   </span>
                 </div>
               </DetailSection>
 
-              {/* TOTAL */}
-              <div className="rounded-xl border border-primary/20 bg-primary/[0.045] p-4 sm:p-5">
+              {/* ==================================================
+                  GRAND TOTAL
+              =================================================== */}
+
+              <div
+                className="
+                  rounded-xl
+                  border
+                  border-primary/20
+                  bg-primary/[0.045]
+                  p-4
+
+                  sm:p-5
+                "
+              >
                 <div className="flex items-end justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Grand Total
                     </p>
-                    <p className="mt-1 text-lg font-semibold">
+
+                    <p className="mt-1 text-lg font-semibold text-foreground">
                       Amount Due
                     </p>
                   </div>
 
-                  <p className="text-2xl font-semibold tracking-tight text-primary sm:text-3xl">
-                    ₱{formatCurrency(selectedItem.grandTotal)}
+                  <p
+                    className="
+                      text-2xl
+                      font-semibold
+                      tracking-tight
+                      text-primary
+
+                      sm:text-3xl
+                    "
+                  >
+                    ₱
+                    {safeCurrency(
+                      selectedItem.grandTotal,
+                    )}
                   </p>
                 </div>
               </div>
 
+              {/* ==================================================
+                  REASON
+              =================================================== */}
+
               {selectedItem.reason && (
-                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                <div
+                  className="
+                    rounded-lg
+                    border
+                    border-yellow-200
+                    bg-yellow-50
+                    p-3
+                  "
+                >
                   <p className="text-xs font-medium text-yellow-700">
-                    Reason: {selectedItem.reason}
+                    Reason:{' '}
+                    {
+                      selectedItem.reason
+                    }
                   </p>
                 </div>
               )}
             </div>
           ) : (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No details available.
-            </p>
+            <div
+              className="
+                flex
+                min-h-[280px]
+                flex-col
+                items-center
+                justify-center
+                text-center
+              "
+            >
+              <div
+                className="
+                  flex
+                  h-12
+                  w-12
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-muted
+                "
+              >
+                <FileText className="h-5 w-5 text-muted-foreground" />
+              </div>
+
+              <p className="mt-4 text-sm font-semibold text-foreground">
+                No details available
+              </p>
+
+              <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
+                The final-bill information could not be displayed.
+              </p>
+            </div>
           )}
         </div>
 
-        <div className="sticky bottom-0 border-t border-border bg-background/80 p-4 backdrop-blur-xl">
+        {/* ========================================================
+            FOOTER
+        ========================================================= */}
+
+        <div
+          className="
+            shrink-0
+            border-t
+            border-border
+            bg-background/80
+            p-4
+            backdrop-blur-xl
+          "
+        >
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() =>
+                onOpenChange(
+                  false,
+                )
+              }
               className="
-                h-11 w-full rounded-md md:h-9 md:w-auto
-                focus-visible:outline-none focus-visible:ring-2
-                focus-visible:ring-ring focus-visible:ring-offset-2
+                h-11
+                w-full
+                rounded-md
+
+                md:h-9
+                md:w-auto
+
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-ring
+                focus-visible:ring-offset-2
               "
             >
               <Eye className="mr-2 h-4 w-4" />
@@ -554,6 +1369,10 @@ export default function DetailModal({
   );
 }
 
+/* ================================================================
+   DETAIL SECTION
+================================================================ */
+
 function DetailSection({
   icon: Icon,
   title,
@@ -561,73 +1380,183 @@ function DetailSection({
   children,
 }: {
   icon: React.ElementType;
+
   title: string;
+
   action?: React.ReactNode;
+
   children: React.ReactNode;
 }) {
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h4 className="flex items-center gap-2 text-sm font-semibold">
+      <div
+        className="
+          flex
+          items-center
+          justify-between
+          gap-3
+        "
+      >
+        <h4
+          className="
+            flex
+            items-center
+            gap-2
+            text-sm
+            font-semibold
+            text-foreground
+          "
+        >
           <Icon className="h-4 w-4 text-primary" />
-          {title}
+
+          {
+            title
+          }
         </h4>
 
-        {action}
+        {
+          action
+        }
       </div>
 
-      <div className="space-y-3">{children}</div>
+      <div className="space-y-3">
+        {
+          children
+        }
+      </div>
     </section>
   );
 }
+
+/* ================================================================
+   SUBTOTAL
+================================================================ */
 
 function SubtotalRow({
   label,
   amount,
 }: {
   label: string;
-  amount: number;
+
+  amount: unknown;
 }) {
   return (
-    <div className="flex justify-between border-t pt-3 text-sm font-semibold">
-      <span>{label}</span>
-      <span>₱{formatCurrency(amount)}</span>
+    <div
+      className="
+        flex
+        items-center
+        justify-between
+        gap-4
+        border-t
+        border-border
+        pt-3
+        text-sm
+        font-semibold
+      "
+    >
+      <span>
+        {
+          label
+        }
+      </span>
+
+      <span className="shrink-0">
+        ₱
+        {safeCurrency(
+          amount,
+        )}
+      </span>
     </div>
   );
 }
+
+/* ================================================================
+   TASK ROW
+================================================================ */
 
 function TaskRow({
   title,
   duration,
 }: {
   title: string;
+
   duration?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5">
+    <div
+      className="
+        flex
+        items-center
+        gap-3
+        rounded-lg
+        border
+        border-border
+        bg-muted/20
+        px-3
+        py-2.5
+      "
+    >
       <CheckCircle className="h-4 w-4 shrink-0 text-green-600" />
 
-      <span className="min-w-0 flex-1 text-sm font-medium">
-        {title}
+      <span
+        className="
+          min-w-0
+          flex-1
+          text-sm
+          font-medium
+          text-foreground
+        "
+      >
+        {
+          title
+        }
       </span>
 
       {duration && (
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {duration}
+        <span
+          className="
+            shrink-0
+            text-xs
+            text-muted-foreground
+          "
+        >
+          {
+            duration
+          }
         </span>
       )}
     </div>
   );
 }
 
-function EmptyLine({ text }: { text: string }) {
+/* ================================================================
+   EMPTY LINE
+================================================================ */
+
+function EmptyLine({
+  text,
+}: {
+  text: string;
+}) {
   return (
-    <div className="rounded-lg border border-dashed bg-muted/20 px-3 py-4 text-center text-sm italic text-muted-foreground">
-      {text}
+    <div
+      className="
+        rounded-lg
+        border
+        border-dashed
+        border-border
+        bg-muted/20
+        px-3
+        py-4
+        text-center
+        text-sm
+        italic
+        text-muted-foreground
+      "
+    >
+      {
+        text
+      }
     </div>
   );
-}
-
-function ReceiptIcon() {
-  return <ReceiptText className="h-5 w-5 text-primary" />;
 }

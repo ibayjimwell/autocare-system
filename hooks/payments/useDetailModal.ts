@@ -32,13 +32,648 @@ import type {
 } from '@supabase/supabase-js';
 
 /* ================================================================
+   HELPERS
+================================================================ */
+
+/**
+ * Safely extract an API record.
+ *
+ * Supported response shapes:
+ *
+ * {
+ *   data: {...}
+ * }
+ *
+ * {
+ *   data: [{...}]
+ * }
+ *
+ * {
+ *   data: {
+ *     finalBill: {...}
+ *   }
+ * }
+ *
+ * {
+ *   finalBill: {...}
+ * }
+ */
+function unwrapApiRecord(
+  response: any,
+): any | null {
+  if (
+    !response ||
+    response.error
+  ) {
+    return null;
+  }
+
+  let value =
+    response.data ??
+    response;
+
+  if (
+    value &&
+    typeof value ===
+      'object' &&
+    !Array.isArray(value)
+  ) {
+    if (
+      value.finalBill
+    ) {
+      value =
+        value.finalBill;
+    } else if (
+      value.bill
+    ) {
+      value =
+        value.bill;
+    } else if (
+      value.data &&
+      typeof value.data ===
+        'object'
+    ) {
+      value =
+        value.data;
+    }
+  }
+
+  if (
+    Array.isArray(
+      value,
+    )
+  ) {
+    return (
+      value[0] ??
+      null
+    );
+  }
+
+  return value &&
+    typeof value ===
+      'object'
+    ? value
+    : null;
+}
+
+/**
+ * Normalize any array-like API value.
+ */
+function normalizeArray(
+  value: any,
+): any[] {
+  return Array.isArray(
+    value,
+  )
+    ? value
+    : [];
+}
+
+/**
+ * Safely parse a numeric value.
+ */
+function toNumber(
+  value: unknown,
+): number {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return 0;
+  }
+
+  const parsed =
+    Number(
+      value,
+    );
+
+  return Number.isFinite(
+    parsed,
+  )
+    ? parsed
+    : 0;
+}
+
+/**
+ * Normalize appointment services.
+ *
+ * Service values can be:
+ *
+ * {
+ *   id: "..."
+ * }
+ *
+ * or
+ *
+ * "service-id"
+ *
+ * The detail modal only needs a valid service ID.
+ */
+function normalizeServices(
+  value: any,
+): any[] {
+  const services =
+    normalizeArray(
+      value,
+    );
+
+  return services
+    .map(
+      (
+        service: any,
+      ) => {
+        if (
+          typeof service ===
+          'string'
+        ) {
+          return {
+            id: service,
+          };
+        }
+
+        if (
+          !service ||
+          typeof service !==
+            'object'
+        ) {
+          return null;
+        }
+
+        const id =
+          service.id ??
+          service.serviceId;
+
+        if (
+          !id
+        ) {
+          return null;
+        }
+
+        return {
+          ...service,
+          id,
+        };
+      },
+    )
+    .filter(
+      Boolean,
+    );
+}
+
+/**
+ * Normalize final-bill finding parts.
+ *
+ * Some payloads use `parts`.
+ * Older payloads may use `products`.
+ */
+function normalizeFindingParts(
+  finding: any,
+): any[] {
+  const rawParts =
+    Array.isArray(
+      finding?.parts,
+    )
+      ? finding.parts
+      : Array.isArray(
+          finding?.products,
+        )
+        ? finding.products
+        : [];
+
+  return rawParts.map(
+    (
+      part: any,
+      index: number,
+    ) => {
+      const quantity =
+        Math.max(
+          1,
+          toNumber(
+            part?.quantity,
+          ) ||
+            1,
+        );
+
+      const priceAtTime =
+        Math.max(
+          0,
+          toNumber(
+            part?.priceAtTime ??
+              part?.price ??
+              part?.unitPrice,
+          ),
+        );
+
+      const explicitTotal =
+        part?.totalPrice ??
+        part?.amount;
+
+      const calculatedTotal =
+        explicitTotal !==
+          null &&
+        explicitTotal !==
+          undefined &&
+        explicitTotal !==
+          ''
+          ? toNumber(
+              explicitTotal,
+            )
+          : priceAtTime *
+            quantity;
+
+      return {
+        ...part,
+
+        id:
+          part?.id ??
+          `part-${index}`,
+
+        partName:
+          part?.partName ??
+          part?.name ??
+          part?.productName ??
+          'Part',
+
+        quantity,
+
+        priceAtTime,
+
+        totalPrice:
+          calculatedTotal,
+
+        isPms:
+          Boolean(
+            part?.isPms,
+          ),
+      };
+    },
+  );
+}
+
+/**
+ * Normalize final-bill findings.
+ */
+function normalizeFindings(
+  value: any,
+): any[] {
+  return normalizeArray(
+    value,
+  ).map(
+    (
+      finding: any,
+      index: number,
+    ) => {
+      const parts =
+        normalizeFindingParts(
+          finding,
+        );
+
+      const calculatedPartsSubtotal =
+        parts.reduce(
+          (
+            total: number,
+            part: any,
+          ) =>
+            total +
+            toNumber(
+              part.totalPrice,
+            ),
+          0,
+        );
+
+      return {
+        ...finding,
+
+        id:
+          finding?.id ??
+          `finding-${index}`,
+
+        description:
+          finding?.description ??
+          finding?.title ??
+          'Finding',
+
+        included:
+          finding?.included !==
+          false,
+
+        parts,
+
+        partsSubtotal:
+          toNumber(
+            finding?.partsSubtotal,
+          ) ||
+          calculatedPartsSubtotal,
+      };
+    },
+  );
+}
+
+/**
+ * Normalize fees.
+ */
+function normalizeFees(
+  value: any,
+): any[] {
+  return normalizeArray(
+    value,
+  ).map(
+    (
+      fee: any,
+      index: number,
+    ) => ({
+      ...fee,
+
+      id:
+        fee?.id ??
+        `fee-${index}`,
+
+      title:
+        fee?.title ??
+        'Fee',
+
+      amount:
+        toNumber(
+          fee?.amount,
+        ),
+    }),
+  );
+}
+
+/**
+ * Normalize discounts.
+ */
+function normalizeDiscounts(
+  value: any,
+): any[] {
+  return normalizeArray(
+    value,
+  ).map(
+    (
+      discount: any,
+      index: number,
+    ) => ({
+      ...discount,
+
+      id:
+        discount?.id ??
+        `discount-${index}`,
+
+      title:
+        discount?.title ??
+        'Discount',
+
+      type:
+        discount?.type ??
+        'fixed',
+
+      amount:
+        Math.abs(
+          toNumber(
+            discount?.amount ??
+              discount?.value,
+          ),
+        ),
+    }),
+  );
+}
+
+/**
+ * Normalize work tasks.
+ */
+function normalizeWorkTasks(
+  value: any,
+): any[] {
+  return normalizeArray(
+    value,
+  ).map(
+    (
+      task: any,
+      index: number,
+    ) => ({
+      ...task,
+
+      id:
+        task?.id ??
+        `work-task-${index}`,
+
+      title:
+        task?.title ??
+        task?.name ??
+        'Work Task',
+    }),
+  );
+}
+
+/**
+ * Normalize appointment.
+ */
+function normalizeAppointment(
+  value: any,
+): any | null {
+  if (
+    !value ||
+    typeof value !==
+      'object'
+  ) {
+    return null;
+  }
+
+  return {
+    ...value,
+
+    services:
+      normalizeServices(
+        value.services,
+      ),
+  };
+}
+
+/**
+ * Normalize the complete final bill before it reaches React state.
+ */
+function normalizeFinalBill(
+  value: any,
+  fallback: any = null,
+  appointment: any = null,
+): any | null {
+  const source =
+    value ||
+    fallback;
+
+  if (
+    !source ||
+    typeof source !==
+      'object' ||
+    Array.isArray(
+      source,
+    )
+  ) {
+    return fallback &&
+      typeof fallback ===
+        'object'
+      ? {
+          ...fallback,
+        }
+      : null;
+  }
+
+  const sourceAppointment =
+    source.appointment;
+
+  const mergedAppointment =
+    normalizeAppointment({
+      ...(fallback?.appointment ||
+        {}),
+      ...(sourceAppointment ||
+        {}),
+      ...(appointment ||
+        {}),
+    });
+
+  const normalized =
+    {
+      ...fallback,
+      ...source,
+
+      appointment:
+        mergedAppointment,
+
+      findings:
+        normalizeFindings(
+          source.findings ??
+            fallback?.findings,
+        ),
+
+      fees:
+        normalizeFees(
+          source.fees ??
+            fallback?.fees,
+        ),
+
+      discounts:
+        normalizeDiscounts(
+          source.discounts ??
+            fallback?.discounts,
+        ),
+
+      workTasks:
+        normalizeWorkTasks(
+          source.workTasks ??
+            source.tasks ??
+            fallback?.workTasks,
+        ),
+    };
+
+  /*
+   * Keep the original database ID.
+   */
+  if (
+    !normalized.id &&
+    fallback?.id
+  ) {
+    normalized.id =
+      fallback.id;
+  }
+
+  /*
+   * Keep appointment ID available even when the detail endpoint
+   * omits it.
+   */
+  if (
+    !normalized.appointmentId &&
+    fallback?.appointmentId
+  ) {
+    normalized.appointmentId =
+      fallback.appointmentId;
+  }
+
+  /*
+   * Normalize numeric totals into safe values.
+   *
+   * We preserve the field values when supplied by the API.
+   */
+  normalized.serviceSubtotal =
+    toNumber(
+      normalized.serviceSubtotal,
+    );
+
+  normalized.findingsSubtotal =
+    toNumber(
+      normalized.findingsSubtotal,
+    );
+
+  normalized.workTasksSubtotal =
+    toNumber(
+      normalized.workTasksSubtotal,
+    );
+
+  normalized.feesTotal =
+    toNumber(
+      normalized.feesTotal,
+    );
+
+  normalized.discountTotal =
+    toNumber(
+      normalized.discountTotal,
+    );
+
+  normalized.grandTotal =
+    toNumber(
+      normalized.grandTotal,
+    );
+
+  return normalized;
+}
+
+/**
+ * Safely retrieve a fresh appointment.
+ *
+ * Appointment loading is independent from final-bill loading so a
+ * missing appointment response cannot prevent the final bill from
+ * being displayed.
+ */
+async function fetchAppointmentSafely(
+  appointmentId: string | null | undefined,
+): Promise<any | null> {
+  if (
+    !appointmentId
+  ) {
+    return null;
+  }
+
+  try {
+    const response =
+      await appointmentsApi.get(
+        appointmentId,
+      );
+
+    return normalizeAppointment(
+      unwrapApiRecord(
+        response,
+      ),
+    );
+  } catch (
+    error
+  ) {
+    console.error(
+      '[useDetailModal] Failed to load appointment:',
+      error,
+    );
+
+    return null;
+  }
+}
+
+/* ================================================================
    HOOK
 ================================================================ */
 
 export function useDetailModal(
   onSuccess?: () =>
     | void
-    | Promise<void>
+    | Promise<void>,
 ) {
   /* ==============================================================
      MODAL STATE
@@ -55,7 +690,7 @@ export function useDetailModal(
     setSelectedItem,
   ] =
     useState<any>(
-      null
+      null,
     );
 
   const [
@@ -66,7 +701,7 @@ export function useDetailModal(
       | 'estimate'
       | 'final-bill'
     >(
-      'estimate'
+      'estimate',
     );
 
   const [
@@ -84,16 +719,12 @@ export function useDetailModal(
       ReturnType<
         typeof setTimeout
       > | null
-    >(null);
+    >(
+      null,
+    );
 
   /* ==============================================================
      REFRESH DETAIL
-     
-     A realtime event does not manually patch selectedItem.
-     
-     Instead, the hook retrieves the complete current record again.
-     This keeps totals, findings, fees, discounts, parts, and related
-     appointment information synchronized.
   ============================================================== */
 
   const refreshDetail =
@@ -102,6 +733,19 @@ export function useDetailModal(
         if (
           !selectedItem
         ) {
+          return;
+        }
+
+        const recordId =
+          selectedItem?.id;
+
+        if (
+          !recordId
+        ) {
+          console.error(
+            '[useDetailModal] Missing record ID during refresh.',
+          );
+
           return;
         }
 
@@ -114,65 +758,97 @@ export function useDetailModal(
             detailType ===
             'estimate'
           ) {
-            const [
-              estRes,
-              apptRes,
-            ] =
-              await Promise.all([
-                estimatesApi.get(
-                  selectedItem.id
-                ),
+            let estimateRecord =
+              null;
 
-                appointmentsApi.get(
-                  selectedItem.appointmentId
-                ),
-              ]);
+            try {
+              const response =
+                await estimatesApi.get(
+                  recordId,
+                );
+
+              estimateRecord =
+                unwrapApiRecord(
+                  response,
+                );
+            } catch (
+              error
+            ) {
+              console.error(
+                '[useDetailModal] Failed to refresh estimate:',
+                error,
+              );
+            }
 
             if (
-              estRes.error ||
-              !estRes.data
+              !estimateRecord
             ) {
               return;
             }
 
-            const data =
-              estRes.data;
+            const appointmentId =
+              estimateRecord?.appointmentId ??
+              selectedItem?.appointmentId;
 
-            if (
-              !apptRes.error &&
-              apptRes.data
-            ) {
-              data.appointment =
-                {
-                  ...data.appointment,
+            const appointment =
+              await fetchAppointmentSafely(
+                appointmentId,
+              );
 
-                  ...apptRes.data,
+            const normalizedEstimate =
+              {
+                ...selectedItem,
+                ...estimateRecord,
 
-                  services:
-                    apptRes.data
-                      .services ||
-                    [],
-                };
-            }
+                appointment:
+                  {
+                    ...(selectedItem?.appointment ||
+                      {}),
+                    ...(estimateRecord?.appointment ||
+                      {}),
+                    ...(appointment ||
+                      {}),
 
-            data.tasks =
-              data.tasks ||
-              [];
+                    services:
+                      normalizeServices(
+                        appointment
+                          ?.services ??
+                          estimateRecord
+                            ?.appointment
+                            ?.services ??
+                          selectedItem
+                            ?.appointment
+                            ?.services,
+                      ),
+                  },
 
-            data.findings =
-              data.findings ||
-              [];
+                tasks:
+                  normalizeArray(
+                    estimateRecord?.tasks ??
+                      selectedItem?.tasks,
+                  ),
 
-            data.fees =
-              data.fees ||
-              [];
+                findings:
+                  normalizeFindings(
+                    estimateRecord?.findings ??
+                      selectedItem?.findings,
+                  ),
 
-            data.discounts =
-              data.discounts ||
-              [];
+                fees:
+                  normalizeFees(
+                    estimateRecord?.fees ??
+                      selectedItem?.fees,
+                  ),
+
+                discounts:
+                  normalizeDiscounts(
+                    estimateRecord?.discounts ??
+                      selectedItem?.discounts,
+                  ),
+              };
 
             setSelectedItem(
-              data
+              normalizedEstimate,
             );
 
             return;
@@ -182,79 +858,85 @@ export function useDetailModal(
              FINAL BILL
           ======================================================= */
 
-          const [
-            billRes,
-            apptRes,
-          ] =
-            await Promise.all([
-              finalBillsApi.get(
-                selectedItem.id
-              ),
+          let billRecord =
+            null;
 
-              appointmentsApi.get(
-                selectedItem.appointmentId
-              ),
-            ]);
+          try {
+            const response =
+              await finalBillsApi.get(
+                recordId,
+              );
 
+            billRecord =
+              unwrapApiRecord(
+                response,
+              );
+          } catch (
+            error
+          ) {
+            console.error(
+              '[useDetailModal] Failed to refresh final bill:',
+              error,
+            );
+          }
+
+          /*
+           * A failed detail request should NOT destroy the
+           * currently visible bill.
+           */
           if (
-            billRes.error ||
-            !billRes.data
+            !billRecord
           ) {
             return;
           }
 
-          const bill =
-            billRes.data;
+          const appointmentId =
+            billRecord?.appointmentId ??
+            selectedItem?.appointmentId ??
+            selectedItem
+              ?.appointment
+              ?.id;
+
+          const appointment =
+            await fetchAppointmentSafely(
+              appointmentId,
+            );
+
+          const normalizedBill =
+            normalizeFinalBill(
+              billRecord,
+              selectedItem,
+              appointment,
+            );
 
           if (
-            !apptRes.error &&
-            apptRes.data
+            !normalizedBill
           ) {
-            bill.appointment =
-              {
-                ...bill.appointment,
-
-                ...apptRes.data,
-
-                services:
-                  apptRes.data
-                    .services ||
-                  [],
-              };
+            return;
           }
 
-          bill.findings =
-            bill.findings ||
-            [];
-
-          bill.fees =
-            bill.fees ||
-            [];
-
-          bill.discounts =
-            bill.discounts ||
-            [];
-
-          bill.workTasks =
-            bill.workTasks ||
-            [];
-
           setSelectedItem(
-            bill
+            normalizedBill,
           );
         } catch (
-          err
+          error
         ) {
           console.error(
-            'Failed to refresh payment detail:',
-            err
+            '[useDetailModal] Failed to refresh payment detail:',
+            error,
           );
+
+          /*
+           * Do not clear selectedItem here.
+           *
+           * The last known safe record remains visible.
+           */
         }
       },
       [
         selectedItem,
         detailType,
-      ]
+      ],
     );
 
   /* ================================================================
@@ -267,22 +949,72 @@ export function useDetailModal(
         item: any,
         type:
           | 'estimate'
-          | 'final-bill'
+          | 'final-bill',
       ) => {
+        /*
+         * Normalize the list item first so the modal always has a
+         * safe fallback even before the detailed API request finishes.
+         */
+        const fallbackItem =
+          type ===
+          'final-bill'
+            ? normalizeFinalBill(
+                item,
+                item,
+                item?.appointment,
+              )
+            : {
+                ...item,
+
+                appointment:
+                  {
+                    ...(item?.appointment ||
+                      {}),
+                    services:
+                      normalizeServices(
+                        item
+                          ?.appointment
+                          ?.services,
+                      ),
+                  },
+
+                tasks:
+                  normalizeArray(
+                    item?.tasks,
+                  ),
+
+                findings:
+                  normalizeFindings(
+                    item?.findings,
+                  ),
+
+                fees:
+                  normalizeFees(
+                    item?.fees,
+                  ),
+
+                discounts:
+                  normalizeDiscounts(
+                    item?.discounts,
+                  ),
+              };
+
         setDetailLoading(
-          true
+          true,
         );
 
         setSelectedItem(
-          item
+          fallbackItem ||
+            item ||
+            null,
         );
 
         setDetailType(
-          type
+          type,
         );
 
         setDetailModalOpen(
-          true
+          true,
         );
 
         try {
@@ -294,70 +1026,101 @@ export function useDetailModal(
             type ===
             'final-bill'
           ) {
-            const [
-              billRes,
-              apptRes,
-            ] =
-              await Promise.all([
-                finalBillsApi.get(
-                  item.id
-                ),
-
-                appointmentsApi.get(
-                  item.appointmentId
-                ),
-              ]);
+            const billId =
+              item?.id;
 
             if (
-              billRes.error ||
-              !billRes.data
+              !billId
             ) {
               toast.error(
-                billRes.errorMessage ||
-                  'Could not load full bill details.'
+                'This final bill does not have a valid ID.',
               );
 
               return;
             }
 
-            const bill =
-              billRes.data;
+            /*
+             * Load the bill first.
+             *
+             * Appointment loading is independent so that one bad
+             * related request does not break the final bill view.
+             */
+            let billRecord =
+              null;
 
-            if (
-              !apptRes.error &&
-              apptRes.data
+            try {
+              const billResponse =
+                await finalBillsApi.get(
+                  billId,
+                );
+
+              if (
+                billResponse?.error
+              ) {
+                toast.error(
+                  billResponse?.errorMessage ||
+                    'Could not load full bill details.',
+                );
+              } else {
+                billRecord =
+                  unwrapApiRecord(
+                    billResponse,
+                  );
+              }
+            } catch (
+              error: any
             ) {
-              bill.appointment =
-                {
-                  ...bill.appointment,
+              console.error(
+                '[useDetailModal] Final bill request failed:',
+                error,
+              );
 
-                  ...apptRes.data,
-
-                  services:
-                    apptRes.data
-                      .services ||
-                    [],
-                };
+              toast.error(
+                error?.message ||
+                  'Could not load full bill details.',
+              );
             }
 
-            bill.findings =
-              bill.findings ||
-              [];
+            /*
+             * Even if the detail endpoint fails, keep the list
+             * representation visible instead of throwing.
+             */
+            if (
+              !billRecord
+            ) {
+              return;
+            }
 
-            bill.fees =
-              bill.fees ||
-              [];
+            const appointmentId =
+              billRecord?.appointmentId ??
+              item?.appointmentId ??
+              item?.appointment?.id;
 
-            bill.discounts =
-              bill.discounts ||
-              [];
+            const appointment =
+              await fetchAppointmentSafely(
+                appointmentId,
+              );
 
-            bill.workTasks =
-              bill.workTasks ||
-              [];
+            const normalizedBill =
+              normalizeFinalBill(
+                billRecord,
+                fallbackItem ||
+                  item,
+                appointment,
+              );
+
+            if (
+              !normalizedBill
+            ) {
+              toast.error(
+                'The final bill data is invalid.',
+              );
+
+              return;
+            }
 
             setSelectedItem(
-              bill
+              normalizedBill,
             );
 
             return;
@@ -367,118 +1130,181 @@ export function useDetailModal(
              ESTIMATE
           ======================================================= */
 
-          const [
-            estRes,
-            apptRes,
-          ] =
-            await Promise.all([
-              estimatesApi.get(
-                item.id
-              ),
-
-              appointmentsApi.get(
-                item.appointmentId
-              ),
-            ]);
+          const estimateId =
+            item?.id;
 
           if (
-            estRes.error ||
-            !estRes.data
+            !estimateId
           ) {
             toast.error(
-              estRes.errorMessage ||
-                'Could not load estimate details.'
+              'This estimate does not have a valid ID.',
             );
 
             return;
           }
 
-          const data =
-            estRes.data;
+          let estimateRecord =
+            null;
 
-          if (
-            !apptRes.error &&
-            apptRes.data
+          try {
+            const estimateResponse =
+              await estimatesApi.get(
+                estimateId,
+              );
+
+            if (
+              estimateResponse?.error
+            ) {
+              toast.error(
+                estimateResponse?.errorMessage ||
+                  'Could not load estimate details.',
+              );
+            } else {
+              estimateRecord =
+                unwrapApiRecord(
+                  estimateResponse,
+                );
+            }
+          } catch (
+            error: any
           ) {
-            data.appointment =
-              {
-                ...data.appointment,
+            console.error(
+              '[useDetailModal] Estimate request failed:',
+              error,
+            );
 
-                ...apptRes.data,
-
-                services:
-                  apptRes.data
-                    .services ||
-                  [],
-              };
+            toast.error(
+              error?.message ||
+                'Could not load estimate details.',
+            );
           }
 
-          data.tasks =
-            data.tasks ||
-            [];
+          if (
+            !estimateRecord
+          ) {
+            return;
+          }
 
-          data.findings =
-            data.findings ||
-            [];
+          const appointmentId =
+            estimateRecord?.appointmentId ??
+            item?.appointmentId ??
+            item?.appointment?.id;
 
-          data.fees =
-            data.fees ||
-            [];
+          const appointment =
+            await fetchAppointmentSafely(
+              appointmentId,
+            );
 
-          data.discounts =
-            data.discounts ||
-            [];
+          const normalizedEstimate =
+            {
+              ...item,
+              ...estimateRecord,
+
+              appointment:
+                {
+                  ...(item?.appointment ||
+                    {}),
+                  ...(estimateRecord?.appointment ||
+                    {}),
+                  ...(appointment ||
+                    {}),
+
+                  services:
+                    normalizeServices(
+                      appointment
+                        ?.services ??
+                        estimateRecord
+                          ?.appointment
+                          ?.services ??
+                        item
+                          ?.appointment
+                          ?.services,
+                    ),
+                },
+
+              tasks:
+                normalizeArray(
+                  estimateRecord?.tasks ??
+                    item?.tasks,
+                ),
+
+              findings:
+                normalizeFindings(
+                  estimateRecord?.findings ??
+                    item?.findings,
+                ),
+
+              fees:
+                normalizeFees(
+                  estimateRecord?.fees ??
+                    item?.fees,
+                ),
+
+              discounts:
+                normalizeDiscounts(
+                  estimateRecord?.discounts ??
+                    item?.discounts,
+                ),
+            };
 
           setSelectedItem(
-            data
+            normalizedEstimate,
           );
 
           await onSuccess?.();
         } catch (
-          err
+          error
         ) {
           console.error(
-            'Failed to fetch payment details:',
-            err
+            '[useDetailModal] Failed to fetch payment details:',
+            error,
           );
 
+          /*
+           * Keep the existing list record visible.
+           */
+          if (
+            fallbackItem
+          ) {
+            setSelectedItem(
+              fallbackItem,
+            );
+          }
+
           toast.error(
-            'Error loading payment details.'
+            'Error loading payment details.',
           );
         } finally {
           setDetailLoading(
-            false
+            false,
           );
         }
       },
       [
         onSuccess,
-      ]
+      ],
     );
 
   /* ================================================================
      SCHEDULE DETAIL REFRESH
-     
-     Multiple related payment records can change within the same
-     short period. Debounce those events into one complete refresh.
   ================================================================ */
 
   const scheduleDetailRefresh =
     useCallback(
       (
-        payload?: RealtimePostgresChangesPayload<any>
+        payload?: RealtimePostgresChangesPayload<any>,
       ) => {
         console.log(
           '📡 Payment detail realtime change detected:',
           payload?.eventType ||
-            'unknown'
+            'unknown',
         );
 
         if (
           realtimeTimerRef.current
         ) {
           clearTimeout(
-            realtimeTimerRef.current
+            realtimeTimerRef.current,
           );
         }
 
@@ -490,32 +1316,35 @@ export function useDetailModal(
 
               void refreshDetail();
             },
-            120
+            120,
           );
       },
       [
         refreshDetail,
-      ]
+      ],
     );
 
   /* ================================================================
      REALTIME TIMER CLEANUP
   ================================================================ */
 
-  useEffect(() => {
-    return () => {
-      if (
-        realtimeTimerRef.current
-      ) {
-        clearTimeout(
+  useEffect(
+    () => {
+      return () => {
+        if (
           realtimeTimerRef.current
-        );
+        ) {
+          clearTimeout(
+            realtimeTimerRef.current,
+          );
 
-        realtimeTimerRef.current =
-          null;
-      }
-    };
-  }, []);
+          realtimeTimerRef.current =
+            null;
+        }
+      };
+    },
+    [],
+  );
 
   /* ================================================================
      ESTIMATE PARENT
@@ -528,7 +1357,7 @@ export function useDetailModal(
       selectedItem?.id
       ? `id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
@@ -542,7 +1371,7 @@ export function useDetailModal(
       selectedItem?.id
       ? `estimate_id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
@@ -556,7 +1385,7 @@ export function useDetailModal(
       selectedItem?.id
       ? `estimate_id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
@@ -570,19 +1399,11 @@ export function useDetailModal(
       selectedItem?.id
       ? `estimate_id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
      ESTIMATE FINDING PARTS
-     
-     estimate_finding_parts only exposes estimate_finding_id.
-     
-     Because the supplied schema does not provide estimate_id
-     directly on this table, use a global subscription while the
-     currently opened estimate is being viewed.
-     
-     refreshDetail() then retrieves the authoritative estimate.
   ================================================================ */
 
   useRealtimeTable(
@@ -591,7 +1412,7 @@ export function useDetailModal(
     detailType ===
         'estimate'
       ? scheduleDetailRefresh
-      : undefined
+      : undefined,
   );
 
   /* ================================================================
@@ -605,7 +1426,7 @@ export function useDetailModal(
       selectedItem?.id
       ? `id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
@@ -619,7 +1440,7 @@ export function useDetailModal(
       selectedItem?.id
       ? `final_bill_id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
@@ -633,7 +1454,7 @@ export function useDetailModal(
       selectedItem?.id
       ? `final_bill_id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
@@ -647,14 +1468,11 @@ export function useDetailModal(
       selectedItem?.id
       ? `final_bill_id=eq.${selectedItem.id}`
       : undefined,
-    scheduleDetailRefresh
+    scheduleDetailRefresh,
   );
 
   /* ================================================================
      FINAL BILL FINDING PARTS
-     
-     final_bill_finding_parts only exposes final_bill_finding_id,
-     so use a global subscription while a final bill is open.
   ================================================================ */
 
   useRealtimeTable(
@@ -663,7 +1481,7 @@ export function useDetailModal(
     detailType ===
         'final-bill'
       ? scheduleDetailRefresh
-      : undefined
+      : undefined,
   );
 
   /* ================================================================

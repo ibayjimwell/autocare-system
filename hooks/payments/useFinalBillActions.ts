@@ -5,119 +5,74 @@ import {
   useState,
 } from 'react';
 
-import {
-  toast,
-} from 'sonner';
+import { toast } from 'sonner';
 
 import {
   finalBillsApi,
 } from '@/lib/payments/final-bills';
 
-/* ================================================================
-   HOOK
-================================================================ */
-
 export function useFinalBillActions(
-  onSuccess: () =>
-    | void
-    | Promise<void>
+  onSuccess:
+    () => void | Promise<void>,
 ) {
-  /* ==============================================================
-     CASHIER
-  ============================================================== */
-
   const [
     cashierModalOpen,
     setCashierModalOpen,
-  ] =
-    useState(false);
+  ] = useState(false);
 
   const [
     selectedBillForPayment,
     setSelectedBillForPayment,
-  ] =
-    useState<any>(
-      null
-    );
-
-  /* ==============================================================
-     DELETE
-  ============================================================== */
+  ] = useState<any>(null);
 
   const [
     deleteDialogOpen,
     setDeleteDialogOpen,
-  ] =
-    useState(false);
+  ] = useState(false);
 
   const [
     deleteTargetId,
     setDeleteTargetId,
-  ] =
-    useState<string | null>(
-      null
-    );
-
-  /* ==============================================================
-     ACTION LOADING
-  ============================================================== */
+  ] = useState<
+    string | null
+  >(null);
 
   const [
     actionLoading,
     setActionLoading,
-  ] =
-    useState(false);
-
-  /* ==============================================================
-     OPEN CASHIER
-  ============================================================== */
+  ] = useState(false);
 
   const handleOpenCashier =
     useCallback(
-      (
-        bill: any
-      ) => {
+      (bill: any) => {
         setSelectedBillForPayment(
-          bill
+          bill,
         );
 
         setCashierModalOpen(
-          true
+          true,
         );
       },
-      []
+      [],
     );
-
-  /* ==============================================================
-     REQUEST DELETE
-  ============================================================== */
 
   const confirmDelete =
     useCallback(
-      (
-        id: string
-      ) => {
-        setDeleteTargetId(
-          id
-        );
-
+      (id: string) => {
+        setDeleteTargetId(id);
         setDeleteDialogOpen(
-          true
+          true,
         );
       },
-      []
+      [],
     );
-
-  /* ==============================================================
-     DELETE
-  ============================================================== */
 
   const handleDelete =
     useCallback(
       async (
         billType:
           | 'estimates'
-          | 'final-bills'
+          | 'final-bills',
       ) => {
         if (
           !deleteTargetId
@@ -131,90 +86,70 @@ export function useFinalBillActions(
             'estimates'
           ) {
             toast.info(
-              'Estimates cannot be deleted. You can decline them instead.'
+              'Estimates cannot be deleted. You can decline them instead.',
             );
-          } else {
-            const res =
-              await finalBillsApi.delete(
-                deleteTargetId
-              );
 
-            if (
-              res.error
-            ) {
-              toast.error(
-                res.errorMessage ||
-                  'Failed to delete.'
-              );
-            } else {
-              toast.success(
-                'Final bill deleted.'
-              );
-
-              /*
-               * Refresh the current page immediately.
-               *
-               * Other open clients receive the same change through
-               * final_bills realtime subscription.
-               */
-              await onSuccess();
-            }
+            return;
           }
+
+          const res =
+            await finalBillsApi.delete(
+              deleteTargetId,
+            );
+
+          if (res?.error) {
+            toast.error(
+              res.errorMessage ||
+                'Failed to delete.',
+            );
+
+            return;
+          }
+
+          toast.success(
+            'Final bill deleted.',
+          );
+
+          await onSuccess();
         } catch (
-          err: any
+          error: any
         ) {
           toast.error(
-            err?.message ||
-              'Error.'
+            error?.message ||
+              'Error deleting final bill.',
           );
         } finally {
           setDeleteDialogOpen(
-            false
+            false,
           );
 
           setDeleteTargetId(
-            null
+            null,
           );
         }
       },
       [
         deleteTargetId,
         onSuccess,
-      ]
+      ],
     );
-
-  /* ==============================================================
-     UPDATE STATUS
-     
-     Examples:
-       PENDING
-       HOLD
-       OFFICIAL
-     
-     The database UPDATE is detected by the final_bills realtime
-     subscription in usePaymentsData and useDetailModal.
-  ============================================================== */
 
   const updateStatus =
     useCallback(
       async (
         billId: string,
         newStatus: string,
-        parkingFeeRate?: number,
-        parkingFeeUnit?: string
       ) => {
-        if (
-          !billId
-        ) {
+        if (!billId) {
           toast.error(
-            'Missing final bill ID.'
+            'Missing final bill ID.',
           );
 
-          return;
+          return false;
         }
 
         setActionLoading(
-          true
+          true,
         );
 
         try {
@@ -222,49 +157,182 @@ export function useFinalBillActions(
             await finalBillsApi.updateStatus(
               billId,
               newStatus,
-              parkingFeeRate,
-              parkingFeeUnit
             );
 
-          if (
-            res.error
-          ) {
+          if (res?.error) {
             toast.error(
               res.errorMessage ||
-                `Failed to update status to ${newStatus}.`
-            );
-          } else {
-            toast.success(
-              `Bill status updated to ${newStatus}.`
+                `Failed to update status to ${newStatus}.`,
             );
 
-            await onSuccess();
+            return false;
           }
+
+          toast.success(
+            `Bill status updated to ${newStatus}.`,
+          );
+
+          await onSuccess();
+
+          return true;
         } catch (
-          err: any
+          error: any
         ) {
           toast.error(
-            err?.message ||
-              'Error updating status.'
+            error?.message ||
+              'Error updating bill status.',
           );
+
+          return false;
         } finally {
           setActionLoading(
-            false
+            false,
           );
         }
       },
-      [
-        onSuccess,
-      ]
+      [onSuccess],
     );
 
-  /* ==============================================================
-     RETURN
-  ============================================================== */
+  const parkVehicle =
+    useCallback(
+      async (
+        billId: string,
+        addParkingFee: boolean,
+      ) => {
+        if (!billId) {
+          toast.error(
+            'Missing final bill ID.',
+          );
+
+          return false;
+        }
+
+        setActionLoading(
+          true,
+        );
+
+        try {
+          const res =
+            await finalBillsApi.park(
+              billId,
+              addParkingFee,
+            );
+
+          if (res?.error) {
+            toast.error(
+              res.errorMessage ||
+                'Failed to park vehicle.',
+            );
+
+            return false;
+          }
+
+          toast.success(
+            addParkingFee
+              ? 'Vehicle parked. Parking fee is now accumulating.'
+              : 'Vehicle parked without a parking fee.',
+          );
+
+          await onSuccess();
+
+          return true;
+        } catch (
+          error: any
+        ) {
+          toast.error(
+            error?.message ||
+              'Error parking vehicle.',
+          );
+
+          return false;
+        } finally {
+          setActionLoading(
+            false,
+          );
+        }
+      },
+      [onSuccess],
+    );
+
+  const stopParking =
+    useCallback(
+      async (
+        billId: string,
+      ) => {
+        if (!billId) {
+          toast.error(
+            'Missing final bill ID.',
+          );
+
+          return false;
+        }
+
+        setActionLoading(
+          true,
+        );
+
+        try {
+          const res =
+            await finalBillsApi.stopParking(
+              billId,
+            );
+
+          if (res?.error) {
+            toast.error(
+              res.errorMessage ||
+                'Failed to stop parking.',
+            );
+
+            return false;
+          }
+
+          const fee =
+            Number(
+              res?.data
+                ?.parkingFee ||
+                0,
+            );
+
+          const days =
+            Number(
+              res?.data
+                ?.billableDays ||
+                1,
+            );
+
+          toast.success(
+            `Parking stopped. ₱${fee.toFixed(
+              2,
+            )} added for ${days} day${
+              days === 1
+                ? ''
+                : 's'
+            }.`,
+          );
+
+          await onSuccess();
+
+          return true;
+        } catch (
+          error: any
+        ) {
+          toast.error(
+            error?.message ||
+              'Error stopping parking.',
+          );
+
+          return false;
+        } finally {
+          setActionLoading(
+            false,
+          );
+        }
+      },
+      [onSuccess],
+    );
 
   return {
     cashierModalOpen,
-
     setCashierModalOpen,
 
     selectedBillForPayment,
@@ -272,14 +340,15 @@ export function useFinalBillActions(
     handleOpenCashier,
 
     deleteDialogOpen,
-
     setDeleteDialogOpen,
 
     confirmDelete,
-
     handleDelete,
 
     updateStatus,
+
+    parkVehicle,
+    stopParking,
 
     actionLoading,
   };

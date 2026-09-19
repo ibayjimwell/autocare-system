@@ -22,8 +22,6 @@ import {
   Button,
 } from '@/components/ui/button';
 
-import StatusBadge from '@/components/shared/status-badge';
-
 import EmptyState from '@/components/shared/empty-state';
 
 import {
@@ -71,6 +69,146 @@ interface EstimatesListProps {
 }
 
 /* ================================================================
+   STATUS HELPERS
+================================================================ */
+
+function getEstimateStatusHighlight(
+  status: string,
+) {
+  switch (
+    status
+  ) {
+    case 'PENDING':
+      return {
+        wrapper:
+          'border-red-200 bg-red-50 text-red-700',
+        dot:
+          'bg-red-500',
+        row:
+          'bg-red-50/70 hover:bg-red-100/80 border-l-2 border-l-red-400',
+        pulse:
+          'motion-safe:animate-pulse',
+      };
+
+    case 'WAITING_FOR_APPROVAL':
+      return {
+        wrapper:
+          'border-blue-200 bg-blue-50 text-blue-700',
+        dot:
+          'bg-blue-500',
+        row:
+          'bg-blue-50/70 hover:bg-blue-100/80 border-l-2 border-l-blue-400',
+        pulse:
+          '',
+      };
+
+    case 'APPROVED':
+      return {
+        wrapper:
+          'border-green-200 bg-green-50 text-green-700',
+        dot:
+          'bg-green-500',
+        row:
+          'bg-green-50/70 hover:bg-green-100/80 border-l-2 border-l-green-400',
+        pulse:
+          '',
+      };
+
+    case 'DECLINED':
+      return {
+        wrapper:
+          'border-red-200 bg-red-50 text-red-700',
+        dot:
+          'bg-red-500',
+        row:
+          'bg-red-50/70 hover:bg-red-100/80 border-l-2 border-l-red-400',
+        pulse:
+          '',
+      };
+
+    default:
+      return {
+        wrapper:
+          'border-border bg-muted/40 text-muted-foreground',
+        dot:
+          'bg-muted-foreground',
+        row:
+          'bg-muted/30 hover:bg-muted/50 border-l-2 border-l-muted-foreground/30',
+        pulse:
+          '',
+      };
+  }
+}
+
+/* ================================================================
+   STATUS HIGHLIGHT
+================================================================ */
+
+function EstimateStatusHighlight({
+  status,
+}: {
+  status: string;
+}) {
+  const styles =
+    getEstimateStatusHighlight(
+      status,
+    );
+
+  const labelMap: Record<
+    string,
+    string
+  > = {
+    PENDING:
+      'Pending',
+    WAITING_FOR_APPROVAL:
+      'Waiting for Approval',
+    APPROVED:
+      'Approved',
+    DECLINED:
+      'Declined',
+  };
+
+  return (
+    <div
+      className={`
+        inline-flex
+        items-center
+        gap-1.5
+        rounded-full
+        border
+        px-2.5
+        py-1
+
+        text-[10px]
+        font-semibold
+        uppercase
+        tracking-wide
+
+        ${styles.wrapper}
+        ${styles.pulse}
+      `}
+    >
+      <span
+        className={`
+          h-1.5
+          w-1.5
+          shrink-0
+          rounded-full
+          ${styles.dot}
+        `}
+      />
+
+      {
+        labelMap[
+          status
+        ] ||
+        status
+      }
+    </div>
+  );
+}
+
+/* ================================================================
    COMPONENT
 ================================================================ */
 
@@ -95,7 +233,7 @@ export default function EstimatesList({
         description={
           statusFilter !==
           'ALL'
-            ? 'No estimates with the selected status.'
+            ? 'No estimates with the selected filters.'
             : 'Create an estimate from a confirmed appointment.'
         }
       />
@@ -103,11 +241,7 @@ export default function EstimatesList({
   }
 
   return (
-    <div
-      className="
-        space-y-4
-      "
-    >
+    <div className="space-y-4">
       {/* =========================================================
           MOBILE
       ========================================================== */}
@@ -117,6 +251,7 @@ export default function EstimatesList({
           grid
           grid-cols-1
           gap-3
+
           md:hidden
         "
       >
@@ -152,25 +287,26 @@ export default function EstimatesList({
                   )
                 : 'N/A';
 
+            const statusStyles =
+              getEstimateStatusHighlight(
+                est.status,
+              );
+
             return (
               <Card
                 key={
                   est.id
                 }
-                className="
+                className={`
                   overflow-hidden
                   rounded-xl
                   border
-                  border-border
                   bg-card
                   shadow-sm
-                "
+                  ${statusStyles.row}
+                `}
               >
-                <CardContent
-                  className="
-                    p-4
-                  "
-                >
+                <CardContent className="p-4">
                   <div
                     className="
                       flex
@@ -181,80 +317,76 @@ export default function EstimatesList({
                   >
                     <div
                       className="
+                        flex
                         min-w-0
+                        items-center
+                        gap-3
                       "
                     >
                       <div
                         className="
                           flex
+                          h-9
+                          w-9
+                          shrink-0
                           items-center
-                          gap-2
+                          justify-center
+                          rounded-md
+                          border
+                          border-border
+                          bg-muted/40
                         "
                       >
-                        <div
+                        <FileText
                           className="
-                            flex
-                            h-9
-                            w-9
-                            shrink-0
-                            items-center
-                            justify-center
-                            rounded-md
-                            border
-                            border-border
-                            bg-muted/40
+                            h-4
+                            w-4
+                            text-muted-foreground
+                          "
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p
+                          className="
+                            truncate
+                            text-base
+                            font-semibold
+                            text-foreground
                           "
                         >
-                          <FileText
-                            className="
-                              h-4
-                              w-4
-                              text-muted-foreground
-                            "
-                          />
-                        </div>
+                          {
+                            customer
+                          }
+                        </p>
 
-                        <div
+                        <p
                           className="
-                            min-w-0
+                            truncate
+                            font-mono
+                            text-xs
+                            text-muted-foreground
                           "
                         >
-                          <p
-                            className="
-                              truncate
-                              text-base
-                              font-semibold
-                              text-foreground
-                            "
-                          >
-                            {
-                              customer
-                            }
-                          </p>
-
-                          <p
-                            className="
-                              truncate
-                              text-xs
-                              text-muted-foreground
-                            "
-                          >
-                            {
-                              plate
-                            }
-                          </p>
-                        </div>
+                          #
+                          {est.id
+                            .slice(
+                              0,
+                              8,
+                            )
+                            .toUpperCase()}
+                          {' • '}
+                          {
+                            plate
+                          }
+                        </p>
                       </div>
                     </div>
 
-                    <StatusBadge
+                    <EstimateStatusHighlight
                       status={
                         est.status
                       }
-                      className="
-                        shrink-0
-                        text-[10px]
-                      "
                     />
                   </div>
 
@@ -297,11 +429,7 @@ export default function EstimatesList({
                       </p>
                     </div>
 
-                    <div
-                      className="
-                        text-right
-                      "
-                    >
+                    <div className="text-right">
                       <p
                         className="
                           text-[11px]
@@ -330,15 +458,7 @@ export default function EstimatesList({
                     </div>
                   </div>
 
-                  <div
-                    className="
-                      flex
-                      flex-wrap
-                      gap-2
-                    "
-                  >
-                    {/* SEND */}
-
+                  <div className="flex flex-wrap gap-2">
                     {est.status ===
                       'PENDING' && (
                       <Button
@@ -360,19 +480,10 @@ export default function EstimatesList({
                           focus-visible:ring-offset-2
                         "
                       >
-                        <CheckCircle
-                          className="
-                            mr-2
-                            h-4
-                            w-4
-                          "
-                        />
-
+                        <CheckCircle className="mr-2 h-4 w-4" />
                         Send for Approval
                       </Button>
                     )}
-
-                    {/* APPROVE / DECLINE */}
 
                     {est.status ===
                       'WAITING_FOR_APPROVAL' && (
@@ -393,14 +504,7 @@ export default function EstimatesList({
                             hover:bg-primary/90
                           "
                         >
-                          <Check
-                            className="
-                              mr-2
-                              h-4
-                              w-4
-                            "
-                          />
-
+                          <Check className="mr-2 h-4 w-4" />
                           Approve
                         </Button>
 
@@ -418,20 +522,11 @@ export default function EstimatesList({
                             px-4
                           "
                         >
-                          <XCircle
-                            className="
-                              mr-2
-                              h-4
-                              w-4
-                            "
-                          />
-
+                          <XCircle className="mr-2 h-4 w-4" />
                           Decline
                         </Button>
                       </>
                     )}
-
-                    {/* VIEW */}
 
                     <Button
                       type="button"
@@ -442,20 +537,9 @@ export default function EstimatesList({
                           'estimate',
                         )
                       }
-                      className="
-                        h-11
-                        rounded-md
-                        px-4
-                      "
+                      className="h-11 rounded-md px-4"
                     >
-                      <Eye
-                        className="
-                          mr-2
-                          h-4
-                          w-4
-                        "
-                      />
-
+                      <Eye className="mr-2 h-4 w-4" />
                       View
                     </Button>
                   </div>
@@ -483,22 +567,10 @@ export default function EstimatesList({
           md:block
         "
       >
-        <div
-          className="
-            overflow-x-auto
-          "
-        >
+        <div className="overflow-x-auto">
           <Table>
-            <TableHeader
-              className="
-                bg-muted/40
-              "
-            >
-              <TableRow
-                className="
-                  hover:bg-transparent
-                "
-              >
+            <TableHeader className="bg-muted/40">
+              <TableRow className="hover:bg-transparent">
                 <TableHead
                   className="
                     h-11
@@ -592,322 +664,212 @@ export default function EstimatesList({
               {estimates.map(
                 (
                   est,
-                ) => (
-                  <TableRow
-                    key={
-                      est.id
-                    }
-                    className="
-                      group
-                      border-border
-                      hover:bg-muted/20
-                    "
-                  >
-                    <TableCell
-                      className="
-                        px-4
-                        py-3
-                      "
-                    >
-                      <div
-                        className="
-                          flex
-                          items-center
-                          gap-3
-                        "
-                      >
-                        <div
-                          className="
-                            flex
-                            h-8
-                            w-8
-                            items-center
-                            justify-center
-                            rounded-md
-                            border
-                            border-border
-                            bg-muted/40
-                          "
-                        >
-                          <FileText
-                            className="
-                              h-4
-                              w-4
-                              text-muted-foreground
-                            "
-                          />
-                        </div>
+                ) => {
+                  const statusStyles =
+                    getEstimateStatusHighlight(
+                      est.status,
+                    );
 
-                        <div>
-                          <p
+                  return (
+                    <TableRow
+                      key={
+                        est.id
+                      }
+                      className={`
+                        group
+                        transition-colors
+                        ${statusStyles.row}
+                      `}
+                    >
+                      <TableCell className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div
                             className="
-                              font-medium
-                              text-foreground
+                              flex
+                              h-8
+                              w-8
+                              items-center
+                              justify-center
+                              rounded-md
+                              border
+                              border-border
+                              bg-muted/40
                             "
                           >
-                            #
-                            {est.id
-                              .slice(
-                                0,
-                                8,
-                              )
-                              .toUpperCase()}
-                          </p>
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                          </div>
 
-                          <p
-                            className="
-                              text-xs
-                              text-muted-foreground
-                            "
-                          >
-                            {est
-                              .appointment
-                              ?.vehicle
-                              ?.plateNumber ||
-                              'N/A'}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
+                          <div>
+                            <p className="font-mono text-sm font-medium text-foreground">
+                              #
+                              {est.id
+                                .slice(
+                                  0,
+                                  8,
+                                )
+                                .toUpperCase()}
+                            </p>
 
-                    <TableCell
-                      className="
-                        px-4
-                        py-3
-                        text-sm
-                        text-muted-foreground
-                      "
-                    >
-                      {est
-                        .appointment
-                        ?.appointmentDate
-                        ? format(
-                            new Date(
-                              est
+                            <p className="text-xs text-muted-foreground">
+                              {est
                                 .appointment
-                                .appointmentDate,
-                            ),
-                            'MMM dd, yyyy',
-                          )
-                        : 'N/A'}
-                    </TableCell>
+                                ?.vehicle
+                                ?.plateNumber ||
+                                'N/A'}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
 
-                    <TableCell
-                      className="
-                        px-4
-                        py-3
-                      "
-                    >
-                      <p
-                        className="
-                          font-medium
-                          text-foreground
-                        "
-                      >
+                      <TableCell className="px-4 py-3 text-sm text-muted-foreground">
                         {est
                           .appointment
-                          ?.customer
-                          ?.fullname ||
-                          'Customer'}
-                      </p>
-                    </TableCell>
+                          ?.appointmentDate
+                          ? format(
+                              new Date(
+                                est
+                                  .appointment
+                                  .appointmentDate,
+                              ),
+                              'MMM dd, yyyy',
+                            )
+                          : 'N/A'}
+                      </TableCell>
 
-                    <TableCell
-                      className="
-                        px-4
-                        py-3
-                      "
-                    >
-                      <StatusBadge
-                        status={
-                          est.status
-                        }
-                        className="
-                          text-[10px]
-                        "
-                      />
-                    </TableCell>
+                      <TableCell className="px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground">
+                            {est
+                              .appointment
+                              ?.customer
+                              ?.fullname ||
+                              'Customer'}
+                          </p>
 
-                    <TableCell
-                      className="
-                        px-4
-                        py-3
-                        text-right
-                      "
-                    >
-                      <span
-                        className="
-                          font-semibold
-                          text-primary
-                        "
-                      >
-                        ₱
-                        {formatCurrency(
-                          est.grandTotal,
-                        )}
-                      </span>
-                    </TableCell>
+                          {est
+                            .appointment
+                            ?.trackingNumber && (
+                            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                              {
+                                est
+                                  .appointment
+                                  .trackingNumber
+                              }
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
 
-                    <TableCell
-                      className="
-                        px-4
-                        py-3
-                      "
-                    >
-                      <div
-                        className="
-                          flex
-                          items-center
-                          justify-end
-                          gap-1
-                        "
-                      >
-                        {/* SEND */}
+                      <TableCell className="px-4 py-3">
+                        <EstimateStatusHighlight
+                          status={
+                            est.status
+                          }
+                        />
+                      </TableCell>
 
-                        {est.status ===
-                          'PENDING' && (
+                      <TableCell className="px-4 py-3 text-right">
+                        <span className="font-semibold text-primary">
+                          ₱
+                          {formatCurrency(
+                            est.grandTotal,
+                          )}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          {est.status ===
+                            'PENDING' && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                onRequestSendForApproval(
+                                  est,
+                                )
+                              }
+                              className="
+                                h-8
+                                rounded-md
+                                text-xs
+                              "
+                            >
+                              <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                              Send
+                            </Button>
+                          )}
+
+                          {est.status ===
+                            'WAITING_FOR_APPROVAL' && (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() =>
+                                  onRequestApprove(
+                                    est,
+                                  )
+                                }
+                                className="
+                                  h-8
+                                  rounded-md
+                                  bg-primary
+                                  text-xs
+                                  text-primary-foreground
+                                  hover:bg-primary/90
+                                "
+                              >
+                                <Check className="mr-1.5 h-3.5 w-3.5" />
+                                Approve
+                              </Button>
+
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                onClick={() =>
+                                  onRequestDecline(
+                                    est,
+                                  )
+                                }
+                                className="
+                                  h-8
+                                  rounded-md
+                                  text-xs
+                                "
+                              >
+                                <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                                Decline
+                              </Button>
+                            </>
+                          )}
+
                           <Button
                             type="button"
-                            size="sm"
-                            variant="outline"
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`View estimate ${est.id}`}
                             onClick={() =>
-                              onRequestSendForApproval(
+                              onOpenDetail(
                                 est,
+                                'estimate',
                               )
                             }
                             className="
                               h-8
+                              w-8
                               rounded-md
-                              text-xs
-
-                              focus-visible:outline-none
-                              focus-visible:ring-2
-                              focus-visible:ring-ring
-                              focus-visible:ring-offset-2
                             "
                           >
-                            <CheckCircle
-                              className="
-                                mr-1.5
-                                h-3.5
-                                w-3.5
-                              "
-                            />
-
-                            Send
+                            <Eye className="h-4 w-4" />
                           </Button>
-                        )}
-
-                        {/* APPROVE / DECLINE */}
-
-                        {est.status ===
-                          'WAITING_FOR_APPROVAL' && (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() =>
-                                onRequestApprove(
-                                  est,
-                                )
-                              }
-                              className="
-                                h-8
-                                rounded-md
-                                bg-primary
-                                text-xs
-                                text-primary-foreground
-                                hover:bg-primary/90
-                              "
-                            >
-                              <Check
-                                className="
-                                  mr-1.5
-                                  h-3.5
-                                  w-3.5
-                                "
-                              />
-
-                              Approve
-                            </Button>
-
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="destructive"
-                              onClick={() =>
-                                onRequestDecline(
-                                  est,
-                                )
-                              }
-                              className="
-                                h-8
-                                rounded-md
-                                text-xs
-                              "
-                            >
-                              <XCircle
-                                className="
-                                  mr-1.5
-                                  h-3.5
-                                  w-3.5
-                                "
-                              />
-
-                              Decline
-                            </Button>
-                          </>
-                        )}
-
-                        {/* VIEW */}
-
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`View estimate ${est.id}`}
-                          onClick={() =>
-                            onOpenDetail(
-                              est,
-                              'estimate',
-                            )
-                          }
-                          className="
-                            h-8
-                            w-8
-                            rounded-md
-                          "
-                        >
-                          <Eye
-                            className="
-                              h-4
-                              w-4
-                            "
-                          />
-                        </Button>
-
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          aria-label="More actions"
-                          className="
-                            h-8
-                            w-8
-                            rounded-md
-                          "
-                        >
-                          <MoreHorizontal
-                            className="
-                              h-4
-                              w-4
-                            "
-                          />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ),
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                },
               )}
             </TableBody>
           </Table>
@@ -916,24 +878,23 @@ export default function EstimatesList({
         <div
           className="
             flex
-            items-center
-            justify-between
+            flex-col
+            gap-1
             border-t
             border-border
             px-4
             py-3
             text-xs
             text-muted-foreground
+
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
           "
         >
           <span>
             Showing{' '}
-            <span
-              className="
-                font-medium
-                text-foreground
-              "
-            >
+            <span className="font-medium text-foreground">
               {
                 estimates.length
               }
@@ -946,7 +907,7 @@ export default function EstimatesList({
           </span>
 
           <span>
-            Updated from current payment data
+            Status priority is always applied first.
           </span>
         </div>
       </Card>

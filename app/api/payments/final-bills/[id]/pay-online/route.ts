@@ -6,6 +6,9 @@ import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 import { createPaymongoPaymentLink } from '@/lib/paymongo';
 
+// --------------------------------------------------------------
+// POST /api/payments/final-bills/[id]/pay-online
+// --------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
