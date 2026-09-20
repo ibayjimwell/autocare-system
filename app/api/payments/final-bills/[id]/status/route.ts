@@ -1,68 +1,148 @@
-// app/api/payments/final-bills/[id]/status/route.ts
+import {
+  NextRequest,
+  NextResponse,
+} from 'next/server';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { Database } from '@/lib/drizzle';
-import { FinalBill } from '@/database/models/payments/final-bill.model';
-import { FinalBillFees } from '@/database/models/payments/final-bill-fees.model';
-import { Configurations } from '@/database/models/configurations/configurations.model';
-import { eq, and } from 'drizzle-orm';
-import { isValidUUID } from '@/utils/shared';
-import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
-import { paymentsTriggers } from '@/triggers/payments';
-import { mobilePaymentsTriggers } from '@/app-triggers/payments';
+import {
+  Database,
+} from '@/lib/drizzle';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+import {
+  FinalBill,
+} from '@/database/models/payments/final-bill.model';
 
-const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  PENDING: ['PARKED', 'OFFICIAL'],
-  PARKED: ['PENDING'],
-  OFFICIAL: ['PAID'],
+import {
+  FinalBillFees,
+} from '@/database/models/payments/final-bill-fees.model';
+
+import {
+  Configurations,
+} from '@/database/models/configurations/configurations.model';
+
+import {
+  eq,
+  and,
+} from 'drizzle-orm';
+
+import {
+  isValidUUID,
+} from '@/utils/shared';
+
+import {
+  getAppointmentInfo,
+} from '@/utils/payments/get-appointment-info';
+
+import {
+  paymentsTriggers,
+} from '@/triggers/payments';
+
+import {
+  mobilePaymentsTriggers,
+} from '@/app-triggers/payments';
+
+const DAY_MS =
+  24 * 60 * 60 * 1000;
+
+const ALLOWED_TRANSITIONS: Record<
+  string,
+  string[]
+> = {
+  PENDING: [
+    'PARKED',
+    'OFFICIAL',
+  ],
+
+  PARKED: [
+    'PENDING',
+  ],
+
+  OFFICIAL: [
+    'PAID',
+  ],
+
   PAID: [],
 };
 
 class ParkingStateError extends Error {
-  code = 'PARKING_STATE_CHANGED';
+  code =
+    'PARKING_STATE_CHANGED';
 }
 
-function toMoney(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+function toMoney(
+  value: unknown,
+): number {
+  const parsed =
+    Number(value);
+
+  return Number.isFinite(
+    parsed,
+  )
+    ? parsed
+    : 0;
 }
 
-function getBillableDays(startedAt: Date, now: Date): number {
-  const diffMs = Math.max(0, now.getTime() - startedAt.getTime());
+function getBillableDays(
+  startedAt: Date,
+  now: Date,
+): number {
+  const diffMs =
+    Math.max(
+      0,
+      now.getTime() -
+        startedAt.getTime(),
+    );
 
-  /*
-   * Billing rule:
-   *
-   * - Parking is ALWAYS billed in whole days.
-   * - Any partial day counts as one day.
-   * - A session shorter than 24 hours is still one billable day.
-   */
-  return Math.max(1, Math.ceil(diffMs / DAY_MS));
+  return Math.max(
+    1,
+    Math.ceil(
+      diffMs / DAY_MS,
+    ),
+  );
 }
 
 async function getPaymentConfig() {
-  const [configRow] = await Database.select()
-    .from(Configurations)
-    .where(eq(Configurations.module, 'payments'));
+  const [
+    configRow,
+  ] =
+    await Database
+      .select()
+      .from(
+        Configurations,
+      )
+      .where(
+        eq(
+          Configurations.module,
+          'payments',
+        ),
+      );
 
   const raw =
-    configRow?.config && typeof configRow.config === 'object'
+    configRow?.config &&
+    typeof configRow.config ===
+      'object'
       ? (configRow.config as any)
       : {};
 
-  const parkingFeeRaw = Number(
-    raw.parkingFeePerDay ??
-      raw.parkingFee ??
-      raw.parkingRate ??
-      0,
-  );
+  const parkingFeeRaw =
+    Number(
+      raw.parkingFeePerDay ??
+        raw.parkingFee ??
+        raw.parkingRate ??
+        0,
+    );
 
   return {
-    parkingFeePerDay: Number.isFinite(parkingFeeRaw)
-      ? Math.max(0, Math.round(parkingFeeRaw * 100) / 100)
-      : 0,
+    parkingFeePerDay:
+      Number.isFinite(
+        parkingFeeRaw,
+      )
+        ? Math.max(
+            0,
+            Math.round(
+              parkingFeeRaw * 100,
+            ) / 100,
+          )
+        : 0,
   };
 }
 
@@ -71,71 +151,251 @@ async function notifyStatusChange(
   newStatus: string,
 ) {
   try {
-    const info = await getAppointmentInfo(bill.appointmentId);
+    const info =
+      await getAppointmentInfo(
+        bill.appointmentId,
+      );
 
-    paymentsTriggers.onFinalBillStatusChanged({
-      trackingNumber: info.trackingNumber,
-      customerName: info.customerName,
-      newStatus,
-    }).catch(console.error);
+    paymentsTriggers
+      .onFinalBillStatusChanged({
+        trackingNumber:
+          info.trackingNumber,
 
-    /*
-     * Preserve the existing trigger function name so older trigger
-     * implementations keep working. The stored bill status and the
-     * UI are now PARKED.
-     */
-    if (newStatus === 'PARKED') {
-      mobilePaymentsTriggers.onFinalBillHold({
-        customerId: info.customerId,
-        trackingNumber: info.trackingNumber,
-        appointmentId: bill.appointmentId,
-        billId: bill.id,
-      }).catch(console.error);
+        customerName:
+          info.customerName,
+
+        newStatus,
+      })
+      .catch(console.error);
+
+    if (
+      newStatus ===
+      'PARKED'
+    ) {
+      mobilePaymentsTriggers
+        .onFinalBillHold({
+          customerId:
+            info.customerId,
+
+          trackingNumber:
+            info.trackingNumber,
+
+          appointmentId:
+            bill.appointmentId,
+
+          billId:
+            bill.id,
+        })
+        .catch(console.error);
     }
 
-    if (newStatus === 'PAID') {
-      mobilePaymentsTriggers.onFinalBillPaid({
-        customerId: info.customerId,
-        trackingNumber: info.trackingNumber,
-        appointmentId: bill.appointmentId,
-        billId: bill.id,
-      }).catch(console.error);
+    if (
+      newStatus ===
+      'PAID'
+    ) {
+      mobilePaymentsTriggers
+        .onFinalBillPaid({
+          customerId:
+            info.customerId,
 
-      paymentsTriggers.onPaymentCompleted({
-        trackingNumber: info.trackingNumber,
-        customerName: info.customerName,
-      }).catch(console.error);
+          trackingNumber:
+            info.trackingNumber,
+
+          appointmentId:
+            bill.appointmentId,
+
+          billId:
+            bill.id,
+        })
+        .catch(console.error);
+
+      paymentsTriggers
+        .onPaymentCompleted({
+          trackingNumber:
+            info.trackingNumber,
+
+          customerName:
+            info.customerName,
+        })
+        .catch(console.error);
     }
   } catch (error) {
-    console.error('[final-bill-status] notification error:', error);
+    console.error(
+      '[final-bill-status] notification error:',
+      error,
+    );
   }
 }
 
-export async function PATCH(
+/* ================================================================
+   GET CURRENT STATUS
+================================================================ */
+
+export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+    params,
+  }: {
+    params: Promise<{
+      id: string;
+    }>;
+  },
 ) {
-  const { id } = await params;
+  const { id } =
+    await params;
 
   if (!isValidUUID(id)) {
     return NextResponse.json(
-      { error: true, errorMessage: 'Invalid bill ID' },
-      { status: 400 },
+      {
+        error: true,
+        errorMessage:
+          'Invalid bill ID',
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  try {
+    const [bill] =
+      await Database
+        .select({
+          id:
+            FinalBill.id,
+
+          status:
+            FinalBill.status,
+
+          grandTotal:
+            FinalBill.grandTotal,
+
+          parkedAt:
+            FinalBill.parkedAt,
+
+          parkingFeeEnabled:
+            FinalBill.parkingFeeEnabled,
+
+          parkingFeeRate:
+            FinalBill.parkingFeeRate,
+
+          updatedAt:
+            FinalBill.updatedAt,
+        })
+        .from(FinalBill)
+        .where(
+          eq(
+            FinalBill.id,
+            id,
+          ),
+        )
+        .limit(1);
+
+    if (!bill) {
+      return NextResponse.json(
+        {
+          error: true,
+          errorMessage:
+            'Final bill not found.',
+        },
+        {
+          status: 404,
+        },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: false,
+        message:
+          'Final bill status retrieved.',
+        data: bill,
+      },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control':
+            'no-store, max-age=0',
+        },
+      },
+    );
+  } catch (error) {
+    console.error(
+      '[GET /api/payments/final-bills/[id]/status] Error:',
+      error,
+    );
+
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: 'dbe',
+        errorTitle:
+          'Database error',
+        errorMessage:
+          'Could not retrieve bill status.',
+        errorLog:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      },
+      {
+        status: 500,
+      },
+    );
+  }
+}
+
+/* ================================================================
+   PATCH STATUS
+================================================================ */
+
+export async function PATCH(
+  req: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{
+      id: string;
+    }>;
+  },
+) {
+  const { id } =
+    await params;
+
+  if (!isValidUUID(id)) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Invalid bill ID',
+      },
+      {
+        status: 400,
+      },
     );
   }
 
   let body: any;
+
   try {
-    body = await req.json();
+    body =
+      await req.json();
   } catch {
     return NextResponse.json(
-      { error: true, errorMessage: 'Invalid JSON' },
-      { status: 400 },
+      {
+        error: true,
+        errorMessage:
+          'Invalid JSON',
+      },
+      {
+        status: 400,
+      },
     );
   }
 
   const requestedStatus =
-    typeof body?.status === 'string'
+    typeof body?.status ===
+    'string'
       ? body.status.toUpperCase()
       : '';
 
@@ -146,129 +406,207 @@ export async function PATCH(
     'PAID',
   ];
 
-  if (!validStatuses.includes(requestedStatus)) {
+  if (
+    !validStatuses.includes(
+      requestedStatus,
+    )
+  ) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
           'Invalid status. Allowed: PENDING, PARKED, OFFICIAL, PAID.',
       },
-      { status: 422 },
+      {
+        status: 422,
+      },
     );
   }
 
   try {
-    const [bill] = await Database.select()
-      .from(FinalBill)
-      .where(eq(FinalBill.id, id));
+    const [bill] =
+      await Database
+        .select()
+        .from(FinalBill)
+        .where(
+          eq(
+            FinalBill.id,
+            id,
+          ),
+        );
 
     if (!bill) {
       return NextResponse.json(
         {
           error: true,
-          errorMessage: 'Final bill not found.',
+          errorMessage:
+            'Final bill not found.',
         },
-        { status: 404 },
+        {
+          status: 404,
+        },
       );
     }
 
-    const currentStatus = bill.status;
+    const currentStatus =
+      bill.status;
 
-    if (currentStatus === requestedStatus) {
+    if (
+      currentStatus ===
+      requestedStatus
+    ) {
       return NextResponse.json(
         {
           error: true,
-          errorMessage: `Bill is already ${requestedStatus}.`,
+          errorMessage:
+            `Bill is already ${requestedStatus}.`,
         },
-        { status: 422 },
+        {
+          status: 422,
+        },
       );
     }
 
-    const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
+    const allowed =
+      ALLOWED_TRANSITIONS[
+        currentStatus
+      ] || [];
 
-    if (!allowed.includes(requestedStatus)) {
+    if (
+      !allowed.includes(
+        requestedStatus,
+      )
+    ) {
       return NextResponse.json(
         {
           error: true,
           errorMessage:
             `Cannot transition from ${currentStatus} to ${requestedStatus}.`,
         },
-        { status: 422 },
+        {
+          status: 422,
+        },
       );
     }
 
     /* ============================================================
-       PARK VEHICLE
        PENDING -> PARKED
     ============================================================ */
-    if (requestedStatus === 'PARKED') {
-      const config = await getPaymentConfig();
-      const addParkingFee = body?.addParkingFee !== false;
-      const now = new Date();
-      const snapshotRate = addParkingFee
-        ? config.parkingFeePerDay
-        : 0;
 
-      const updated = await Database.update(FinalBill)
-        .set({
-          status: 'PARKED',
-          parkedAt: now,
-          parkingFeeEnabled: addParkingFee,
-          parkingFeeRate: snapshotRate.toFixed(2),
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(FinalBill.id, id),
-            eq(FinalBill.status, 'PENDING'),
-          ),
-        )
-        .returning();
+    if (
+      requestedStatus ===
+      'PARKED'
+    ) {
+      const config =
+        await getPaymentConfig();
 
-      if (updated.length === 0) {
+      const addParkingFee =
+        body?.addParkingFee !==
+        false;
+
+      const now =
+        new Date();
+
+      const snapshotRate =
+        addParkingFee
+          ? config.parkingFeePerDay
+          : 0;
+
+      const updated =
+        await Database
+          .update(FinalBill)
+          .set({
+            status:
+              'PARKED',
+
+            parkedAt:
+              now,
+
+            parkingFeeEnabled:
+              addParkingFee,
+
+            parkingFeeRate:
+              snapshotRate.toFixed(
+                2,
+              ),
+
+            updatedAt:
+              now,
+          })
+          .where(
+            and(
+              eq(
+                FinalBill.id,
+                id,
+              ),
+
+              eq(
+                FinalBill.status,
+                'PENDING',
+              ),
+            ),
+          )
+          .returning();
+
+      if (
+        updated.length === 0
+      ) {
         return NextResponse.json(
           {
             error: true,
             errorMessage:
               'This Final Bill was changed by another user. Refresh and try again.',
           },
-          { status: 409 },
+          {
+            status: 409,
+          },
         );
       }
 
-      await notifyStatusChange(updated[0], 'PARKED');
+      await notifyStatusChange(
+        updated[0],
+        'PARKED',
+      );
 
       return NextResponse.json(
         {
           error: false,
-          message: 'Vehicle parked successfully.',
+
+          message:
+            'Vehicle parked successfully.',
+
           data: {
             id,
-            status: 'PARKED',
-            parkingFeeEnabled: addParkingFee,
-            parkingFeeRate: snapshotRate,
-            parkedAt: now.toISOString(),
+
+            status:
+              'PARKED',
+
+            parkingFeeEnabled:
+              addParkingFee,
+
+            parkingFeeRate:
+              snapshotRate,
+
+            parkedAt:
+              now.toISOString(),
           },
         },
-        { status: 200 },
+        {
+          status: 200,
+        },
       );
     }
 
     /* ============================================================
-       STOP PARKING
        PARKED -> PENDING
-
-       Calculation rule:
-       - whole billable days
-       - any partial day counts as one day
-       - minimum is one day
-
-       The complete stop operation is wrapped in a transaction so a
-       second concurrent request cannot create a duplicate parking fee.
+       STOP PARKING
     ============================================================ */
+
     if (
-      requestedStatus === 'PENDING' &&
-      currentStatus === 'PARKED'
+      requestedStatus ===
+        'PENDING' &&
+      currentStatus ===
+        'PARKED'
     ) {
       let parkingResult: {
         bill: any;
@@ -279,96 +617,215 @@ export async function PATCH(
       };
 
       try {
-        parkingResult = await Database.transaction(async (tx) => {
-          const [currentBill] = await tx
-            .select()
-            .from(FinalBill)
-            .where(eq(FinalBill.id, id));
+        parkingResult =
+          await Database.transaction(
+            async tx => {
+              const [
+                currentBill,
+              ] =
+                await tx
+                  .select()
+                  .from(
+                    FinalBill,
+                  )
+                  .where(
+                    eq(
+                      FinalBill.id,
+                      id,
+                    ),
+                  );
 
-          if (!currentBill || currentBill.status !== 'PARKED') {
-            throw new ParkingStateError(
-              'This vehicle is no longer parked. Refresh the Final Bill and try again.',
-            );
-          }
+              if (
+                !currentBill ||
+                currentBill.status !==
+                  'PARKED'
+              ) {
+                throw new ParkingStateError(
+                  'This vehicle is no longer parked. Refresh the Final Bill and try again.',
+                );
+              }
 
-          if (!currentBill.parkedAt) {
-            throw new ParkingStateError(
-              'Parked vehicle has no parking start time.',
-            );
-          }
+              if (
+                !currentBill.parkedAt
+              ) {
+                throw new ParkingStateError(
+                  'Parked vehicle has no parking start time.',
+                );
+              }
 
-          const parkedAt = new Date(currentBill.parkedAt);
+              const parkedAt =
+                new Date(
+                  currentBill.parkedAt,
+                );
 
-          if (Number.isNaN(parkedAt.getTime())) {
-            throw new ParkingStateError(
-              'Parking start time is invalid.',
-            );
-          }
+              if (
+                Number.isNaN(
+                  parkedAt.getTime(),
+                )
+              ) {
+                throw new ParkingStateError(
+                  'Parking start time is invalid.',
+                );
+              }
 
-          const now = new Date();
-          const billableDays = getBillableDays(parkedAt, now);
-          const rate = currentBill.parkingFeeEnabled
-            ? toMoney(currentBill.parkingFeeRate)
-            : 0;
-          const parkingFee = Math.round(rate * billableDays * 100) / 100;
+              const now =
+                new Date();
 
-          let nextFeesTotal = toMoney(currentBill.feesTotal);
-          let nextGrandTotal = toMoney(currentBill.grandTotal);
+              const billableDays =
+                getBillableDays(
+                  parkedAt,
+                  now,
+                );
 
-          if (parkingFee > 0) {
-            await tx.insert(FinalBillFees).values({
-              finalBillId: id,
-              title: `Parking Fee (${billableDays} day${billableDays === 1 ? '' : 's'})`,
-              amount: parkingFee.toFixed(2),
-            });
+              const rate =
+                currentBill
+                  .parkingFeeEnabled
+                  ? toMoney(
+                      currentBill.parkingFeeRate,
+                    )
+                  : 0;
 
-            nextFeesTotal =
-              Math.round((nextFeesTotal + parkingFee) * 100) / 100;
-            nextGrandTotal =
-              Math.round((nextGrandTotal + parkingFee) * 100) / 100;
-          }
+              const parkingFee =
+                Math.round(
+                  rate *
+                    billableDays *
+                    100,
+                ) / 100;
 
-          const [updatedBill] = await tx
-            .update(FinalBill)
-            .set({
-              status: 'PENDING',
-              parkedAt: null,
-              parkingFeeEnabled: false,
-              parkingFeeRate: null,
-              feesTotal: nextFeesTotal.toFixed(2),
-              grandTotal: nextGrandTotal.toFixed(2),
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(FinalBill.id, id),
-                eq(FinalBill.status, 'PARKED'),
-              ),
-            )
-            .returning();
+              let nextFeesTotal =
+                toMoney(
+                  currentBill.feesTotal,
+                );
 
-          if (!updatedBill) {
-            throw new ParkingStateError(
-              'This vehicle was already unparked by another user. Refresh the Final Bill and try again.',
-            );
-          }
+              let nextGrandTotal =
+                toMoney(
+                  currentBill.grandTotal,
+                );
 
-          return {
-            bill: updatedBill,
-            billableDays,
-            parkingFee,
-            rate,
-            parkedAt,
-          };
-        });
+              if (
+                parkingFee > 0
+              ) {
+                await tx
+                  .insert(
+                    FinalBillFees,
+                  )
+                  .values({
+                    finalBillId:
+                      id,
+
+                    title:
+                      `Parking Fee (${billableDays} day${
+                        billableDays ===
+                        1
+                          ? ''
+                          : 's'
+                      })`,
+
+                    amount:
+                      parkingFee.toFixed(
+                        2,
+                      ),
+                  });
+
+                nextFeesTotal =
+                  Math.round(
+                    (nextFeesTotal +
+                      parkingFee) *
+                      100,
+                  ) / 100;
+
+                nextGrandTotal =
+                  Math.round(
+                    (nextGrandTotal +
+                      parkingFee) *
+                      100,
+                  ) / 100;
+              }
+
+              const [
+                updatedBill,
+              ] =
+                await tx
+                  .update(
+                    FinalBill,
+                  )
+                  .set({
+                    status:
+                      'PENDING',
+
+                    parkedAt:
+                      null,
+
+                    parkingFeeEnabled:
+                      false,
+
+                    parkingFeeRate:
+                      null,
+
+                    feesTotal:
+                      nextFeesTotal.toFixed(
+                        2,
+                      ),
+
+                    grandTotal:
+                      nextGrandTotal.toFixed(
+                        2,
+                      ),
+
+                    updatedAt:
+                      now,
+                  })
+                  .where(
+                    and(
+                      eq(
+                        FinalBill.id,
+                        id,
+                      ),
+
+                      eq(
+                        FinalBill.status,
+                        'PARKED',
+                      ),
+                    ),
+                  )
+                  .returning();
+
+              if (
+                !updatedBill
+              ) {
+                throw new ParkingStateError(
+                  'This vehicle was already unparked by another user. Refresh the Final Bill and try again.',
+                );
+              }
+
+              return {
+                bill:
+                  updatedBill,
+
+                billableDays,
+
+                parkingFee,
+
+                rate,
+
+                parkedAt,
+              };
+            },
+          );
       } catch (error) {
-        if (error instanceof ParkingStateError) {
+        if (
+          error instanceof
+          ParkingStateError
+        ) {
           return NextResponse.json(
             {
               error: true,
-              errorMessage: error.message,
+              errorMessage:
+                error.message,
             },
-            { status: 409 },
+            {
+              status: 409,
+            },
           );
         }
 
@@ -383,60 +840,101 @@ export async function PATCH(
       return NextResponse.json(
         {
           error: false,
-          message: 'Parking stopped successfully.',
+
+          message:
+            'Parking stopped successfully.',
+
           data: {
             id,
-            status: 'PENDING',
-            billableDays: parkingResult.billableDays,
-            parkingFee: parkingResult.parkingFee,
-            rate: parkingResult.rate,
-            parkedAt: parkingResult.parkedAt,
+
+            status:
+              'PENDING',
+
+            billableDays:
+              parkingResult.billableDays,
+
+            parkingFee:
+              parkingResult.parkingFee,
+
+            rate:
+              parkingResult.rate,
+
+            parkedAt:
+              parkingResult.parkedAt,
           },
         },
-        { status: 200 },
+        {
+          status: 200,
+        },
       );
     }
 
     /* ============================================================
        OTHER TRANSITIONS
     ============================================================ */
-    const updated = await Database.update(FinalBill)
-      .set({
-        status: requestedStatus,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(FinalBill.id, id),
-          eq(FinalBill.status, currentStatus),
-        ),
-      )
-      .returning();
 
-    if (updated.length === 0) {
+    const updated =
+      await Database
+        .update(FinalBill)
+        .set({
+          status:
+            requestedStatus,
+
+          updatedAt:
+            new Date(),
+        })
+        .where(
+          and(
+            eq(
+              FinalBill.id,
+              id,
+            ),
+
+            eq(
+              FinalBill.status,
+              currentStatus,
+            ),
+          ),
+        )
+        .returning();
+
+    if (
+      updated.length === 0
+    ) {
       return NextResponse.json(
         {
           error: true,
           errorMessage:
             'This Final Bill was changed by another user. Refresh and try again.',
         },
-        { status: 409 },
+        {
+          status: 409,
+        },
       );
     }
 
-    await notifyStatusChange(updated[0], requestedStatus);
+    await notifyStatusChange(
+      updated[0],
+      requestedStatus,
+    );
 
     return NextResponse.json(
       {
         error: false,
+
         message:
           `Final bill status updated to ${requestedStatus}.`,
+
         data: {
           id,
-          status: requestedStatus,
+
+          status:
+            requestedStatus,
         },
       },
-      { status: 200 },
+      {
+        status: 200,
+      },
     );
   } catch (error) {
     console.error(
@@ -448,11 +946,18 @@ export async function PATCH(
       {
         error: true,
         errorType: 'dbe',
-        errorTitle: 'Database error',
-        errorMessage: 'Could not update bill status.',
-        errorLog: error instanceof Error ? error.message : String(error),
+        errorTitle:
+          'Database error',
+        errorMessage:
+          'Could not update bill status.',
+        errorLog:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
-      { status: 500 },
+      {
+        status: 500,
+      },
     );
   }
 }
