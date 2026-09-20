@@ -491,7 +491,7 @@ function normalizeAppointment(
 }
 
 /**
- * Normalize the complete final bill before it reaches React state.
+ * Normalize the complete Final Cost before it reaches React state.
  */
 function normalizeFinalBill(
   value: any,
@@ -631,7 +631,7 @@ function normalizeFinalBill(
  * Safely retrieve a fresh appointment.
  *
  * Appointment loading is independent from final-bill loading so a
- * missing appointment response cannot prevent the final bill from
+ * missing appointment response cannot prevent the Final Cost from
  * being displayed.
  */
 async function fetchAppointmentSafely(
@@ -855,7 +855,7 @@ export function useDetailModal(
           }
 
           /* ======================================================
-             FINAL BILL
+             Final Cost
           ======================================================= */
 
           let billRecord =
@@ -875,7 +875,7 @@ export function useDetailModal(
             error
           ) {
             console.error(
-              '[useDetailModal] Failed to refresh final bill:',
+              '[useDetailModal] Failed to refresh Final Cost:',
               error,
             );
           }
@@ -1019,7 +1019,7 @@ export function useDetailModal(
 
         try {
           /* ======================================================
-             FINAL BILL
+             Final Cost
           ======================================================= */
 
           if (
@@ -1033,7 +1033,7 @@ export function useDetailModal(
               !billId
             ) {
               toast.error(
-                'This final bill does not have a valid ID.',
+                'This Final Cost does not have a valid ID.',
               );
 
               return;
@@ -1043,7 +1043,7 @@ export function useDetailModal(
              * Load the bill first.
              *
              * Appointment loading is independent so that one bad
-             * related request does not break the final bill view.
+             * related request does not break the Final Cost view.
              */
             let billRecord =
               null;
@@ -1071,7 +1071,7 @@ export function useDetailModal(
               error: any
             ) {
               console.error(
-                '[useDetailModal] Final bill request failed:',
+                '[useDetailModal] Final Cost request failed:',
                 error,
               );
 
@@ -1113,7 +1113,7 @@ export function useDetailModal(
               !normalizedBill
             ) {
               toast.error(
-                'The final bill data is invalid.',
+                'The Final Cost data is invalid.',
               );
 
               return;
@@ -1416,7 +1416,7 @@ export function useDetailModal(
   );
 
   /* ================================================================
-     FINAL BILL PARENT
+     Final Cost PARENT
   ================================================================ */
 
   useRealtimeTable(
@@ -1430,7 +1430,7 @@ export function useDetailModal(
   );
 
   /* ================================================================
-     FINAL BILL FEES
+     Final Cost FEES
   ================================================================ */
 
   useRealtimeTable(
@@ -1444,7 +1444,7 @@ export function useDetailModal(
   );
 
   /* ================================================================
-     FINAL BILL DISCOUNTS
+     Final Cost DISCOUNTS
   ================================================================ */
 
   useRealtimeTable(
@@ -1458,7 +1458,7 @@ export function useDetailModal(
   );
 
   /* ================================================================
-     FINAL BILL FINDINGS
+     Final Cost FINDINGS
   ================================================================ */
 
   useRealtimeTable(
@@ -1472,7 +1472,7 @@ export function useDetailModal(
   );
 
   /* ================================================================
-     FINAL BILL FINDING PARTS
+     Final Cost FINDING PARTS
   ================================================================ */
 
   useRealtimeTable(

@@ -26,7 +26,7 @@ export const finalBillsApi = {
       const bills = Array.isArray(res?.data) ? res.data : [];
       const matches = bills.filter((bill: any) => String(bill?.id || '').trim().toUpperCase().slice(0, 8) === normalized);
       if (matches.length === 0) return { error: true, errorMessage: `Bill ID "${normalized}" was not found.`, data: null };
-      if (matches.length > 1) return { error: true, errorMessage: `Bill ID "${normalized}" matches multiple final bills. Please scan the QR code instead.`, data: null };
+      if (matches.length > 1) return { error: true, errorMessage: `Bill ID "${normalized}" matches multiple Final Costs. Please scan the QR code instead.`, data: null };
       return { error: false, data: matches[0].id };
     } catch (error: any) {
       return { error: true, errorMessage: error?.message || 'Failed to look up the Bill ID.', data: null };

@@ -23,7 +23,7 @@ export async function GET(
     const [bill] = await Database.select().from(FinalBill).where(eq(FinalBill.id, id)).limit(1);
 
     if (!bill) {
-      return NextResponse.json({ error: true, errorMessage: 'Final bill not found' }, { status: 404 });
+      return NextResponse.json({ error: true, errorMessage: 'Final Cost not found' }, { status: 404 });
     }
 
     const [findings, fees, discounts, workTasks] = await Promise.all([
@@ -42,7 +42,7 @@ export async function GET(
     };
 
     return NextResponse.json(
-      { error: false, message: 'Final bill retrieved.', data },
+      { error: false, message: 'Final Cost retrieved.', data },
       { status: 200 }
     );
   } catch (e) {
@@ -52,7 +52,7 @@ export async function GET(
         error: true,
         errorType: 'dbe',
         errorTitle: 'Database error',
-        errorMessage: 'Unable to fetch final bill.',
+        errorMessage: 'Unable to fetch Final Cost.',
         errorLog: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

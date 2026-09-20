@@ -67,7 +67,7 @@ export async function POST(
         {
           error: true,
           errorMessage:
-            'Final bill not found',
+            'Final Cost not found',
         },
         {
           status: 404,
@@ -123,7 +123,7 @@ export async function POST(
         {
           error: true,
           errorMessage:
-            'Final bill has an invalid payment amount.',
+            'Final Cost has an invalid payment amount.',
         },
         {
           status: 422,
@@ -150,7 +150,7 @@ export async function POST(
         description,
 
         remarks:
-          `Final bill ${bill.id}`,
+          `Final Cost ${bill.id}`,
       });
 
     return NextResponse.json(

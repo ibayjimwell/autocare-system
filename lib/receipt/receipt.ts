@@ -16,7 +16,7 @@ export async function getReceiptByFinalBill(
   if (!finalBillId) {
     return {
       error: true,
-      errorMessage: 'Missing final bill ID.',
+      errorMessage: 'Missing Final Cost ID.',
     };
   }
 

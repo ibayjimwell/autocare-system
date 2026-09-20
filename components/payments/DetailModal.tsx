@@ -374,7 +374,7 @@ function getFindingSubtotal(
 }
 
 /**
- * Safely get the final bill findings.
+ * Safely get the Final Cost findings.
  */
 function getFindings(
   selectedItem: any,
@@ -567,7 +567,7 @@ export default function DetailModal({
                 {detailType ===
                 'estimate'
                   ? 'Estimate Details'
-                  : 'Final Bill Details'}
+                  : 'Final Cost Details'}
               </span>
 
               {selectedItem && (

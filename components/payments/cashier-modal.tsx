@@ -147,7 +147,7 @@ export default function CashierModal({
         safeTotalAmount <= 0
       ) {
         toast.error(
-          'This final bill has an invalid total amount.',
+          'This Final Cost has an invalid total amount.',
         );
 
         return;

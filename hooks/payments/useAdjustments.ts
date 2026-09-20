@@ -997,7 +997,7 @@ export function useAdjustments({
     );
 
   /* ================================================================
-     FINAL BILL PART EDIT
+     Final Cost PART EDIT
   ================================================================ */
 
   const [
@@ -1040,7 +1040,7 @@ export function useAdjustments({
     });
 
   /* ================================================================
-     OPEN FINAL BILL PART EDIT
+     OPEN Final Cost PART EDIT
   ================================================================ */
 
   const handleEditPartOpen =
@@ -1082,7 +1082,7 @@ export function useAdjustments({
     );
 
   /* ================================================================
-     SAVE FINAL BILL PART
+     SAVE Final Cost PART
   ================================================================ */
 
   const handleEditPartSave =
@@ -1223,7 +1223,7 @@ export function useAdjustments({
 
     confirmDeleteAdjustment,
 
-    /* Final Bill Part */
+    /* Final Cost Part */
     editPartModalOpen,
 
     setEditPartModalOpen,

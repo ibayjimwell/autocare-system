@@ -12,7 +12,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 
 // --------------------------------------------------------------
-// GET /api/payments/final-bills – Get final bills with optional filters
+// GET /api/payments/final-bills – Get Final Costs with optional filters
 // --------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json(
-      { error: false, message: "Final bills retrieved.", data },
+      { error: false, message: "Final Costs retrieved.", data },
       { status: 200 }
     );
   } catch (e) {
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
         error: true,
         errorType: "dbe",
         errorTitle: "Database error",
-        errorMessage: "Unable to fetch final bills.",
+        errorMessage: "Unable to fetch Final Costs.",
         errorLog: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

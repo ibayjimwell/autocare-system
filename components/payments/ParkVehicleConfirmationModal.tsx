@@ -61,7 +61,7 @@ export default function ParkVehicleConfirmationModal({
               <div>
                 <p className="text-sm font-semibold text-amber-900">Vehicle will be marked as Parked</p>
                 <p className="mt-1 text-xs leading-5 text-amber-800/80">
-                  Parking time starts now. When parking is stopped, the system calculates the final parking fee using whole billable days and adds it to the Final Bill fees.
+                  Parking time starts now. When parking is stopped, the system calculates the final parking fee using whole billable days and adds it to the Final Cost fees.
                 </p>
               </div>
             </div>

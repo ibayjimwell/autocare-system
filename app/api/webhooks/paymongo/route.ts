@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   const remarks = event.data.attributes.data?.attributes?.remarks || '';
-  const match = remarks.match(/^Final bill (.+)$/);
+  const match = remarks.match(/^Final Cost (.+)$/);
   if (!match) {
     console.error('[Webhook] Could not parse bill ID from remarks:', remarks);
     return NextResponse.json({ error: true, message: 'Invalid remarks' }, { status: 400 });
@@ -53,11 +53,11 @@ export async function POST(req: NextRequest) {
   const billId = match[1];
 
   try {
-    // Fetch the final bill with appointment to get tracking number and customer
+    // Fetch the Final Cost with appointment to get tracking number and customer
     const [bill] = await Database.select().from(FinalBill).where(eq(FinalBill.id, billId)).limit(1);
 
     if (!bill) {
-      return NextResponse.json({ error: true, message: 'Final bill not found' }, { status: 404 });
+      return NextResponse.json({ error: true, message: 'Final Cost not found' }, { status: 404 });
     }
 
     if (bill.status === 'PAID') {

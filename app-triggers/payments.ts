@@ -67,52 +67,52 @@ export const mobilePaymentsTriggers = {
   },
 
   /**
-   * Customer – Final bill generated (Pending status)
+   * Customer – Final Cost generated (Pending status)
    * Triggered when In Progress is completed.
    */
   async onFinalBillGenerated(payload: PaymentTriggerPayload) {
-    const title = '🧾 Final Bill Generated';
-    const body = `Your final bill for appointment #${payload.trackingNumber} has been generated and is pending review.`;
+    const title = '🧾 Final Cost Generated';
+    const body = `Your Final Cost for appointment #${payload.trackingNumber} has been generated and is pending review.`;
     await sendPushToCustomer(payload.customerId, title, body, {
       url: getAppointmentLink(payload.appointmentId),
     });
   },
 
   /**
-   * Customer – Final bill on Hold
+   * Customer – Final Cost on Hold
    */
   async onFinalBillHold(payload: PaymentTriggerPayload) {
-    const title = '⏸️ Final Bill on Hold';
-    const body = `The final bill for appointment #${payload.trackingNumber} has been placed on hold. Parking fees may apply.`;
+    const title = '⏸️ Final Cost on Hold';
+    const body = `The Final Cost for appointment #${payload.trackingNumber} has been placed on hold. Parking fees may apply.`;
     await sendPushToCustomer(payload.customerId, title, body, {
       url: getBillLink(payload.billId),
     });
   },
 
   /**
-   * Customer – Final bill back to Pending (Unhold)
+   * Customer – Final Cost back to Pending (Unhold)
    */
   async onFinalBillBackToPending(payload: PaymentTriggerPayload) {
-    const title = '🔄 Final Bill Unhold';
-    const body = `The hold on the final bill for appointment #${payload.trackingNumber} has been removed.`;
+    const title = '🔄 Final Cost Unhold';
+    const body = `The hold on the Final Cost for appointment #${payload.trackingNumber} has been removed.`;
     await sendPushToCustomer(payload.customerId, title, body, {
       url: getBillLink(payload.billId),
     });
   },
 
   /**
-   * Customer – Final bill sent for payment (Official)
+   * Customer – Final Cost sent for payment (Official)
    */
   async onFinalBillOfficial(payload: PaymentTriggerPayload) {
-    const title = '📋 Final Bill Ready for Payment';
-    const body = `The final bill for appointment #${payload.trackingNumber} is now official and ready for payment.`;
+    const title = '📋 Final Cost Ready for Payment';
+    const body = `The Final Cost for appointment #${payload.trackingNumber} is now official and ready for payment.`;
     await sendPushToCustomer(payload.customerId, title, body, {
       url: getBillLink(payload.billId),
     });
   },
 
   /**
-   * Customer – Final bill paid (Online or Cash)
+   * Customer – Final Cost paid (Online or Cash)
    */
   async onFinalBillPaid(payload: PaymentTriggerPayload) {
     const title = '💰 Payment Successful';

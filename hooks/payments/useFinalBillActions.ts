@@ -107,7 +107,7 @@ export function useFinalBillActions(
           }
 
           toast.success(
-            'Final bill deleted.',
+            'Final Cost deleted.',
           );
 
           await onSuccess();
@@ -116,7 +116,7 @@ export function useFinalBillActions(
         ) {
           toast.error(
             error?.message ||
-              'Error deleting final bill.',
+              'Error deleting Final Cost.',
           );
         } finally {
           setDeleteDialogOpen(
@@ -142,7 +142,7 @@ export function useFinalBillActions(
       ) => {
         if (!billId) {
           toast.error(
-            'Missing final bill ID.',
+            'Missing Final Cost ID.',
           );
 
           return false;
@@ -201,7 +201,7 @@ export function useFinalBillActions(
       ) => {
         if (!billId) {
           toast.error(
-            'Missing final bill ID.',
+            'Missing Final Cost ID.',
           );
 
           return false;
@@ -261,7 +261,7 @@ export function useFinalBillActions(
       ) => {
         if (!billId) {
           toast.error(
-            'Missing final bill ID.',
+            'Missing Final Cost ID.',
           );
 
           return false;

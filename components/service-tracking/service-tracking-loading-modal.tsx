@@ -39,7 +39,7 @@ const ACTION_CONTENT: Record<
   COMPLETE_WORK: {
     title: "Completing Job",
     description:
-      "Please wait while the final bill is being generated and the job is being completed.",
+      "Please wait while the Final Cost is being generated and the job is being completed.",
     icon: Wrench,
   },
 };

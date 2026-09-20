@@ -42,38 +42,38 @@ export const paymentsTriggers = {
   },
 
   async onFinalBillGenerated(payload: PaymentPayload) {
-    const title = '🧾 Final Bill Generated';
+    const title = '🧾 Final Cost Generated';
     const body = payload.customerName
-      ? `Final bill for #${payload.trackingNumber} (${payload.customerName}) is ready.`
-      : `Final bill for #${payload.trackingNumber} is ready.`;
+      ? `Final Cost for #${payload.trackingNumber} (${payload.customerName}) is ready.`
+      : `Final Cost for #${payload.trackingNumber} is ready.`;
     await triggerPush('payments', 'final-bill-generated', title, body, '/payments');
   },
 
   async onFinalBillStatusChanged(payload: PaymentPayload) {
     const statusMap: Record<string, { title: string; body: string }> = {
       HOLD: {
-        title: '⏸️ Final Bill on Hold',
+        title: '⏸️ Final Cost on Hold',
         body: payload.customerName
-          ? `Final bill for #${payload.trackingNumber} (${payload.customerName}) has been put on hold.`
-          : `Final bill for #${payload.trackingNumber} has been put on hold.`,
+          ? `Final Cost for #${payload.trackingNumber} (${payload.customerName}) has been put on hold.`
+          : `Final Cost for #${payload.trackingNumber} has been put on hold.`,
       },
       OFFICIAL: {
-        title: '📋 Final Bill Made Official',
+        title: '📋 Final Cost Made Official',
         body: payload.customerName
-          ? `Final bill for #${payload.trackingNumber} (${payload.customerName}) is now official.`
-          : `Final bill for #${payload.trackingNumber} is now official.`,
+          ? `Final Cost for #${payload.trackingNumber} (${payload.customerName}) is now official.`
+          : `Final Cost for #${payload.trackingNumber} is now official.`,
       },
       PAID: {
-        title: '💰 Final Bill Paid',
+        title: '💰 Final Cost Paid',
         body: payload.customerName
           ? `Payment for #${payload.trackingNumber} (${payload.customerName}) has been completed.`
           : `Payment for #${payload.trackingNumber} has been completed.`,
       },
       PENDING: {
-        title: '🔄 Final Bill Back to Pending',
+        title: '🔄 Final Cost Back to Pending',
         body: payload.customerName
-          ? `Final bill for #${payload.trackingNumber} (${payload.customerName}) is back to pending.`
-          : `Final bill for #${payload.trackingNumber} is back to pending.`,
+          ? `Final Cost for #${payload.trackingNumber} (${payload.customerName}) is back to pending.`
+          : `Final Cost for #${payload.trackingNumber} is back to pending.`,
       },
     };
 

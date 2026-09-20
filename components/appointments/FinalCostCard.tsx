@@ -44,7 +44,7 @@ export default function FinalCostCard({
       <Card className="rounded-xl border-border bg-card opacity-50 shadow-sm">
         <CardContent className="p-5">
           <p className="text-xs text-muted-foreground">
-            The final bill is available after the appointment is completed.
+            The Final Cost is available after the appointment is completed.
           </p>
         </CardContent>
       </Card>
@@ -58,11 +58,11 @@ export default function FinalCostCard({
           <ReceiptText className="mx-auto h-6 w-6 text-muted-foreground/50" />
 
           <p className="mt-2 text-sm font-medium text-foreground">
-            No final bill available
+            No Final Cost available
           </p>
 
           <p className="mt-1 text-xs text-muted-foreground">
-            A final bill has not been generated for this appointment.
+            A Final Cost has not been generated for this appointment.
           </p>
         </CardContent>
       </Card>
@@ -90,7 +90,7 @@ export default function FinalCostCard({
 
             <div>
               <h3 className="text-sm font-semibold text-foreground">
-                Final Bill
+                Final Cost
               </h3>
 
               <p className="text-xs text-muted-foreground">
@@ -143,7 +143,7 @@ export default function FinalCostCard({
             0 && (
             <div className="rounded-lg border border-border bg-background p-4">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Final Bill Findings
+                Final Cost Findings
               </p>
 
               <div className="space-y-2">
@@ -216,7 +216,7 @@ export default function FinalCostCard({
             0 && (
             <div className="rounded-lg border border-border bg-background p-4">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Final Bill Fees
+                Final Cost Fees
               </p>
 
               <div className="space-y-2">

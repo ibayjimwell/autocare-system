@@ -42,7 +42,7 @@ export async function POST(
       .where(eq(FinalBill.id, billId));
     if (!bill) {
       return NextResponse.json(
-        { error: true, errorMessage: 'Final bill not found.' },
+        { error: true, errorMessage: 'Final Cost not found.' },
         { status: 404 }
       );
     }

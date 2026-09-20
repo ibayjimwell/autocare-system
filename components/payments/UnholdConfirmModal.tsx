@@ -75,7 +75,7 @@ export default function UnholdConfirmModal({
           </div>
 
           <p className="text-sm text-muted-foreground">
-            This fee will be added to the final bill. Do you want to continue?
+            This fee will be added to the Final Cost. Do you want to continue?
           </p>
         </div>
 

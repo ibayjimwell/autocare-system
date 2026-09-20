@@ -47,7 +47,7 @@ export default function PaymentsTabs({
           "
         >
           <ReceiptText className="mr-2 h-4 w-4" />
-          Final Bills
+          Final Costs
         </TabsTrigger>
       </TabsList>
     </Tabs>

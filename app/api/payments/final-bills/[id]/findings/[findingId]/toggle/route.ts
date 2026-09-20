@@ -4,7 +4,7 @@ import { FinalBillFindings } from "@/database/models/payments/final-bill-finding
 import { FinalBill } from "@/database/models/payments/final-bill.model";
 import { eq, and } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
-// We'll need a helper to recalculate final bill totals. For simplicity, we'll implement a simple recalculation here or import from a utils file.
+// We'll need a helper to recalculate Final Cost totals. For simplicity, we'll implement a simple recalculation here or import from a utils file.
 
 // ---------------------------------------------------------------
 // PATCH /api/payments/finall-bills/:id/findings/:findingId/toggle
@@ -38,7 +38,7 @@ export async function PATCH(
           error: true,
           errorType: "auth",
           errorTitle: "Bill not found",
-          errorMessage: "Final bill does not exist.",
+          errorMessage: "Final Cost does not exist.",
           errorLog: null,
         },
         { status: 404 },
@@ -83,7 +83,7 @@ export async function PATCH(
       .set({ included: !finding.included })
       .where(eq(FinalBillFindings.id, findingId));
 
-    // Recalculate final bill totals (simple version)
+    // Recalculate Final Cost totals (simple version)
     // We'll fetch all findings (included only) and sum their partsSubtotal
     const allFindings = await Database.select()
       .from(FinalBillFindings)

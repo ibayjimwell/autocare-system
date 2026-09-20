@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     if (receipts.length === 0) {
       return NextResponse.json(
-        { error: true, errorMessage: "No receipt found for this final bill" },
+        { error: true, errorMessage: "No receipt found for this Final Cost" },
         { status: 404 }
       );
     }

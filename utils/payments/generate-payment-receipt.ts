@@ -31,9 +31,9 @@ export async function generatePaymentReceipt(billId: string): Promise<{
   referenceNumber: string;
   receiptData: any;
 }> {
-  // 1. Fetch the final bill
+  // 1. Fetch the Final Cost
   const [bill] = await Database.select().from(FinalBill).where(eq(FinalBill.id, billId)).limit(1);
-  if (!bill) throw new Error('Final bill not found');
+  if (!bill) throw new Error('Final Cost not found');
   if (bill.status === 'PAID') throw new Error('Bill already paid');
 
   // 2. Fetch all related data (same as the cash pay route)

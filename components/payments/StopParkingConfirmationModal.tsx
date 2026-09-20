@@ -47,7 +47,7 @@ export default function StopParkingConfirmationModal({
             Stop Parking?
           </DialogTitle>
           <DialogDescription className="text-sm leading-6">
-            Confirm that the vehicle is leaving the parking state. The system will add the calculated parking charge to the Final Bill fees.
+            Confirm that the vehicle is leaving the parking state. The system will add the calculated parking charge to the Final Cost fees.
           </DialogDescription>
         </DialogHeader>
 
@@ -82,7 +82,7 @@ export default function StopParkingConfirmationModal({
           <div className="flex items-start gap-2 rounded-lg border border-border bg-background p-3">
             <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <p className="text-xs leading-5 text-muted-foreground">
-              This action ends parking and permanently adds the calculated parking fee as a Final Bill fee. The bill then returns to Pending so staff can send the final cost when ready.
+              This action ends parking and permanently adds the calculated parking fee as a Final Cost fee. The bill then returns to Pending so staff can send the final cost when ready.
             </p>
           </div>
         </div>

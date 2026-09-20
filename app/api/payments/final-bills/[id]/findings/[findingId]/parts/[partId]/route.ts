@@ -29,7 +29,7 @@ export async function PATCH(
         error: true,
         errorType: 'auth',
         errorTitle: 'Bill not found',
-        errorMessage: 'Final bill does not exist.',
+        errorMessage: 'Final Cost does not exist.',
         errorLog: null,
       }, { status: 404 });
     }
@@ -94,7 +94,7 @@ export async function PATCH(
       .set({ partsSubtotal: newPartsSubtotal })
       .where(eq(FinalBillFindings.id, findingId));
 
-    // Recalculate final bill totals
+    // Recalculate Final Cost totals
     const allFindings = await Database.select().from(FinalBillFindings)
       .where(eq(FinalBillFindings.finalBillId, billId));
     const includedFindings = allFindings.filter(f => f.included);

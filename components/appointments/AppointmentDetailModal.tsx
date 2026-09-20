@@ -916,14 +916,14 @@ export default function AppointmentDetailModal({
               </section>
 
               {/* ===================================================
-                  11 FINAL BILL
+                  11 Final Cost
               ==================================================== */}
 
               <section className="space-y-3">
                 <AppointmentSectionHeader
                   number="11"
                   title="Final Cost"
-                  description="Final bill and payment status"
+                  description="Final Cost and payment status"
                   enabled={
                     enabledSections.finalBill
                   }

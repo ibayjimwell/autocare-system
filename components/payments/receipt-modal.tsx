@@ -441,7 +441,7 @@ export default function ReceiptModal({
         </DialogTitle>
 
         <DialogDescription className="sr-only">
-          Official AutoCare receipt for the paid final bill.
+          Official AutoCare receipt for the paid Final Cost.
         </DialogDescription>
 
         {/* ========================================================
@@ -495,7 +495,7 @@ export default function ReceiptModal({
               </p>
 
               <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
-                Retrieving the official receipt for this paid final bill.
+                Retrieving the official receipt for this paid Final Cost.
               </p>
             </div>
           ) : error ? (
@@ -1013,7 +1013,7 @@ export default function ReceiptModal({
               </p>
 
               <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
-                No official receipt data is available for this paid final bill.
+                No official receipt data is available for this paid Final Cost.
               </p>
             </div>
           )}

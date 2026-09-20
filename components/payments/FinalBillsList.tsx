@@ -202,8 +202,8 @@ export default function FinalBillsList({
     return (
       <EmptyState
         icon={DollarSign}
-        title="No final bills"
-        description={statusFilter !== 'ALL' ? 'No final bills with the selected filters.' : 'Final bills are generated from approved estimates.'}
+        title="No Final Costs"
+        description={statusFilter !== 'ALL' ? 'No Final Costs with the selected filters.' : 'Final Costs are generated from approved estimates.'}
       />
     );
   }
@@ -317,7 +317,7 @@ export default function FinalBillsList({
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-foreground">Final Bill</p>
+                        <p className="truncate text-base font-semibold text-foreground">Final Cost</p>
                         <p className="truncate font-mono text-xs text-muted-foreground">#{String(bill.id).slice(0, 8).toUpperCase()}</p>
                       </div>
                     </div>
@@ -383,7 +383,7 @@ export default function FinalBillsList({
                           </div>
                           <div>
                             <p className="font-mono text-sm font-medium text-foreground">{String(bill.id).slice(0, 8).toUpperCase()}</p>
-                            <p className="text-xs text-muted-foreground">Final billing record</p>
+                            <p className="text-xs text-muted-foreground">Final Costing record</p>
                           </div>
                         </div>
                       </TableCell>
@@ -410,7 +410,7 @@ export default function FinalBillsList({
               </Table>
             </div>
             <div className="flex flex-col gap-1 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <span>Showing <span className="font-medium text-foreground">{bills.length}</span> final bill{bills.length === 1 ? '' : 's'}</span>
+              <span>Showing <span className="font-medium text-foreground">{bills.length}</span> Final Cost{bills.length === 1 ? '' : 's'}</span>
               <span>Pending → Parked → Pending → Official → Paid</span>
             </div>
           </Card>

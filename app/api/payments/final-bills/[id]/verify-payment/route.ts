@@ -34,7 +34,7 @@ export async function POST(
   // Check current bill status
   const [bill] = await Database.select().from(FinalBill).where(eq(FinalBill.id, billId)).limit(1);
   if (!bill) {
-    return NextResponse.json({ error: true, errorMessage: 'Final bill not found' }, { status: 404 });
+    return NextResponse.json({ error: true, errorMessage: 'Final Cost not found' }, { status: 404 });
   }
 
   if (bill.status === 'PAID') {

@@ -453,7 +453,7 @@ export function usePaymentsData(
 
       if (finalBillRes?.error) {
         throw new Error(
-          finalBillRes.errorMessage || 'Failed to load final bills.',
+          finalBillRes.errorMessage || 'Failed to load Final Costs.',
         );
       }
 

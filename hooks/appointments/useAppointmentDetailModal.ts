@@ -741,7 +741,7 @@ export function useAppointmentDetailModal(
         }
 
         // =====================================================================
-        // FINAL BILL
+        // Final Cost
         // =====================================================================
 
         if (
@@ -783,7 +783,7 @@ export function useAppointmentDetailModal(
                 }
               } catch (error) {
                 console.error(
-                  '[Appointment Detail] Full final bill load failed:',
+                  '[Appointment Detail] Full Final Cost load failed:',
                   error
                 );
               }
@@ -800,7 +800,7 @@ export function useAppointmentDetailModal(
             }
           } catch (error) {
             console.error(
-              '[Appointment Detail] Final bill load failed:',
+              '[Appointment Detail] Final Cost load failed:',
               error
             );
 
@@ -1217,7 +1217,7 @@ export function useAppointmentDetailModal(
   );
 
   // ===========================================================================
-  // FINAL BILLS REALTIME
+  // Final CostS REALTIME
   // ===========================================================================
 
   useRealtimeTable(

@@ -216,7 +216,7 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     FINAL BILL ACTIONS
+     Final Cost ACTIONS
   ============================================================== */
 
   const billActions =
@@ -775,7 +775,7 @@ export default function PaymentsPage() {
       (billId: string) => {
         if (!billId) {
           toast.error(
-            'Missing final bill ID.',
+            'Missing Final Cost ID.',
           );
           return;
         }
@@ -842,7 +842,7 @@ export default function PaymentsPage() {
 
       /*
        * Reset tab-specific status/search state so a status from
-       * Estimates is never accidentally carried into Final Bills.
+       * Estimates is never accidentally carried into Final Costs.
        */
       setStatusFilter(
         'ALL',
@@ -929,7 +929,7 @@ export default function PaymentsPage() {
   return (
     <PageContainer
       title="Payments & Billing"
-      subtitle="Manage estimates, approvals, and final billing"
+      subtitle="Manage estimates, approvals, and Final Costing"
       actions={
         <div
           className="
@@ -1063,11 +1063,11 @@ export default function PaymentsPage() {
               icon={
                 FileCheck2
               }
-              label="Final Bills"
+              label="Final Costs"
               value={
                 finalBills.length.toLocaleString()
               }
-              description="Current final bill results"
+              description="Current Final Cost results"
               active={
                 activeTab ===
                 'final-bills'

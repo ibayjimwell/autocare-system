@@ -296,7 +296,7 @@ export async function GET(
         {
           error: true,
           errorMessage:
-            'Final bill not found.',
+            'Final Cost not found.',
         },
         {
           status: 404,
@@ -308,7 +308,7 @@ export async function GET(
       {
         error: false,
         message:
-          'Final bill status retrieved.',
+          'Final Cost status retrieved.',
         data: bill,
       },
       {
@@ -440,7 +440,7 @@ export async function PATCH(
         {
           error: true,
           errorMessage:
-            'Final bill not found.',
+            'Final Cost not found.',
         },
         {
           status: 404,
@@ -555,7 +555,7 @@ export async function PATCH(
           {
             error: true,
             errorMessage:
-              'This Final Bill was changed by another user. Refresh and try again.',
+              'This Final Cost was changed by another user. Refresh and try again.',
           },
           {
             status: 409,
@@ -641,7 +641,7 @@ export async function PATCH(
                   'PARKED'
               ) {
                 throw new ParkingStateError(
-                  'This vehicle is no longer parked. Refresh the Final Bill and try again.',
+                  'This vehicle is no longer parked. Refresh the Final Cost and try again.',
                 );
               }
 
@@ -794,7 +794,7 @@ export async function PATCH(
                 !updatedBill
               ) {
                 throw new ParkingStateError(
-                  'This vehicle was already unparked by another user. Refresh the Final Bill and try again.',
+                  'This vehicle was already unparked by another user. Refresh the Final Cost and try again.',
                 );
               }
 
@@ -905,7 +905,7 @@ export async function PATCH(
         {
           error: true,
           errorMessage:
-            'This Final Bill was changed by another user. Refresh and try again.',
+            'This Final Cost was changed by another user. Refresh and try again.',
         },
         {
           status: 409,
@@ -923,7 +923,7 @@ export async function PATCH(
         error: false,
 
         message:
-          `Final bill status updated to ${requestedStatus}.`,
+          `Final Cost status updated to ${requestedStatus}.`,
 
         data: {
           id,

@@ -27,8 +27,8 @@ export async function POST(
   } catch (err: any) {
     console.error('[PAY]', err);
     // Handle specific error messages from the shared function
-    if (err.message === 'Final bill not found') {
-      return NextResponse.json({ error: true, errorMessage: 'Final bill not found' }, { status: 404 });
+    if (err.message === 'Final Cost not found') {
+      return NextResponse.json({ error: true, errorMessage: 'Final Cost not found' }, { status: 404 });
     }
     if (err.message === 'Bill already paid') {
       return NextResponse.json({ error: true, errorMessage: 'Bill already paid' }, { status: 400 });

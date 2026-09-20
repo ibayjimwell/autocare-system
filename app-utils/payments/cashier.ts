@@ -1,6 +1,6 @@
 /**
  * Philippine peso denominations used to generate practical cashier payment
- * choices for a final bill.
+ * choices for a Final Cost.
  *
  * The exact bill amount is always returned as the first choice. The remaining
  * choices are the smallest rounded-up amounts that can be formed using the

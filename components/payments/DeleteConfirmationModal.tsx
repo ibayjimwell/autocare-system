@@ -38,7 +38,7 @@ export default function DeleteConfirmationModal({
           </DialogTitle>
 
           <DialogDescription>
-            This action cannot be undone. The selected final bill will be permanently deleted.
+            This action cannot be undone. The selected Final Cost will be permanently deleted.
           </DialogDescription>
         </DialogHeader>
 

@@ -36,7 +36,7 @@ export async function PATCH(
           error: true,
           errorType: "auth",
           errorTitle: "Bill not found",
-          errorMessage: "Final bill does not exist.",
+          errorMessage: "Final Cost does not exist.",
           errorLog: null,
         },
         { status: 404 },

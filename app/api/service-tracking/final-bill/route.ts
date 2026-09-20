@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
           errorType: "fve",
           errorTitle: "Work not complete",
           errorMessage:
-            "All work tasks must be completed before generating the final bill.",
+            "All work tasks must be completed before generating the Final Cost.",
           errorLog: null,
         },
         { status: 422 },
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Generate final bill
+    // 3. Generate Final Cost
     const finalBill = await generateFinalBill(appointmentId, estimate.id);
 
     // 4. Update appointment status to COMPLETED (or maybe keep IN_PROGRESS until payment)
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: false,
-        message: "Final bill generated.",
+        message: "Final Cost generated.",
         data: finalBill,
       },
       { status: 201 },
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
         error: true,
         errorType: "dbe",
         errorTitle: "Database error",
-        errorMessage: "Could not generate final bill.",
+        errorMessage: "Could not generate Final Cost.",
         errorLog: e instanceof Error ? e.message : String(e),
       },
       { status: 500 },

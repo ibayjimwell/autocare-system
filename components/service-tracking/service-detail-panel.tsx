@@ -1587,11 +1587,11 @@ export default function ServiceDetailPanel({
         ) {
           toast.error(
             billRes.errorMessage ||
-              "Failed to generate final bill."
+              "Failed to generate Final Cost."
           );
         } else {
           toast.success(
-            "Job completed! Final bill generated."
+            "Job completed! Final Cost generated."
           );
 
           await recordTasksToHistory(
@@ -3110,7 +3110,7 @@ export default function ServiceDetailPanel({
             setDoneConfirmOpen
           }
           title="Complete Work"
-          description="All repair tasks are done. This will generate the final bill and complete the job. Continue?"
+          description="All repair tasks are done. This will generate the Final Cost and complete the job. Continue?"
           onConfirm={
             handleWorkDone
           }
