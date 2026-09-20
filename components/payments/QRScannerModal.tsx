@@ -58,10 +58,10 @@ import {
 interface QRScannerModalProps {
   open: boolean;
   onOpenChange: (
-    open: boolean
+    open: boolean,
   ) => void;
   onScan: (
-    billId: string
+    billId: string,
   ) => void;
 }
 
@@ -110,7 +110,7 @@ export default function QRScannerModal({
 
   const scannerRef =
     useRef<Html5Qrcode | null>(
-      null
+      null,
     );
 
   const scannerContainerId =
@@ -133,7 +133,7 @@ export default function QRScannerModal({
           ) {
             console.error(
               'Error stopping scanner:',
-              err
+              err,
             );
           }
 
@@ -142,14 +142,14 @@ export default function QRScannerModal({
         }
 
         setScanning(
-          false
+          false,
         );
 
         setStarting(
-          false
+          false,
         );
       },
-      []
+      [],
     );
 
   /* ==============================================================
@@ -160,50 +160,50 @@ export default function QRScannerModal({
     useCallback(
       async () => {
         setScanError(
-          null
+          null,
         );
 
         setStarting(
-          true
+          true,
         );
 
         /*
          * Request camera permission first.
          *
          * The temporary stream is immediately stopped because
-         * html5-qrcode will create/manage its own scanner stream.
+         * html5-qrcode will create and manage its own scanner stream.
          */
         try {
           const stream =
-            await navigator.mediaDevices.getUserMedia({
-              video: {
-                facingMode:
-                  'environment',
+            await navigator.mediaDevices.getUserMedia(
+              {
+                video: {
+                  facingMode:
+                    'environment',
+                },
               },
-            });
+            );
 
           stream
             .getTracks()
             .forEach(
-              (
-                track
-              ) =>
-                track.stop()
+              track =>
+                track.stop(),
             );
         } catch (
           err: any
         ) {
           console.error(
             'Camera permission denied:',
-            err
+            err,
           );
 
           setScanError(
-            'Camera access denied. Please allow camera permissions in your browser settings.'
+            'Camera access denied. Please allow camera permissions in your browser settings.',
           );
 
           setStarting(
-            false
+            false,
           );
 
           return;
@@ -211,18 +211,18 @@ export default function QRScannerModal({
 
         const container =
           document.getElementById(
-            scannerContainerId
+            scannerContainerId,
           );
 
         if (
           !container
         ) {
           setScanError(
-            'Scanner container not found.'
+            'Scanner container not found.',
           );
 
           setStarting(
-            false
+            false,
           );
 
           return;
@@ -231,7 +231,7 @@ export default function QRScannerModal({
         try {
           const scanner =
             new Html5Qrcode(
-              scannerContainerId
+              scannerContainerId,
             );
 
           scannerRef.current =
@@ -251,49 +251,43 @@ export default function QRScannerModal({
               aspectRatio: 1.0,
             },
             (
-              decodedText: string
+              decodedText: string,
             ) => {
               /*
-               * QR behavior remains exactly as before.
-               *
-               * The decoded QR content is passed directly to the
-               * existing onScan callback.
-               *
-               * Manual Bill ID resolution is intentionally handled
-               * separately in handleManualSubmit().
+               * QR behavior remains the same.
                */
               stopScanner().catch(
-                console.error
+                console.error,
               );
 
               onScan(
-                decodedText
+                decodedText,
               );
 
               onOpenChange(
-                false
+                false,
               );
             },
-            () => {}
+            () => {},
           );
 
           setScanning(
-            true
+            true,
           );
         } catch (
           err: any
         ) {
           console.error(
             'Scanner start error:',
-            err
+            err,
           );
 
           setScanError(
-            'Failed to start camera. Please refresh the page and try again.'
+            'Failed to start camera. Please refresh the page and try again.',
           );
         } finally {
           setStarting(
-            false
+            false,
           );
         }
       },
@@ -301,7 +295,7 @@ export default function QRScannerModal({
         onScan,
         onOpenChange,
         stopScanner,
-      ]
+      ],
     );
 
   /* ==============================================================
@@ -321,12 +315,12 @@ export default function QRScannerModal({
           () => {
             void startScanner();
           },
-          400
+          400,
         );
 
       return () => {
         window.clearTimeout(
-          timer
+          timer,
         );
 
         void stopScanner();
@@ -336,19 +330,19 @@ export default function QRScannerModal({
     void stopScanner();
 
     setScanError(
-      null
+      null,
     );
 
     setStarting(
-      false
+      false,
     );
 
     setManualId(
-      ''
+      '',
     );
 
     setManualLookupLoading(
-      false
+      false,
     );
 
     return () => {
@@ -371,7 +365,7 @@ export default function QRScannerModal({
           .trim()
           .replace(
             /^#/,
-            ''
+            '',
           )
           .toUpperCase();
 
@@ -379,32 +373,24 @@ export default function QRScannerModal({
         !trimmed
       ) {
         toast.error(
-          'Please enter a valid Bill ID.'
+          'Please enter a valid Bill ID.',
         );
 
         return;
       }
 
       /*
-       * The Final Cost table displays:
-       *
-       * bill.id.slice(0, 8).toUpperCase()
-       *
-       * Example:
-       *
-       * 32DBD79E
-       *
-       * Resolve that displayed ID to the real database UUID before
-       * sending it into the existing payment/cashier flow.
+       * Resolve the displayed short Bill ID to the real UUID before
+       * continuing through the existing payment/cashier flow.
        */
       setManualLookupLoading(
-        true
+        true,
       );
 
       try {
         const result =
           await finalBillsApi.resolveBillId(
-            trimmed
+            trimmed,
           );
 
         if (
@@ -413,46 +399,38 @@ export default function QRScannerModal({
         ) {
           toast.error(
             result?.errorMessage ||
-              `Bill ID "${trimmed}" was not found.`
+              `Bill ID "${trimmed}" was not found.`,
           );
 
           return;
         }
 
-        /*
-         * IMPORTANT:
-         *
-         * onScan() receives the actual database final-bill ID.
-         *
-         * Therefore the rest of the existing payment flow does not
-         * need to be changed.
-         */
         onScan(
-          result.data
+          result.data,
         );
 
         setManualId(
-          ''
+          '',
         );
 
         onOpenChange(
-          false
+          false,
         );
       } catch (
         err: any
       ) {
         console.error(
           'Manual Bill ID lookup failed:',
-          err
+          err,
         );
 
         toast.error(
           err?.message ||
-            'Failed to look up the Bill ID.'
+            'Failed to look up the Bill ID.',
         );
       } finally {
         setManualLookupLoading(
-          false
+          false,
         );
       }
     };
@@ -463,7 +441,7 @@ export default function QRScannerModal({
 
   const handleManualKeyDown =
     (
-      event: React.KeyboardEvent<HTMLInputElement>
+      event: React.KeyboardEvent<HTMLInputElement>,
     ) => {
       if (
         event.key !==
@@ -494,24 +472,32 @@ export default function QRScannerModal({
     >
       <DialogContent
         className="
-          w-[calc(100%-1rem)]
+          flex
+          h-[calc(100dvh-1rem)]
+          max-h-[calc(100dvh-1rem)]
+          w-[calc(100vw-1rem)]
+          max-w-md
+          flex-col
           overflow-hidden
           rounded-xl
           border border-border
           bg-card
           p-0
           shadow-2xl
-          sm:max-w-md
+          sm:h-auto
+          sm:max-h-[calc(100dvh-2rem)]
+          sm:w-full
         "
       >
         {/* ========================================================
             HEADER
         ========================================================= */}
 
-        <div className="border-b border-border bg-background/80 p-4 backdrop-blur-xl">
+        <div className="shrink-0 border-b border-border bg-background/80 p-4 backdrop-blur-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
               <QrCode className="h-5 w-5 text-primary" />
+
               Scan QR Code
             </DialogTitle>
 
@@ -523,10 +509,22 @@ export default function QRScannerModal({
         </div>
 
         {/* ========================================================
-            CONTENT
+            SCROLLABLE CONTENT
         ========================================================= */}
 
-        <div className="p-4 sm:p-5">
+        <div
+          className="
+            min-h-0
+            flex-1
+            overflow-x-hidden
+            overflow-y-auto
+            overscroll-contain
+            touch-pan-y
+            [-webkit-overflow-scrolling:touch]
+            p-4
+            sm:p-5
+          "
+        >
           <Tabs
             defaultValue="scan"
             className="w-full"
@@ -568,7 +566,7 @@ export default function QRScannerModal({
               className="mt-4"
             >
               {starting && (
-                <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border bg-muted/20">
+                <div className="flex min-h-[240px] flex-col items-center justify-center rounded-lg border bg-muted/20 sm:min-h-[280px]">
                   <Loader2 className="mb-3 h-8 w-8 animate-spin text-primary" />
 
                   <p className="text-sm text-muted-foreground">
@@ -579,13 +577,11 @@ export default function QRScannerModal({
 
               {scanError &&
                 !starting && (
-                  <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/[0.03] px-6 text-center">
+                  <div className="flex min-h-[240px] flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/[0.03] px-6 text-center sm:min-h-[280px]">
                     <X className="mb-3 h-8 w-8 text-destructive" />
 
-                    <p className="text-sm text-muted-foreground">
-                      {
-                        scanError
-                      }
+                    <p className="text-sm leading-5 text-muted-foreground">
+                      {scanError}
                     </p>
 
                     <Button
@@ -606,18 +602,31 @@ export default function QRScannerModal({
                   </div>
                 )}
 
-              <div
-                id={
-                  scannerContainerId
-                }
-                className="w-full overflow-hidden rounded-lg"
-                style={{
-                  minHeight:
-                    scanning
-                      ? 300
-                      : 0,
-                }}
-              />
+              {/* ==================================================
+                  SCANNER VIEWPORT
+              =================================================== */}
+
+              <div className="w-full overflow-hidden rounded-lg border border-border bg-black/5">
+                <div
+                  id={
+                    scannerContainerId
+                  }
+                  className="w-full overflow-hidden"
+                  style={{
+                    minHeight:
+                      scanning
+                        ? 260
+                        : 0,
+                  }}
+                />
+              </div>
+
+              {scanning && (
+                <p className="mt-3 text-center text-xs leading-5 text-muted-foreground">
+                  Position the customer's QR code inside the scanner
+                  frame.
+                </p>
+              )}
             </TabsContent>
 
             {/* ====================================================
@@ -638,11 +647,9 @@ export default function QRScannerModal({
                     value={
                       manualId
                     }
-                    onChange={(
-                      event
-                    ) =>
+                    onChange={event =>
                       setManualId(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     onKeyDown={
@@ -704,14 +711,14 @@ export default function QRScannerModal({
             FOOTER
         ========================================================= */}
 
-        <div className="border-t border-border p-4">
+        <div className="shrink-0 border-t border-border p-4">
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() =>
                 onOpenChange(
-                  false
+                  false,
                 )
               }
               disabled={
