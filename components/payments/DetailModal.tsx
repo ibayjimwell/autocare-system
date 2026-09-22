@@ -42,6 +42,7 @@ import {
   PlusCircle,
   ReceiptText,
   Tag,
+  Trash2,
   Wrench,
 } from 'lucide-react';
 
@@ -81,6 +82,20 @@ interface DetailModalProps {
     findingId: string,
     billId: string,
   ) => void;
+
+  onDeletePart: (
+    part: any,
+    findingId: string,
+    billId: string,
+  ) => void;
+
+  onEditFee: (fee: any) => void;
+
+  onDeleteFee: (fee: any) => void;
+
+  onEditDiscount: (discount: any) => void;
+
+  onDeleteDiscount: (discount: any) => void;
 
   feeModalOpen: boolean;
 
@@ -427,6 +442,11 @@ export default function DetailModal({
   onAddFee,
   onAddDiscount,
   onEditPart,
+  onDeletePart,
+  onEditFee,
+  onDeleteFee,
+  onEditDiscount,
+  onDeleteDiscount,
   feeModalOpen,
   setFeeModalOpen,
   feeForm,
@@ -457,13 +477,18 @@ export default function DetailModal({
     return null;
   }
 
+  const isFinalBillEditable =
+    detailType ===
+      'final-bill' &&
+    (selectedItem?.status ===
+      'PENDING' ||
+      selectedItem?.status ===
+        'PARKED');
+
   const isEditable =
     detailType ===
       'estimate' ||
-    (detailType ===
-      'final-bill' &&
-      selectedItem?.status ===
-        'PENDING');
+    isFinalBillEditable;
 
   /*
    * Safe data references.
@@ -859,10 +884,8 @@ export default function DetailModal({
                                             )}
                                           </span>
 
-                                          {detailType ===
-                                            'final-bill' &&
-                                            selectedItem?.status ===
-                                              'PENDING' && (
+                                          {isFinalBillEditable && (
+                                            <>
                                               <Button
                                                 type="button"
                                                 size="icon"
@@ -872,7 +895,8 @@ export default function DetailModal({
                                                   h-8
                                                   w-8
                                                   rounded-md
-
+                                                  text-muted-foreground
+                                                  hover:text-foreground
                                                   focus-visible:outline-none
                                                   focus-visible:ring-2
                                                   focus-visible:ring-ring
@@ -888,7 +912,36 @@ export default function DetailModal({
                                               >
                                                 <Pencil className="h-3.5 w-3.5" />
                                               </Button>
-                                            )}
+
+                                              <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="ghost"
+                                                aria-label="Remove part"
+                                                className="
+                                                  h-8
+                                                  w-8
+                                                  rounded-md
+                                                  text-destructive
+                                                  hover:bg-destructive/10
+                                                  hover:text-destructive
+                                                  focus-visible:outline-none
+                                                  focus-visible:ring-2
+                                                  focus-visible:ring-destructive/40
+                                                  focus-visible:ring-offset-2
+                                                "
+                                                onClick={() =>
+                                                  onDeletePart(
+                                                    part,
+                                                    finding.id,
+                                                    selectedItem.id,
+                                                  )
+                                                }
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </>
+                                          )}
                                         </div>
                                       </div>
                                     );
@@ -1067,12 +1120,44 @@ export default function DetailModal({
                             }
                           </span>
 
-                          <span className="shrink-0 text-sm font-semibold text-foreground">
-                            ₱
-                            {safeCurrency(
-                              fee?.amount,
+                          <div className="flex shrink-0 items-center gap-1">
+                            <span className="text-sm font-semibold text-foreground">
+                              ₱
+                              {safeCurrency(
+                                fee?.amount,
+                              )}
+                            </span>
+
+                            {isFinalBillEditable && (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label="Edit fee"
+                                  className="h-8 w-8 rounded-md"
+                                  onClick={() =>
+                                    onEditFee(fee)
+                                  }
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label="Remove fee"
+                                  className="h-8 w-8 rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() =>
+                                    onDeleteFee(fee)
+                                  }
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
                             )}
-                          </span>
+                          </div>
                         </div>
                       ),
                     )}
@@ -1171,17 +1256,49 @@ export default function DetailModal({
                             </span>
                           </div>
 
-                          <span className="shrink-0 text-sm font-semibold text-red-500">
-                            -₱
-                            {safeCurrency(
-                              Math.abs(
-                                toSafeNumber(
-                                  discount?.amount ??
-                                    discount?.value,
+                          <div className="flex shrink-0 items-center gap-1">
+                            <span className="text-sm font-semibold text-red-500">
+                              -₱
+                              {safeCurrency(
+                                Math.abs(
+                                  toSafeNumber(
+                                    discount?.amount ??
+                                      discount?.value,
+                                  ),
                                 ),
-                              ),
+                              )}
+                            </span>
+
+                            {isFinalBillEditable && (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label="Edit discount"
+                                  className="h-8 w-8 rounded-md"
+                                  onClick={() =>
+                                    onEditDiscount(discount)
+                                  }
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label="Remove discount"
+                                  className="h-8 w-8 rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() =>
+                                    onDeleteDiscount(discount)
+                                  }
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
                             )}
-                          </span>
+                          </div>
                         </div>
                       ),
                     )}

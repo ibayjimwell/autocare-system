@@ -1,180 +1,716 @@
-import { Database } from "@/lib/drizzle";
-import { FinalBill } from "@/database/models/payments/final-bill.model";
-import { FinalBillFindings } from "@/database/models/payments/final-bill-findings.model";
-import { FinalBillFindingParts } from "@/database/models/payments/final-bill-finding-parts.model";
-import { FinalBillFees } from "@/database/models/payments/final-bill-fees.model";
-import { FinalBillDiscounts } from "@/database/models/payments/final-bill-discounts.model";
-import { FinalBillWorkTasks } from "@/database/models/payments/final-bill-work-tasks.model";
-import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
-import { EstimateFindings } from "@/database/models/payments/estimate-findings.model";
-import { EstimateFindingParts } from "@/database/models/payments/estimate-finding-parts.model";
-import { EstimateFees } from "@/database/models/payments/estimate-fees.model";
-import { EstimateDiscounts } from "@/database/models/payments/estimate-discounts.model";
-import { WorkTasks } from "@/database/models/service-tracking/work-tasks.model";
-import { eq, and } from "drizzle-orm";
+import {
+  Database,
+} from '@/lib/drizzle';
+
+import {
+  EstimatedCosts,
+} from '@/database/models/payments/estimated-costs.model';
+
+import {
+  EstimateFindings,
+} from '@/database/models/payments/estimate-findings.model';
+
+import {
+  EstimateFindingParts,
+} from '@/database/models/payments/estimate-finding-parts.model';
+
+import {
+  EstimateFees,
+} from '@/database/models/payments/estimate-fees.model';
+
+import {
+  EstimateDiscounts,
+} from '@/database/models/payments/estimate-discounts.model';
+
+import {
+  FinalBill,
+} from '@/database/models/payments/final-bill.model';
+
+import {
+  FinalBillFindings,
+} from '@/database/models/payments/final-bill-findings.model';
+
+import {
+  FinalBillFindingParts,
+} from '@/database/models/payments/final-bill-finding-parts.model';
+
+import {
+  FinalBillFees,
+} from '@/database/models/payments/final-bill-fees.model';
+
+import {
+  FinalBillDiscounts,
+} from '@/database/models/payments/final-bill-discounts.model';
+
+import {
+  FinalBillWorkTasks,
+} from '@/database/models/payments/final-bill-work-tasks.model';
+
+import {
+  WorkTasks,
+} from '@/database/models/service-tracking/work-tasks.model';
+
+import {
+  and,
+  eq,
+  inArray,
+} from 'drizzle-orm';
+
+/* ================================================================
+   HELPERS
+================================================================ */
+
+function toNumber(
+  value: unknown,
+): number {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return 0;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+}
+
+function money(
+  value: number,
+): string {
+  return value.toFixed(2);
+}
+
+function partTotal(
+  part: any,
+): number {
+  const storedTotal =
+    toNumber(part?.totalPrice);
+
+  if (storedTotal > 0) {
+    return storedTotal;
+  }
+
+  const quantity = Math.max(
+    1,
+    toNumber(part?.quantity) || 1,
+  );
+
+  const price = Math.max(
+    0,
+    toNumber(
+      part?.priceAtTime ??
+        part?.price,
+    ),
+  );
+
+  return quantity * price;
+}
+
+/* ================================================================
+   RECALCULATE FINAL COST
+================================================================ */
+
+export async function recalculateFinalBillTotals(
+  finalBillId: string,
+) {
+  const [bill] =
+    await Database
+      .select()
+      .from(FinalBill)
+      .where(
+        eq(
+          FinalBill.id,
+          finalBillId,
+        ),
+      )
+      .limit(1);
+
+  if (!bill) {
+    throw new Error(
+      'Final Cost not found.',
+    );
+  }
+
+  const [findings, fees, discounts] =
+    await Promise.all([
+      Database
+        .select()
+        .from(FinalBillFindings)
+        .where(
+          eq(
+            FinalBillFindings.finalBillId,
+            finalBillId,
+          ),
+        ),
+
+      Database
+        .select()
+        .from(FinalBillFees)
+        .where(
+          eq(
+            FinalBillFees.finalBillId,
+            finalBillId,
+          ),
+        ),
+
+      Database
+        .select()
+        .from(FinalBillDiscounts)
+        .where(
+          eq(
+            FinalBillDiscounts.finalBillId,
+            finalBillId,
+          ),
+        ),
+    ]);
+
+  let parts = [] as any[];
+
+  if (findings.length > 0) {
+    parts = await Database
+      .select()
+      .from(FinalBillFindingParts)
+      .where(
+        inArray(
+          FinalBillFindingParts.finalBillFindingId,
+          findings.map(
+            finding =>
+              finding.id,
+          ),
+        ),
+      );
+  }
+
+  const partsByFinding =
+    new Map<string, any[]>();
+
+  for (const part of parts) {
+    const existing =
+      partsByFinding.get(
+        part.finalBillFindingId,
+      ) ?? [];
+
+    existing.push(part);
+
+    partsByFinding.set(
+      part.finalBillFindingId,
+      existing,
+    );
+  }
+
+  let findingsSubtotal = 0;
+
+  for (const finding of findings) {
+    const findingParts =
+      partsByFinding.get(
+        finding.id,
+      ) ?? [];
+
+    const subtotal =
+      findingParts.reduce(
+        (
+          total: number,
+          part: any,
+        ) =>
+          total +
+          partTotal(part),
+        0,
+      );
+
+    await Database
+      .update(FinalBillFindings)
+      .set({
+        partsSubtotal:
+          money(subtotal),
+      })
+      .where(
+        eq(
+          FinalBillFindings.id,
+          finding.id,
+        ),
+      );
+
+    if (finding.included !== false) {
+      findingsSubtotal += subtotal;
+    }
+  }
+
+  const serviceSubtotal =
+    toNumber(
+      bill.serviceSubtotal,
+    );
+
+  const workTasksSubtotal =
+    toNumber(
+      bill.workTasksSubtotal,
+    );
+
+  const feesTotal =
+    fees.reduce(
+      (
+        total: number,
+        fee: any,
+      ) =>
+        total +
+        Math.max(
+          0,
+          toNumber(fee.amount),
+        ),
+      0,
+    );
+
+  /*
+   * All discounts are calculated against the current pre-discount
+   * subtotal. Each discount row stores its own computed amount so the
+   * detail modal and final totals stay synchronized.
+   */
+  const discountBase =
+    serviceSubtotal +
+    findingsSubtotal +
+    workTasksSubtotal +
+    feesTotal;
+
+  let discountTotal = 0;
+
+  for (const discount of discounts) {
+    const value =
+      Math.max(
+        0,
+        toNumber(discount.value),
+      );
+
+    const amount =
+      String(
+        discount.type || '',
+      ).toLowerCase() ===
+      'percentage'
+        ? discountBase * (value / 100)
+        : value;
+
+    const safeAmount = Math.min(
+      Math.max(0, amount),
+      Math.max(0, discountBase),
+    );
+
+    discountTotal += safeAmount;
+
+    await Database
+      .update(FinalBillDiscounts)
+      .set({
+        amount:
+          money(safeAmount),
+        updatedAt:
+          new Date(),
+      })
+      .where(
+        eq(
+          FinalBillDiscounts.id,
+          discount.id,
+        ),
+      );
+  }
+
+  const grandTotal =
+    Math.max(
+      0,
+      discountBase -
+        discountTotal,
+    );
+
+  const [updatedBill] =
+    await Database
+      .update(FinalBill)
+      .set({
+        findingsSubtotal:
+          money(findingsSubtotal),
+        feesTotal:
+          money(feesTotal),
+        discountTotal:
+          money(discountTotal),
+        grandTotal:
+          money(grandTotal),
+        updatedAt:
+          new Date(),
+      })
+      .where(
+        eq(
+          FinalBill.id,
+          finalBillId,
+        ),
+      )
+      .returning();
+
+  return updatedBill;
+}
+
+/* ================================================================
+   GENERATE FINAL COST FROM APPROVED ESTIMATE
+================================================================ */
 
 export async function generateFinalBill(
   appointmentId: string,
   estimateId: string,
 ) {
-  // 1. Get the approved estimate
-  const [estimate] = await Database.select()
-    .from(EstimatedCosts)
-    .where(
-      and(
-        eq(EstimatedCosts.id, estimateId),
-        eq(EstimatedCosts.status, "APPROVED"),
-      ),
-    );
+  const [estimate] =
+    await Database
+      .select()
+      .from(EstimatedCosts)
+      .where(
+        and(
+          eq(
+            EstimatedCosts.id,
+            estimateId,
+          ),
+          eq(
+            EstimatedCosts.appointmentId,
+            appointmentId,
+          ),
+          eq(
+            EstimatedCosts.status,
+            'APPROVED',
+          ),
+        ),
+      )
+      .limit(1);
+
   if (!estimate) {
-    throw new Error("Approved estimate not found.");
+    throw new Error(
+      'Approved estimate not found for this appointment.',
+    );
   }
 
-  // 2. Get completed work tasks for this appointment (status = DONE)
-  const workTasks = await Database.select()
-    .from(WorkTasks)
-    .where(
-      and(
-        eq(WorkTasks.appointmentId, appointmentId),
-        eq(WorkTasks.status, "DONE"),
+  /*
+   * Avoid creating duplicate Final Costs for the same approved
+   * estimate when the completion action is accidentally submitted
+   * more than once.
+   */
+  const [existingBill] =
+    await Database
+      .select()
+      .from(FinalBill)
+      .where(
+        and(
+          eq(
+            FinalBill.appointmentId,
+            appointmentId,
+          ),
+          eq(
+            FinalBill.estimateId,
+            estimateId,
+          ),
+        ),
+      )
+      .limit(1);
+
+  if (existingBill) {
+    return existingBill;
+  }
+
+  /* ==============================================================
+     LOAD ESTIMATE DETAIL
+  ============================================================== */
+
+  const [
+    estimateFindings,
+    estimateFees,
+    estimateDiscounts,
+  ] = await Promise.all([
+    Database
+      .select()
+      .from(EstimateFindings)
+      .where(
+        eq(
+          EstimateFindings.estimateId,
+          estimateId,
+        ),
       ),
-    );
 
-  // 3. Create FinalBill
-  const [finalBill] = await Database.insert(FinalBill)
-    .values({
-      appointmentId,
-      estimateId: estimate.id,
-      status: "PENDING",
-      serviceSubtotal: estimate.serviceSubtotal,
-      findingsSubtotal: "0",
-      workTasksSubtotal: "0",
-      feesTotal: "0",
-      discountTotal: "0",
-      grandTotal: "0",
-    })
-    .returning();
-
-  // 4. Copy Estimate Findings (only included ones)
-  const estimateFindings = await Database.select()
-    .from(EstimateFindings)
-    .where(
-      and(
-        eq(EstimateFindings.estimateId, estimateId),
-        eq(EstimateFindings.included, true),
+    Database
+      .select()
+      .from(EstimateFees)
+      .where(
+        eq(
+          EstimateFees.estimateId,
+          estimateId,
+        ),
       ),
-    );
 
-  let findingsSubtotal = 0;
-  for (const ef of estimateFindings) {
-    const [fbFinding] = await Database.insert(FinalBillFindings)
+    Database
+      .select()
+      .from(EstimateDiscounts)
+      .where(
+        eq(
+          EstimateDiscounts.estimateId,
+          estimateId,
+        ),
+      ),  ]);
+
+  let estimateParts = [] as any[];
+
+  if (estimateFindings.length > 0) {
+    estimateParts =
+      await Database
+        .select()
+        .from(EstimateFindingParts)
+        .where(
+          inArray(
+            EstimateFindingParts.estimateFindingId,
+            estimateFindings.map(
+              finding =>
+                finding.id,
+            ),
+          ),
+        );
+  }
+
+  const partsByEstimateFinding =
+    new Map<string, any[]>();
+
+  for (const part of estimateParts) {
+    const existing =
+      partsByEstimateFinding.get(
+        part.estimateFindingId,
+      ) ?? [];
+
+    existing.push(part);
+
+    partsByEstimateFinding.set(
+      part.estimateFindingId,
+      existing,
+    );
+  }
+
+  /* ==============================================================
+     CREATE FINAL COST PARENT
+  ============================================================== */
+
+  const [newBill] =
+    await Database
+      .insert(FinalBill)
       .values({
-        finalBillId: finalBill.id,
-        findingId: ef.findingId,
-        description: ef.description,
-        included: true,
-        partsSubtotal: ef.partsSubtotal,
+        appointmentId,
+        estimateId,
+        status: 'PENDING',
+        serviceSubtotal:
+          String(
+            estimate.serviceSubtotal ??
+              '0',
+          ),
+        findingsSubtotal:
+          String(
+            estimate.findingsSubtotal ??
+              '0',
+          ),
+        workTasksSubtotal: '0',
+        feesTotal:
+          String(
+            estimate.feesTotal ??
+              '0',
+          ),
+        discountTotal:
+          String(
+            estimate.discountTotal ??
+              '0',
+          ),
+        grandTotal:
+          String(
+            estimate.grandTotal ??
+              '0',
+          ),
+        notes:
+          estimate.reason ??
+          null,
       })
       .returning();
 
-    // Copy parts
-    const parts = await Database.select()
-      .from(EstimateFindingParts)
-      .where(eq(EstimateFindingParts.estimateFindingId, ef.id));
-    for (const p of parts) {
-      await Database.insert(FinalBillFindingParts).values({
-        finalBillFindingId: fbFinding.id,
-        partName: p.partName,
-        quantity: p.quantity,
-        priceAtTime: p.priceAtTime,
-        isPms: p.isPms,
-        totalPrice: p.totalPrice,
-      });
+  if (!newBill) {
+    throw new Error(
+      'Failed to create Final Cost.',
+    );
+  }
+
+  /* ==============================================================
+     SNAPSHOT FINDINGS + PARTS
+  ============================================================== */
+
+  for (const finding of estimateFindings) {
+    const [newFinding] =
+      await Database
+        .insert(FinalBillFindings)
+        .values({
+          finalBillId:
+            newBill.id,
+          findingId:
+            finding.findingId,
+          description:
+            finding.description,
+          included:
+            finding.included,
+          partsSubtotal:
+            String(
+              finding.partsSubtotal ??
+                '0',
+            ),
+        })
+        .returning();
+
+    if (!newFinding) {
+      throw new Error(
+        `Failed to copy finding ${finding.id} into the Final Cost.`,
+      );
     }
-    findingsSubtotal += parseFloat(ef.partsSubtotal);
-  }
 
-  // 5. Copy Fees
-  const fees = await Database.select()
-    .from(EstimateFees)
-    .where(eq(EstimateFees.estimateId, estimateId));
-  let feesTotal = 0;
-  for (const f of fees) {
-    await Database.insert(FinalBillFees).values({
-      finalBillId: finalBill.id,
-      findingId: f.findingId,
-      title: f.title,
-      amount: f.amount,
-    });
-    feesTotal += parseFloat(f.amount);
-  }
+    const findingParts =
+      partsByEstimateFinding.get(
+        finding.id,
+      ) ?? [];
 
-  // 6. Copy Discounts
-  const discounts = await Database.select()
-    .from(EstimateDiscounts)
-    .where(eq(EstimateDiscounts.estimateId, estimateId));
-  // We'll copy them, but amounts will be recalculated later.
-  for (const d of discounts) {
-    await Database.insert(FinalBillDiscounts).values({
-      finalBillId: finalBill.id,
-      title: d.title,
-      type: d.type,
-      value: d.value,
-      amount: "0",
-    });
-  }
-
-  // 7. Copy Work Tasks (completed)
-  let workTasksSubtotal = 0;
-  // We don't have a price for work tasks; they are just a list of completed tasks.
-  // But we might charge for labor? For now, we'll just store them as items without a price.
-  for (const wt of workTasks) {
-    await Database.insert(FinalBillWorkTasks).values({
-      finalBillId: finalBill.id,
-      workTaskId: wt.id,
-      title: wt.title,
-      order: wt.order,
-    });
-  }
-  // Work tasks subtotal could be a separate line item – we'll keep it as 0 for now.
-
-  // 8. Compute totals
-  const serviceSubtotal = parseFloat(estimate.serviceSubtotal);
-  const totalBeforeDiscount =
-    serviceSubtotal + findingsSubtotal + feesTotal + workTasksSubtotal;
-
-  // Recalculate discounts based on totalBeforeDiscount
-  let totalDiscount = 0;
-  const savedDiscounts = await Database.select()
-    .from(FinalBillDiscounts)
-    .where(eq(FinalBillDiscounts.finalBillId, finalBill.id));
-  for (const d of savedDiscounts) {
-    let amount = 0;
-    if (d.type === "fixed") {
-      amount = parseFloat(d.value);
-    } else {
-      amount = totalBeforeDiscount * (parseFloat(d.value) / 100);
+    if (findingParts.length > 0) {
+      await Database
+        .insert(FinalBillFindingParts)
+        .values(
+          findingParts.map(
+            (part: any) => ({
+              finalBillFindingId:
+                newFinding.id,
+              partName:
+                part.partName,
+              quantity:
+                Math.max(
+                  1,
+                  toNumber(
+                    part.quantity,
+                  ) || 1,
+                ),
+              priceAtTime:
+                String(
+                  part.priceAtTime ??
+                    '0',
+                ),
+              isPms:
+                part.isPms === true,
+              totalPrice:
+                String(
+                  part.totalPrice ??
+                    partTotal(part),
+                ),
+            }),
+          ),
+        );
     }
-    totalDiscount += amount;
-    // Update the discount record with computed amount
-    await Database.update(FinalBillDiscounts)
-      .set({ amount: amount.toString() })
-      .where(eq(FinalBillDiscounts.id, d.id));
   }
 
-  const grandTotal = totalBeforeDiscount - totalDiscount;
+  /* ==============================================================
+     SNAPSHOT FEES
+  ============================================================== */
 
-  // Update FinalBill with totals
-  await Database.update(FinalBill)
-    .set({
-      findingsSubtotal: findingsSubtotal.toString(),
-      workTasksSubtotal: workTasksSubtotal.toString(),
-      feesTotal: feesTotal.toString(),
-      discountTotal: totalDiscount.toString(),
-      grandTotal: grandTotal.toString(),
-      updatedAt: new Date(),
-    })
-    .where(eq(FinalBill.id, finalBill.id));
+  if (estimateFees.length > 0) {
+    await Database
+      .insert(FinalBillFees)
+      .values(
+        estimateFees.map(
+          (fee: any) => ({
+            finalBillId:
+              newBill.id,
+            findingId:
+              fee.findingId ??
+              null,
+            title:
+              fee.title,
+            amount:
+              String(
+                fee.amount ?? '0',
+              ),
+        })),
+      );
+  }
+
+  /* ==============================================================
+     SNAPSHOT DISCOUNTS
+  ============================================================== */
+
+  if (estimateDiscounts.length > 0) {
+    await Database
+      .insert(FinalBillDiscounts)
+      .values(
+        estimateDiscounts.map(
+          (discount: any) => ({
+            finalBillId:
+              newBill.id,
+            title:
+              discount.title,
+            type:
+              discount.type,
+            value:
+              String(
+                discount.value ??
+                  '0',
+              ),
+            amount:
+              String(
+                discount.amount ??
+                  '0',
+              ),
+          })),
+      );
+  }
+
+  /* ==============================================================
+     SNAPSHOT COMPLETED WORK TASKS
+
+     FinalBillWorkTasks.workTaskId references the service-tracking
+     WorkTasks table, so use the actual completed WorkTasks here
+     instead of EstimateTasks (which represents inspection tasks).
+  ============================================================== */
+
+  const completedWorkTasks =
+    await Database
+      .select()
+      .from(WorkTasks)
+      .where(
+        and(
+          eq(
+            WorkTasks.appointmentId,
+            appointmentId,
+          ),
+          eq(
+            WorkTasks.status,
+            'DONE',
+          ),
+        ),
+      );
+
+  if (completedWorkTasks.length > 0) {
+    await Database
+      .insert(FinalBillWorkTasks)
+      .values(
+        completedWorkTasks.map(
+          (task: any, index: number) => ({
+            finalBillId:
+              newBill.id,
+            workTaskId:
+              task.id,
+            title:
+              task.title ||
+              'Completed Task',
+            order: index,
+          })),
+      );
+  }
+
+  /*
+   * Recalculate from the newly-created snapshot so the Final Cost
+   * remains internally consistent even when source values are strings
+   * or a legacy estimate contains stale subtotal values.
+   */
+  const finalBill =
+    await recalculateFinalBillTotals(
+      newBill.id,
+    );
 
   return finalBill;
 }

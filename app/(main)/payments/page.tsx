@@ -81,6 +81,10 @@ import EditPartModal from '@/components/payments/EditPartModal';
 
 import DeleteConfirmationModal from '@/components/payments/DeleteConfirmationModal';
 
+import EditAdjustmentModal from '@/components/payments/EditAdjustmentModal';
+
+import FinalCostChangeConfirmationModal from '@/components/payments/FinalCostChangeConfirmationModal';
+
 import CashierModal from '@/components/payments/cashier-modal';
 
 import QRScannerModal from '@/components/payments/QRScannerModal';
@@ -1330,6 +1334,21 @@ export default function PaymentsPage() {
         onEditPart={
           adjustments.handleEditPartOpen
         }
+        onDeletePart={
+          adjustments.handleDeletePart
+        }
+        onEditFee={
+          adjustments.openEditFee
+        }
+        onDeleteFee={
+          adjustments.requestDeleteFee
+        }
+        onEditDiscount={
+          adjustments.openEditDiscount
+        }
+        onDeleteDiscount={
+          adjustments.requestDeleteDiscount
+        }
         feeModalOpen={
           adjustments.feeModalOpen
         }
@@ -1436,6 +1455,70 @@ export default function PaymentsPage() {
           adjustments.submittingAdjustment
         }
       />
+
+      {/* ==========================================================
+          EDIT ADJUSTMENT
+      =========================================================== */}
+
+      <EditAdjustmentModal
+        open={
+          adjustments.adjustmentEditOpen
+        }
+        onOpenChange={
+          adjustments.setAdjustmentEditOpen
+        }
+        type={
+          adjustments.adjustmentEditType
+        }
+        feeForm={
+          adjustments.editFeeForm
+        }
+        setFeeForm={
+          adjustments.setEditFeeForm
+        }
+        discountForm={
+          adjustments.editDiscountForm
+        }
+        setDiscountForm={
+          adjustments.setEditDiscountForm
+        }
+        onSave={
+          adjustments.saveEditedAdjustment
+        }
+        saving={
+          adjustments.submittingAdjustment
+        }
+      />
+
+      {/* ==========================================================
+          FINAL COST CHANGE CONFIRMATION
+      =========================================================== */}
+
+      {adjustments.finalCostChangeAction && (
+        <FinalCostChangeConfirmationModal
+          open={
+            adjustments.finalCostChangeConfirmationOpen
+          }
+          onOpenChange={
+            adjustments.setFinalCostChangeConfirmationOpen
+          }
+          action={
+            adjustments.finalCostChangeAction.operation
+          }
+          type={
+            adjustments.finalCostChangeAction.type
+          }
+          targetName={
+            adjustments.finalCostChangeTargetName
+          }
+          onConfirm={
+            adjustments.confirmFinalCostChange
+          }
+          saving={
+            adjustments.submittingAdjustment
+          }
+        />
+      )}
 
       {/* ==========================================================
           EDIT PART
@@ -1772,3 +1855,4 @@ function SummaryMetric({
     </div>
   );
 }
+

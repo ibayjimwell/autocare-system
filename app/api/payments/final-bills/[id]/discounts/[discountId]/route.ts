@@ -12,12 +12,8 @@ import {
 } from '@/database/models/payments/final-bill.model';
 
 import {
-  FinalBillFindings,
-} from '@/database/models/payments/final-bill-findings.model';
-
-import {
-  FinalBillFindingParts,
-} from '@/database/models/payments/final-bill-finding-parts.model';
+  FinalBillDiscounts,
+} from '@/database/models/payments/final-bill-discounts.model';
 
 import {
   eq,
@@ -45,12 +41,30 @@ function editable(status: unknown) {
   );
 }
 
-async function getPartContext(
+function normalizeType(
+  value: unknown,
+): 'fixed' | 'percentage' | null {
+  const type = String(
+    value || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  if (
+    type === 'fixed' ||
+    type === 'percentage'
+  ) {
+    return type;
+  }
+
+  return null;
+}
+
+async function getBillAndDiscount(
   billId: string,
-  findingId: string,
-  partId: string,
+  discountId: string,
 ) {
-  const [bill, finding, part] =
+  const [bill, discount] =
     await Promise.all([
       Database
         .select()
@@ -65,33 +79,16 @@ async function getPartContext(
 
       Database
         .select()
-        .from(FinalBillFindings)
+        .from(FinalBillDiscounts)
         .where(
           and(
             eq(
-              FinalBillFindings.id,
-              findingId,
+              FinalBillDiscounts.id,
+              discountId,
             ),
             eq(
-              FinalBillFindings.finalBillId,
+              FinalBillDiscounts.finalBillId,
               billId,
-            ),
-          ),
-        )
-        .limit(1),
-
-      Database
-        .select()
-        .from(FinalBillFindingParts)
-        .where(
-          and(
-            eq(
-              FinalBillFindingParts.id,
-              partId,
-            ),
-            eq(
-              FinalBillFindingParts.finalBillFindingId,
-              findingId,
             ),
           ),
         )
@@ -100,9 +97,8 @@ async function getPartContext(
 
   return {
     bill: bill[0] ?? null,
-    finding:
-      finding[0] ?? null,
-    part: part[0] ?? null,
+    discount:
+      discount[0] ?? null,
   };
 }
 
@@ -113,27 +109,24 @@ export async function PATCH(
   }: {
     params: Promise<{
       id: string;
-      findingId: string;
-      partId: string;
+      discountId: string;
     }>;
   },
 ) {
   const {
     id,
-    findingId,
-    partId,
+    discountId,
   } = await params;
 
   if (
     !isValidUUID(id) ||
-    !isValidUUID(findingId) ||
-    !isValidUUID(partId)
+    !isValidUUID(discountId)
   ) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'Invalid Final Cost, finding, or part ID.',
+          'Invalid Final Cost or discount ID.',
       },
       { status: 422 },
     );
@@ -154,56 +147,63 @@ export async function PATCH(
     );
   }
 
-  const quantity =
-    body?.quantity === undefined
-      ? undefined
-      : Number(body.quantity);
+  const title =
+    typeof body?.title === 'string'
+      ? body.title.trim()
+      : '';
 
-  const priceAtTime =
-    body?.priceAtTime === undefined
-      ? undefined
-      : Number(body.priceAtTime);
+  const type =
+    normalizeType(body?.type);
 
-  if (
-    quantity !== undefined &&
-    (!Number.isFinite(quantity) ||
-      quantity < 1 ||
-      !Number.isInteger(quantity))
-  ) {
+  const value = Number(
+    body?.value,
+  );
+
+  if (!title) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'Quantity must be a whole number of at least 1.',
+          'Discount title is required.',
+      },
+      { status: 422 },
+    );
+  }
+
+  if (!type) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Discount type must be fixed or percentage.',
       },
       { status: 422 },
     );
   }
 
   if (
-    priceAtTime !== undefined &&
-    (!Number.isFinite(priceAtTime) ||
-      priceAtTime < 0)
+    !Number.isFinite(value) ||
+    value <= 0
   ) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'Part price must be zero or greater.',
+          'Discount value must be greater than zero.',
       },
       { status: 422 },
     );
   }
 
   if (
-    quantity === undefined &&
-    priceAtTime === undefined
+    type === 'percentage' &&
+    value > 100
   ) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'At least one part value must be provided.',
+          'Percentage discounts cannot exceed 100%.',
       },
       { status: 422 },
     );
@@ -212,12 +212,10 @@ export async function PATCH(
   try {
     const {
       bill,
-      finding,
-      part,
-    } = await getPartContext(
+      discount,
+    } = await getBillAndDiscount(
       id,
-      findingId,
-      partId,
+      discountId,
     );
 
     if (!bill) {
@@ -231,23 +229,12 @@ export async function PATCH(
       );
     }
 
-    if (!finding) {
+    if (!discount) {
       return NextResponse.json(
         {
           error: true,
           errorMessage:
-            'Finding does not belong to this Final Cost.',
-        },
-        { status: 404 },
-      );
-    }
-
-    if (!part) {
-      return NextResponse.json(
-        {
-          error: true,
-          errorMessage:
-            'Part/item not found for this finding.',
+            'Discount not found for this Final Cost.',
         },
         { status: 404 },
       );
@@ -258,45 +245,31 @@ export async function PATCH(
         {
           error: true,
           errorMessage:
-            'Parts/items can only be edited while the Final Cost is Pending or Parked.',
+            'Discounts can only be edited while the Final Cost is Pending or Parked.',
         },
         { status: 409 },
       );
     }
 
-    const nextQuantity =
-      quantity ??
-      Number(part.quantity) ||
-      1;
-
-    const nextPrice =
-      priceAtTime ??
-      Number(part.priceAtTime) ||
-      0;
-
-    const totalPrice =
-      nextQuantity *
-      nextPrice;
-
-    const [updatedPart] =
+    const [updatedDiscount] =
       await Database
-        .update(FinalBillFindingParts)
+        .update(FinalBillDiscounts)
         .set({
-          quantity: nextQuantity,
-          priceAtTime:
-            nextPrice.toFixed(2),
-          totalPrice:
-            totalPrice.toFixed(2),
+          title,
+          type,
+          value: value.toFixed(2),
+          updatedAt:
+            new Date(),
         })
         .where(
           and(
             eq(
-              FinalBillFindingParts.id,
-              partId,
+              FinalBillDiscounts.id,
+              discountId,
             ),
             eq(
-              FinalBillFindingParts.finalBillFindingId,
-              findingId,
+              FinalBillDiscounts.finalBillId,
+              id,
             ),
           ),
         )
@@ -311,16 +284,17 @@ export async function PATCH(
       {
         error: false,
         message:
-          'Part/item updated.',
+          'Discount updated.',
         data: {
-          part: updatedPart,
+          discount:
+            updatedDiscount,
           bill: updatedBill,
         },
       },
     );
   } catch (error) {
     console.error(
-      '[PATCH /api/payments/final-bills/[id]/findings/[findingId]/parts/[partId]] Error:',
+      '[PATCH /api/payments/final-bills/[id]/discounts/[discountId]] Error:',
       error,
     );
 
@@ -328,7 +302,7 @@ export async function PATCH(
       {
         error: true,
         errorMessage:
-          'Failed to update Final Cost part/item.',
+          'Failed to update Final Cost discount.',
       },
       { status: 500 },
     );
@@ -342,8 +316,7 @@ export async function DELETE(
   }: {
     params: Promise<{
       id: string;
-      findingId: string;
-      partId: string;
+      discountId: string;
     }>;
   },
 ) {
@@ -351,20 +324,18 @@ export async function DELETE(
 
   const {
     id,
-    findingId,
-    partId,
+    discountId,
   } = await params;
 
   if (
     !isValidUUID(id) ||
-    !isValidUUID(findingId) ||
-    !isValidUUID(partId)
+    !isValidUUID(discountId)
   ) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'Invalid Final Cost, finding, or part ID.',
+          'Invalid Final Cost or discount ID.',
       },
       { status: 422 },
     );
@@ -373,12 +344,10 @@ export async function DELETE(
   try {
     const {
       bill,
-      finding,
-      part,
-    } = await getPartContext(
+      discount,
+    } = await getBillAndDiscount(
       id,
-      findingId,
-      partId,
+      discountId,
     );
 
     if (!bill) {
@@ -392,23 +361,12 @@ export async function DELETE(
       );
     }
 
-    if (!finding) {
+    if (!discount) {
       return NextResponse.json(
         {
           error: true,
           errorMessage:
-            'Finding does not belong to this Final Cost.',
-        },
-        { status: 404 },
-      );
-    }
-
-    if (!part) {
-      return NextResponse.json(
-        {
-          error: true,
-          errorMessage:
-            'Part/item not found for this finding.',
+            'Discount not found for this Final Cost.',
         },
         { status: 404 },
       );
@@ -419,23 +377,23 @@ export async function DELETE(
         {
           error: true,
           errorMessage:
-            'Parts/items can only be removed while the Final Cost is Pending or Parked.',
+            'Discounts can only be removed while the Final Cost is Pending or Parked.',
         },
         { status: 409 },
       );
     }
 
     await Database
-      .delete(FinalBillFindingParts)
+      .delete(FinalBillDiscounts)
       .where(
         and(
           eq(
-            FinalBillFindingParts.id,
-            partId,
+            FinalBillDiscounts.id,
+            discountId,
           ),
           eq(
-            FinalBillFindingParts.finalBillFindingId,
-            findingId,
+            FinalBillDiscounts.finalBillId,
+            id,
           ),
         ),
       );
@@ -449,13 +407,13 @@ export async function DELETE(
       {
         error: false,
         message:
-          'Part/item removed.',
+          'Discount removed.',
         data: updatedBill,
       },
     );
   } catch (error) {
     console.error(
-      '[DELETE /api/payments/final-bills/[id]/findings/[findingId]/parts/[partId]] Error:',
+      '[DELETE /api/payments/final-bills/[id]/discounts/[discountId]] Error:',
       error,
     );
 
@@ -463,7 +421,7 @@ export async function DELETE(
       {
         error: true,
         errorMessage:
-          'Failed to remove Final Cost part/item.',
+          'Failed to remove Final Cost discount.',
       },
       { status: 500 },
     );
