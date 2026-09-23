@@ -517,11 +517,6 @@ export function Sidebar({
           </div>
         </SheetContent>
       </Sheet>
-
-      {/* ============================================================
-          MOBILE BOTTOM NAVIGATION
-          ============================================================ */}
-      <MobileBottomNav items={visibleItems} />
     </>
   );
 }
