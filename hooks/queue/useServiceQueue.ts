@@ -40,9 +40,9 @@ export function useServiceQueue(
     true,
   );
 
-  /* ==============================================================
+  /* =============================================================
      LOAD QUEUE
-  ============================================================== */
+  ============================================================= */
 
   const loadQueue =
     useCallback(
@@ -69,7 +69,7 @@ export function useServiceQueue(
             );
 
           if (
-            res.error
+            res?.error
           ) {
             toast.error(
               res.errorMessage ||
@@ -85,7 +85,7 @@ export function useServiceQueue(
 
           setQueue(
             Array.isArray(
-              res.data,
+              res?.data,
             )
               ? res.data
               : [],
@@ -118,9 +118,9 @@ export function useServiceQueue(
       ],
     );
 
-  /* ==============================================================
+  /* =============================================================
      INITIAL LOAD / DATE CHANGE
-  ============================================================== */
+  ============================================================= */
 
   useEffect(() => {
     if (
@@ -149,11 +149,14 @@ export function useServiceQueue(
     loadQueue,
   ]);
 
-  /* ==============================================================
+  /* =============================================================
      REALTIME REFRESH
-     
+
      The server remains the single source of truth.
-  ============================================================== */
+     Both service_queue and appointments changes are observed
+     by useRealtimeServiceQueue so an appointment entering
+     IN_PROGRESS appears in the work queue immediately.
+  ============================================================= */
 
   useRealtimeServiceQueue({
     onDataChanged:
@@ -165,15 +168,12 @@ export function useServiceQueue(
     date,
   });
 
-  /* ==============================================================
+  /* =============================================================
      RETURN
-     
-     There is intentionally no moveUp / moveDown / reorder API.
-     
-     Queue order is derived from:
-       appointmentTime ASC
-       createdAt ASC
-  ============================================================== */
+
+     Queue order is determined by the server.
+     There is intentionally no manual move/reorder behavior.
+  ============================================================= */
 
   return {
     queue,

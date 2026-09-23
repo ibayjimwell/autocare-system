@@ -239,6 +239,20 @@
       "when": 1789726191296,
       "tag": "0033_public_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790059700821,
+      "tag": "0034_black_la_nuit",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790067303282,
+      "tag": "0035_clear_pet_avengers",
+      "breakpoints": true
     }
   ]
 }

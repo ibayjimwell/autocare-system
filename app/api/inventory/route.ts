@@ -1,3 +1,5 @@
+// api/inventory/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { Inventory } from "@/database/models/inventory/inventory.model";

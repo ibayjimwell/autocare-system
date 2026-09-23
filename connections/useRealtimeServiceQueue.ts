@@ -1,24 +1,85 @@
-// connections/useRealtimeServiceQueue.ts
 'use client';
 
-import { useCallback } from 'react';
-import { useRealtimeTable } from './useRealtimeTable';
-import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import {
+  useCallback,
+} from 'react';
+
+import {
+  RealtimePostgresChangesPayload,
+} from '@supabase/supabase-js';
+
+import {
+  useRealtimeTable,
+} from './useRealtimeTable';
 
 interface UseRealtimeServiceQueueProps {
   onDataChanged: () => void;
-  date: string;   // YYYY-MM-DD
+  date: string;
 }
 
-export function useRealtimeServiceQueue({ onDataChanged, date }: UseRealtimeServiceQueueProps) {
-  const handleChange = useCallback(
-    (payload: RealtimePostgresChangesPayload<any>) => {
-      console.log('📋 Queue change detected, refreshing...');
-      onDataChanged();
-    },
-    [onDataChanged]
+export function useRealtimeServiceQueue({
+  onDataChanged,
+  date,
+}: UseRealtimeServiceQueueProps) {
+  const handleServiceQueueChange =
+    useCallback(
+      (
+        payload: RealtimePostgresChangesPayload<any>,
+      ) => {
+        console.log(
+          '📋 [Realtime Queue] service_queue change detected:',
+          payload.eventType,
+        );
+
+        onDataChanged();
+      },
+      [
+        onDataChanged,
+      ],
+    );
+
+  const handleAppointmentChange =
+    useCallback(
+      (
+        payload: RealtimePostgresChangesPayload<any>,
+      ) => {
+        console.log(
+          '📋 [Realtime Queue] appointment change detected:',
+          payload.eventType,
+        );
+
+        onDataChanged();
+      },
+      [
+        onDataChanged,
+      ],
+    );
+
+  /* =============================================================
+     SERVICE QUEUE CHANGES
+  ============================================================= */
+
+  useRealtimeTable(
+    'service_queue',
+    date
+      ? `queue_date=eq.${date}`
+      : null,
+    handleServiceQueueChange,
   );
 
-  // Subscribe only to changes for the given date
-  useRealtimeTable('service_queue', `queue_date=eq.${date}`, handleChange);
+  /* =============================================================
+     APPOINTMENT CHANGES
+
+     IN_PROGRESS is an appointment status. Observing appointments
+     ensures the work queue refreshes when an appointment enters or
+     leaves IN_PROGRESS, even when no service_queue row is changed.
+  ============================================================= */
+
+  useRealtimeTable(
+    'appointments',
+    date
+      ? `appointment_date=eq.${date}`
+      : null,
+    handleAppointmentChange,
+  );
 }
