@@ -1,85 +1,122 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Database } from "@/lib/drizzle";
-import { Inventory } from "@/database/models/inventory/inventory.model";
-import { PosTransaction } from "@/database/models/inventory/pos-transaction.model";
-import { eq, inArray } from "drizzle-orm";
-import { inventoryTriggers } from "@/triggers/inventory";
+import { NextRequest, NextResponse } from 'next/server';
+import { Database } from '@/lib/drizzle';
+import { Inventory } from '@/database/models/inventory/inventory.model';
+import { PosTransaction } from '@/database/models/inventory/pos-transaction.model';
+import { eq, inArray } from 'drizzle-orm';
+import { inventoryTriggers } from '@/triggers/inventory';
 
 export async function POST(req: NextRequest) {
   let body: any;
+
   try {
     body = await req.json();
-  } catch (e) {
-    return NextResponse.json({ error: true, errorMessage: "Invalid JSON" }, { status: 400 });
+  } catch {
+    return NextResponse.json(
+      { error: true, errorMessage: 'Invalid JSON.' },
+      { status: 400 },
+    );
   }
 
-  const { items, paymentReceived, staffId } = body;
+  const { items, paymentReceived, staffId } = body || {};
 
-  // Validate input
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return NextResponse.json({ error: true, errorMessage: "No items provided." }, { status: 422 });
-  }
-  if (typeof paymentReceived !== 'number' || paymentReceived <= 0) {
-    return NextResponse.json({ error: true, errorMessage: "Payment amount required." }, { status: 422 });
-  }
-
-  // Fetch inventory items
-  const itemIds = items.map((i: any) => i.id);
-  const inventoryItems = await Database.select()
-    .from(Inventory)
-    .where(inArray(Inventory.id, itemIds));
-
-  const inventoryMap = new Map(inventoryItems.map(i => [i.id, i]));
-
-  // Validate stock availability and compute total
-  let totalAmount = 0;
-  const processedItems = [];
-
-  for (const cartItem of items) {
-    const inv = inventoryMap.get(cartItem.id);
-    if (!inv) {
-      return NextResponse.json(
-        { error: true, errorMessage: `Item not found: ${cartItem.name || cartItem.id}` },
-        { status: 404 }
-      );
-    }
-    if (inv.quantity < cartItem.quantity) {
-      return NextResponse.json(
-        { error: true, errorMessage: `Not enough stock for ${inv.name}` },
-        { status: 400 }
-      );
-    }
-    const lineTotal = parseFloat(inv.sellingPrice) * cartItem.quantity;
-    totalAmount += lineTotal;
-    processedItems.push({
-      id: inv.id,
-      name: inv.name,
-      quantity: cartItem.quantity,
-      sellingPrice: inv.sellingPrice,
-      lineTotal: lineTotal.toFixed(2),
-    });
+  if (!Array.isArray(items) || items.length === 0) {
+    return NextResponse.json(
+      { error: true, errorMessage: 'No items provided.' },
+      { status: 422 },
+    );
   }
 
-  const changeGiven = paymentReceived - totalAmount;
-  if (changeGiven < 0) {
-    return NextResponse.json({ error: true, errorMessage: "Insufficient payment." }, { status: 400 });
+  if (
+    typeof paymentReceived !== 'number' ||
+    !Number.isFinite(paymentReceived) ||
+    paymentReceived <= 0
+  ) {
+    return NextResponse.json(
+      { error: true, errorMessage: 'Payment amount required.' },
+      { status: 422 },
+    );
   }
 
   try {
+    const itemIds = items.map((item: any) => item?.id).filter(Boolean);
+
+    if (itemIds.length !== items.length) {
+      return NextResponse.json(
+        { error: true, errorMessage: 'Every POS item must have a valid inventory ID.' },
+        { status: 422 },
+      );
+    }
+
     const result = await Database.transaction(async (tx) => {
-      // Deduct stock for each item
+      const inventoryItems = await tx
+        .select()
+        .from(Inventory)
+        .where(inArray(Inventory.id, itemIds));
+
+      const inventoryMap = new Map(
+        inventoryItems.map((item) => [item.id, item]),
+      );
+
+      let totalAmount = 0;
+      const processedItems: any[] = [];
+
+      for (const cartItem of items) {
+        const inv = inventoryMap.get(cartItem.id);
+
+        if (!inv) {
+          throw new Error(`Item not found: ${cartItem.name || cartItem.id}`);
+        }
+
+        const quantity = Number(cartItem.quantity);
+
+        if (
+          !Number.isInteger(quantity) ||
+          quantity <= 0
+        ) {
+          throw new Error(`Invalid quantity for ${inv.name}.`);
+        }
+
+        if (inv.quantity < quantity) {
+          throw new Error(`Not enough stock for ${inv.name}.`);
+        }
+
+        const sellingPrice = Number.parseFloat(String(inv.sellingPrice)) || 0;
+        const lineTotal = sellingPrice * quantity;
+
+        totalAmount += lineTotal;
+
+        processedItems.push({
+          id: inv.id,
+          name: inv.name,
+          quantity,
+          sellingPrice: inv.sellingPrice,
+          lineTotal: lineTotal.toFixed(2),
+        });
+      }
+
+      totalAmount = Math.round(totalAmount * 100) / 100;
+
+      const changeGiven = Math.round(
+        (paymentReceived - totalAmount) * 100,
+      ) / 100;
+
+      if (changeGiven < 0) {
+        throw new Error('Insufficient payment.');
+      }
+
       for (const cartItem of items) {
         const inv = inventoryMap.get(cartItem.id)!;
+        const nextQuantity = inv.quantity - Number(cartItem.quantity);
+
         await tx
           .update(Inventory)
           .set({
-            quantity: inv.quantity - cartItem.quantity,
+            quantity: nextQuantity,
             updatedAt: new Date(),
           })
           .where(eq(Inventory.id, inv.id));
       }
 
-      // Insert POS transaction record
       const [inserted] = await tx
         .insert(PosTransaction)
         .values({
@@ -91,25 +128,43 @@ export async function POST(req: NextRequest) {
         })
         .returning();
 
-      return inserted;
+      return {
+        transaction: inserted,
+        processedItems,
+        totalAmount,
+        changeGiven,
+      };
     });
 
-    const totalFormatted = `₱${parseFloat(totalAmount.toFixed(2)).toLocaleString()}`;
-    inventoryTriggers.onPosSale({
-      itemName: `${processedItems.length} item(s)`,
-      transactionTotal: totalFormatted,
-      transactionId: result.id,
-    }).catch(console.error);
+    inventoryTriggers
+      .onPosSale({
+        itemName: `${result.processedItems.length} item(s)`,
+        transactionTotal: `₱${result.totalAmount.toLocaleString('en-PH', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`,
+        transactionId: result.transaction.id,
+      })
+      .catch(console.error);
 
     return NextResponse.json(
-      { error: false, message: "Sale completed.", data: result },
-      { status: 201 }
+      {
+        error: false,
+        message: 'Sale completed.',
+        data: result.transaction,
+      },
+      { status: 201 },
     );
-  } catch (e) {
-    console.error("[POST /api/pos] Error:", e);
+  } catch (error: any) {
+    console.error('[POST /api/inventory/pos] Error:', error);
+
     return NextResponse.json(
-      { error: true, errorMessage: "Transaction failed." },
-      { status: 500 }
+      {
+        error: true,
+        errorMessage:
+          error?.message || 'Transaction failed.',
+      },
+      { status: 400 },
     );
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -8,7 +8,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Search,
   Package,
@@ -37,7 +36,7 @@ export default function InventoryPicker({
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -48,14 +47,16 @@ export default function InventoryPicker({
       try {
         const res = await inventoryApi.list({
           search: search.trim() || undefined,
-          limit: 20,
+          limit: 30,
+          active: 'true',
+          stock: 'all',
         });
 
-        if (res.error) {
+        if (res?.error) {
           console.error('Inventory fetch error:', res.errorMessage);
           setItems([]);
         } else {
-          setItems(res.data || []);
+          setItems(Array.isArray(res?.data) ? res.data : []);
         }
       } catch (err) {
         console.error('Inventory fetch error:', err);
@@ -69,7 +70,7 @@ export default function InventoryPicker({
       clearTimeout(debounceRef.current);
     }
 
-    debounceRef.current = setTimeout(fetchItems, 300);
+    debounceRef.current = setTimeout(fetchItems, 250);
 
     return () => {
       if (debounceRef.current) {
@@ -82,8 +83,8 @@ export default function InventoryPicker({
     onSelect({
       id: item.id,
       name: item.name,
-      price: parseFloat(item.sellingPrice) || 0,
-      quantity: 1,
+      price: Number.parseFloat(String(item.sellingPrice ?? 0)) || 0,
+      quantity: Number(item.quantity) || 0,
     });
 
     setOpen(false);
@@ -118,7 +119,6 @@ export default function InventoryPicker({
         <div className="border-b border-border p-3">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
             <Input
               placeholder="Search inventory..."
               value={search}
@@ -129,7 +129,7 @@ export default function InventoryPicker({
           </div>
         </div>
 
-        <ScrollArea className="max-h-72 p-1.5">
+        <div className="max-h-[min(70vh,24rem)] overflow-y-auto p-1.5 [scrollbar-gutter:stable]">
           {loading ? (
             <div className="space-y-1">
               {Array.from({ length: 5 }).map((_, index) => (
@@ -142,11 +142,9 @@ export default function InventoryPicker({
           ) : items.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <Package className="mx-auto h-6 w-6 text-muted-foreground" />
-
               <p className="mt-2 text-sm font-medium text-foreground">
                 {search ? 'No items found' : 'No inventory items'}
               </p>
-
               <p className="mt-1 text-xs text-muted-foreground">
                 Try another search.
               </p>
@@ -164,14 +162,22 @@ export default function InventoryPicker({
                     <div className="truncate text-sm font-medium text-foreground">
                       {item.name}
                     </div>
-
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      {item.quantity} {item.unit} · ₱
-                      {parseFloat(item.sellingPrice).toFixed(2)}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                      <span>
+                        {item.quantity} {item.unit || 'unit'}
+                      </span>
+                      <span>·</span>
+                      <span>₱{Number.parseFloat(String(item.sellingPrice ?? 0)).toFixed(2)}</span>
+                      {item.barcode ? (
+                        <>
+                          <span>·</span>
+                          <span className="font-mono">{item.barcode}</span>
+                        </>
+                      ) : null}
                     </div>
                   </div>
 
-                  <span className="inline-flex h-8 shrink-0 items-center rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="inline-flex h-8 shrink-0 items-center rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                     <Check className="mr-1.5 h-3.5 w-3.5" />
                     Select
                   </span>
@@ -179,7 +185,7 @@ export default function InventoryPicker({
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

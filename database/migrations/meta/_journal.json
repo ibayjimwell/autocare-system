@@ -253,6 +253,13 @@
       "when": 1790067303282,
       "tag": "0035_clear_pet_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790152031968,
+      "tag": "0036_windy_lord_hawal",
+      "breakpoints": true
     }
   ]
 }
