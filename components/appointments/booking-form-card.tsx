@@ -1481,7 +1481,11 @@ export default function BookingFormCard({
           </div>
 
           {/* ======================================================
-              AVAILABLE SLOT
+              AVAILABLE TIME
+
+              Time choices are generated from the shop's opening and
+              closing hours only. Existing appointment durations do not
+              shrink this list.
           ======================================================= */}
 
           <div>
@@ -1503,37 +1507,30 @@ export default function BookingFormCard({
                   text-muted-foreground
                 "
               >
-                Available Slot
+                Available Time
               </Label>
 
-              {watchDate &&
-                watchServices.length >
-                  0 && (
-                  <span
-                    className="
-                      shrink-0
-                      text-[10px]
-                      font-medium
-                      uppercase
-                      tracking-wide
-                      text-muted-foreground
-                    "
-                  >
-                    {format(
-                      selectedDate,
-                      'MMM d',
-                    )}
-                  </span>
-                )}
+              {watchDate && (
+                <span
+                  className="
+                    shrink-0
+                    text-[10px]
+                    font-medium
+                    uppercase
+                    tracking-wide
+                    text-muted-foreground
+                  "
+                >
+                  Shop hours
+                </span>
+              )}
             </div>
 
             {/* ====================================================
-                NO DATE / NO SERVICES
+                NO DATE
             ===================================================== */}
 
-            {!watchDate ||
-            watchServices.length ===
-              0 ? (
+            {!watchDate ? (
               <div
                 className="
                   rounded-lg
@@ -1564,10 +1561,7 @@ export default function BookingFormCard({
                     text-muted-foreground
                   "
                 >
-                  {watchServices.length ===
-                  0
-                    ? 'Select date & services first'
-                    : 'Select date first'}
+                  Select a date first
                 </p>
               </div>
             ) : loadingAvailableSlots ? (
@@ -1582,7 +1576,7 @@ export default function BookingFormCard({
                   gap-2
                   sm:grid-cols-3
                 "
-                aria-label="Loading available appointment slots"
+                aria-label="Loading available appointment times"
               >
                 {availableSlotSkeleton.map(
                   (
@@ -1605,10 +1599,9 @@ export default function BookingFormCard({
                   ),
                 )}
               </div>
-            ) : availableSlots.length ===
-              0 ? (
+            ) : availableSlots.length === 0 ? (
               /* ====================================================
-                 NO SLOTS
+                 NO TIMES
               ===================================================== */
 
               <div
@@ -1639,8 +1632,7 @@ export default function BookingFormCard({
                     text-destructive
                   "
                 >
-                  No slots available for this
-                  date.
+                  No time listings available for this date.
                 </p>
 
                 <p
@@ -1650,15 +1642,17 @@ export default function BookingFormCard({
                     text-muted-foreground
                   "
                 >
-                  Try another date or select
-                  another service.
+                  Check the shop schedule or choose another date.
                 </p>
               </div>
             ) : (
               /* ====================================================
-                 PRESET SLOTS ONLY
-                 
-                 Custom time has been completely removed.
+                 SHOP-HOUR TIME LIST
+
+                 Every time returned by the endpoint is derived from
+                 openingTime -> closingTime in 30-minute increments.
+                 Existing appointments do not remove times from this
+                 list.
               ===================================================== */
 
               <div
@@ -1677,6 +1671,9 @@ export default function BookingFormCard({
                       watchAppointmentTime ===
                       slot.time;
 
+                    const isAvailable =
+                      slot.available !== false;
+
                     return (
                       <button
                         type="button"
@@ -1684,11 +1681,11 @@ export default function BookingFormCard({
                           slot.time
                         }
                         disabled={
-                          !slot.available
+                          !isAvailable
                         }
                         onClick={() => {
                           if (
-                            !slot.available
+                            !isAvailable
                           ) {
                             return;
                           }
@@ -1711,6 +1708,7 @@ export default function BookingFormCard({
                         aria-pressed={
                           isSelected
                         }
+                        aria-label={`Select appointment time ${formatTime12h(slot.time)}`}
                         className={cn(
                           `
                             flex
@@ -1718,6 +1716,7 @@ export default function BookingFormCard({
                             items-center
                             justify-center
                             rounded-md
+                            border
                             px-3
                             text-xs
                             font-semibold
@@ -1734,13 +1733,13 @@ export default function BookingFormCard({
                           `,
                           isSelected
                             ? `
+                              border-primary
                               bg-primary
                               text-primary-foreground
                               shadow-sm
                             `
-                            : slot.available
+                            : isAvailable
                               ? `
-                                border
                                 border-border
                                 bg-card
                                 text-foreground
@@ -1749,7 +1748,6 @@ export default function BookingFormCard({
                               `
                               : `
                                 cursor-not-allowed
-                                border
                                 border-border/60
                                 bg-muted/50
                                 text-muted-foreground/60
@@ -1945,3 +1943,4 @@ export default function BookingFormCard({
     </Card>
   );
 }
+

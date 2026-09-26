@@ -33,6 +33,7 @@ import AppointmentsSkeleton from '@/components/skeleton/appointments-skeleton';
 import BookingFormCard from '@/components/appointments/booking-form-card';
 import DailyAgenda from '@/components/appointments/daily-agenda';
 import AppointmentCard from '@/components/appointments/appointment-card';
+import AppointmentTimeGrid from '@/components/appointments/appointment-time-grid';
 
 import {
   Card,
@@ -1214,6 +1215,18 @@ export default function AppointmentsPage() {
             )}
           </div>
         </div>
+
+        {/* ========================================================
+            APPOINTMENT TIME GRID
+
+            This is intentionally placed above the search/calendar/booking
+            workspace. It is driven by the currently selected calendar date.
+        ========================================================= */}
+
+        <AppointmentTimeGrid
+          selectedDate={selectedDate}
+          appointments={appointments}
+        />
 
         {/* ========================================================
             SEARCH PANEL

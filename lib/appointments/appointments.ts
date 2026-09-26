@@ -1,7 +1,3 @@
-/* ================================================================
-   APPOINTMENTS API
-================================================================ */
-
 export const appointmentsApi = {
   /* ==============================================================
      LIST APPOINTMENTS
@@ -300,12 +296,18 @@ export const appointmentsApi = {
   },
 
   /* ==============================================================
-     AVAILABLE SLOTS
+     AVAILABLE TIMES
+
+     The available-time endpoint is intentionally based only on the
+     selected date's shop opening and closing hours.
+
+     `serviceIds` is no longer required. It remains optional here only
+     for backwards compatibility with any older callers.
   ============================================================== */
 
   getAvailableSlots: async (
     date: string,
-    serviceIds: string[],
+    serviceIds?: string[],
   ) => {
     const query =
       new URLSearchParams();
@@ -315,12 +317,17 @@ export const appointmentsApi = {
       date,
     );
 
-    query.set(
-      'serviceIds',
-      serviceIds.join(
-        ',',
-      ),
-    );
+    if (
+      Array.isArray(serviceIds) &&
+      serviceIds.length > 0
+    ) {
+      query.set(
+        'serviceIds',
+        serviceIds.join(
+          ',',
+        ),
+      );
+    }
 
     const res =
       await fetch(
@@ -395,3 +402,9 @@ export const appointmentsApi = {
       return res.json();
     },
 };
+
+import { Database } from "@/lib/drizzle";
+import { Appointments } from "@/database/models/appointments/appointments.model";
+import { Customers } from "@/database/models/customers/customers.model";
+import { Vehicles } from "@/database/models/customers/vehicles.model";
+import { Services } from "@/database/models/services/services.model";

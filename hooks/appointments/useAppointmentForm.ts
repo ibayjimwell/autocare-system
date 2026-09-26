@@ -72,7 +72,7 @@ export function useAppointmentForm(
   ] = useState<
     {
       time: string;
-      available: boolean;
+      available?: boolean;
     }[]
   >([]);
 
@@ -461,23 +461,19 @@ export function useAppointmentForm(
   ]);
 
   /* ==============================================================
-     FETCH AVAILABLE SLOTS
-     
-     Runs whenever:
-       - appointment date changes
-       - selected services change
+     FETCH AVAILABLE TIMES
+
+     The available time list is intentionally independent of:
+       - selected service duration
+       - existing appointment duration
+       - existing appointment occupancy
+
+     The endpoint returns the complete 30-minute time grid defined by
+     the shop opening and closing hours for the selected date.
   ============================================================== */
 
   useEffect(() => {
-    /*
-     * No valid date/services:
-     * there is nothing to fetch.
-     */
-    if (
-      !watchDate ||
-      watchServices.length ===
-        0
-    ) {
+    if (!watchDate) {
       setAvailableSlots(
         [],
       );
@@ -486,11 +482,6 @@ export function useAppointmentForm(
         false,
       );
 
-      /*
-       * Reset any previously selected appointment time because
-       * the current time selection is no longer based on a valid
-       * date/service combination.
-       */
       setValue(
         'appointmentTime',
         '',
@@ -520,18 +511,10 @@ export function useAppointmentForm(
           true,
         );
 
-        /*
-         * Do not keep displaying slots from the previous service
-         * selection/date while a new request is running.
-         */
         setAvailableSlots(
           [],
         );
 
-        /*
-         * The previous selected time may no longer exist for the
-         * new date/services combination.
-         */
         setValue(
           'appointmentTime',
           '',
@@ -548,10 +531,15 @@ export function useAppointmentForm(
               'yyyy-MM-dd',
             );
 
+          /*
+           * Only the selected date is needed now.
+           *
+           * The backend derives the complete time list from the
+           * effective opening/closing hours for this date.
+           */
           const res =
             await appointmentsApi.getAvailableSlots(
               dateStr,
-              watchServices,
             );
 
           if (
@@ -583,7 +571,7 @@ export function useAppointmentForm(
           }
 
           console.error(
-            '[useAppointmentForm] Failed to load available slots:',
+            '[useAppointmentForm] Failed to load available times:',
             error,
           );
 
@@ -593,7 +581,7 @@ export function useAppointmentForm(
 
           toast.error(
             error?.message ||
-              'Failed to load available appointment slots.',
+              'Failed to load available appointment times.',
           );
         } finally {
           if (
@@ -613,7 +601,6 @@ export function useAppointmentForm(
     };
   }, [
     watchDate,
-    watchServices,
     setValue,
   ]);
 
@@ -918,3 +905,7 @@ export function useAppointmentForm(
     submitHandler,
   };
 }
+
+/* ================================================================
+   APPOINTMENTS API
+================================================================ */
