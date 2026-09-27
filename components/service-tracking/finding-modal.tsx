@@ -1,6 +1,32 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, {
+  useState,
+} from 'react';
+
+import {
+  Button,
+} from '@/components/ui/button';
+
+import {
+  Input,
+} from '@/components/ui/input';
+
+import {
+  Textarea,
+} from '@/components/ui/textarea';
+
+import {
+  Label,
+} from '@/components/ui/label';
+
+import {
+  Checkbox,
+} from '@/components/ui/checkbox';
+
+import {
+  Separator,
+} from '@/components/ui/separator';
 
 import {
   Dialog,
@@ -9,13 +35,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
 
 import {
   AlertCircle,
@@ -28,15 +47,23 @@ import {
   X,
 } from 'lucide-react';
 
-import { findingsApi } from '@/lib/service-tracking/findings';
-import { toast } from 'sonner';
+import {
+  findingsApi,
+} from '@/lib/service-tracking/findings';
+
+import {
+  toast,
+} from 'sonner';
 
 import InventoryPicker from '@/components/inventory/inventory-picker';
+
 import DefaultFindingPickerModal from './default-finding-picker-modal';
+
 import HistoryFindingPickerModal from './history-finding-picker-modal';
 
 interface FindingPart {
   id: string;
+  inventoryItemId?: string;
   partName: string;
   quantity: number;
   priceAtTime: number;
@@ -47,6 +74,19 @@ interface Finding {
   id: string;
   description: string;
   parts: FindingPart[];
+}
+
+interface FindingPickerPart {
+  inventoryItemId?: string;
+  partName: string;
+  quantity: number;
+  priceAtTime: number;
+  isPms: boolean;
+}
+
+interface FindingPickerData {
+  description: string;
+  parts: FindingPickerPart[];
 }
 
 interface FindingModalProps {
@@ -62,23 +102,33 @@ export default function FindingModal({
   appointmentId,
   onSaved,
 }: FindingModalProps) {
-  const [findings, setFindings] = useState<
-    Finding[]
-  >([
-    {
-      id: Date.now().toString(),
-      description: '',
-      parts: [],
-    },
-  ]);
+  const [
+    findings,
+    setFindings,
+  ] = useState<Finding[]>(
+    [
+      {
+        id: Date.now().toString(),
+        description: '',
+        parts: [],
+      },
+    ],
+  );
 
-  const [saving, setSaving] = useState(false);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
-  const [defaultPickerOpen, setDefaultPickerOpen] =
-    useState(false);
+  const [
+    defaultPickerOpen,
+    setDefaultPickerOpen,
+  ] = useState(false);
 
-  const [historyPickerOpen, setHistoryPickerOpen] =
-    useState(false);
+  const [
+    historyPickerOpen,
+    setHistoryPickerOpen,
+  ] = useState(false);
 
   const [
     isAddingFromPicker,
@@ -96,73 +146,111 @@ export default function FindingModal({
     ]);
   };
 
-  const removeFinding = (id: string) => {
-    if (findings.length === 1) return;
+  const removeFinding = (
+    id: string,
+  ) => {
+    if (
+      findings.length ===
+      1
+    ) {
+      return;
+    }
 
     setFindings(
       findings.filter(
-        (f) => f.id !== id
-      )
+        (
+          f,
+        ) =>
+          f.id !==
+          id,
+      ),
     );
   };
 
   const updateFindingDescription = (
     id: string,
-    description: string
+    description: string,
   ) => {
     setFindings(
-      findings.map((f) =>
-        f.id === id
-          ? {
-              ...f,
-              description,
-            }
-          : f
-      )
+      findings.map(
+        (
+          f,
+        ) =>
+          f.id ===
+          id
+            ? {
+                ...f,
+                description,
+              }
+            : f,
+      ),
     );
   };
 
-  const addPart = (findingId: string) => {
+  const addPart = (
+    findingId: string,
+  ) => {
     setFindings(
-      findings.map((f) => {
-        if (f.id === findingId) {
-          return {
-            ...f,
-            parts: [
-              ...f.parts,
-              {
-                id: Date.now().toString(),
-                partName: '',
-                quantity: 1,
-                priceAtTime: 0,
-                isPms: false,
-              },
-            ],
-          };
-        }
+      findings.map(
+        (
+          f,
+        ) => {
+          if (
+            f.id ===
+            findingId
+          ) {
+            return {
+              ...f,
+              parts: [
+                ...f.parts,
+                {
+                  id: Date.now().toString(),
+                  inventoryItemId:
+                    undefined,
+                  partName: '',
+                  quantity: 1,
+                  priceAtTime: 0,
+                  isPms: false,
+                },
+              ],
+            };
+          }
 
-        return f;
-      })
+          return f;
+        },
+      ),
     );
   };
 
   const removePart = (
     findingId: string,
-    partId: string
+    partId: string,
   ) => {
     setFindings(
-      findings.map((f) => {
-        if (f.id === findingId) {
-          return {
-            ...f,
-            parts: f.parts.filter(
-              (p) => p.id !== partId
-            ),
-          };
-        }
+      findings.map(
+        (
+          f,
+        ) => {
+          if (
+            f.id ===
+            findingId
+          ) {
+            return {
+              ...f,
+              parts:
+                f.parts.filter(
+                  (
+                    p,
+                  ) =>
+                    p.id !==
+                    partId,
+                ),
+            };
+          }
 
-        return f;
-      })
+          return f;
+        },
+      ),
     );
   };
 
@@ -170,33 +258,72 @@ export default function FindingModal({
     findingId: string,
     partId: string,
     field: keyof FindingPart,
-    value: any
+    value: any,
   ) => {
     setFindings(
-      findings.map((f) => {
-        if (f.id === findingId) {
-          return {
-            ...f,
-            parts: f.parts.map((p) => {
-              if (p.id === partId) {
-                return {
-                  ...p,
-                  [field]:
-                    field === 'isPms'
-                      ? value
-                      : field === 'quantity'
-                        ? parseInt(value) || 0
-                        : value,
-                };
-              }
+      findings.map(
+        (
+          f,
+        ) => {
+          if (
+            f.id ===
+            findingId
+          ) {
+            return {
+              ...f,
+              parts:
+                f.parts.map(
+                  (
+                    p,
+                  ) => {
+                    if (
+                      p.id ===
+                      partId
+                    ) {
+                      const nextPart =
+                        {
+                          ...p,
+                          [field]:
+                            field ===
+                            'isPms'
+                              ? value
+                              : field ===
+                                  'quantity'
+                                ? parseInt(
+                                    value,
+                                    10,
+                                  ) || 0
+                                : value,
+                        } as FindingPart;
 
-              return p;
-            }),
-          };
-        }
+                      /*
+                       * If staff manually edits the part name after
+                       * selecting an inventory item, it is no longer
+                       * a guaranteed inventory-linked part.
+                       *
+                       * Clear the inventory reference so the backend
+                       * does not reserve the wrong inventory item.
+                       */
+                      if (
+                        field ===
+                        'partName'
+                      ) {
+                        nextPart.inventoryItemId =
+                          undefined;
+                      }
 
-        return f;
-      })
+                      return nextPart;
+                    }
+
+                    return p;
+                  },
+                ),
+            };
+          }
+
+          return f;
+        },
+      ),
     );
   };
 
@@ -204,61 +331,146 @@ export default function FindingModal({
     findingId: string,
     partId: string,
     item: {
+      id?: string;
       name: string;
       price: number;
       quantity: number;
-    }
+      unit?: string;
+      reorderLevel?: number;
+      lowStock?: boolean;
+      outOfStock?: boolean;
+    },
   ) => {
+    if (
+      !item.id
+    ) {
+      toast.error(
+        'The selected inventory item is missing its ID.',
+      );
+
+      return;
+    }
+
+    if (
+      item.outOfStock ||
+      Number(
+        item.quantity,
+      ) <=
+        0
+    ) {
+      toast.error(
+        `${item.name} is out of stock and cannot be added.`,
+      );
+
+      return;
+    }
+
     setFindings(
-      findings.map((f) => {
-        if (f.id === findingId) {
-          return {
-            ...f,
-            parts: f.parts.map((p) => {
-              if (p.id === partId) {
-                return {
-                  ...p,
-                  partName: item.name,
-                  priceAtTime: item.price,
-                  quantity:
-                    item.quantity || 1,
-                };
-              }
+      findings.map(
+        (
+          f,
+        ) => {
+          if (
+            f.id ===
+            findingId
+          ) {
+            return {
+              ...f,
+              parts:
+                f.parts.map(
+                  (
+                    p,
+                  ) => {
+                    if (
+                      p.id ===
+                      partId
+                    ) {
+                      return {
+                        ...p,
+                        inventoryItemId:
+                          item.id,
+                        partName:
+                          item.name,
+                        priceAtTime:
+                          item.price,
+                        quantity:
+                          Math.max(
+                            1,
+                            Math.min(
+                              Number(
+                                p.quantity,
+                              ) ||
+                                1,
+                              Number(
+                                item.quantity,
+                              ) ||
+                                1,
+                            ),
+                          ),
+                      };
+                    }
 
-              return p;
-            }),
-          };
-        }
+                    return p;
+                  },
+                ),
+            };
+          }
 
-        return f;
-      })
+          return f;
+        },
+      ),
     );
+
+    if (
+      item.lowStock
+    ) {
+      toast.warning(
+        `${item.name} is low on stock (${item.quantity} ${item.unit || 'unit'} remaining).`,
+      );
+    }
   };
 
   const handleAddFindingFromPicker = (
-    findingData: {
-      description: string;
-      parts: Array<{
-        partName: string;
-        quantity: number;
-        priceAtTime: number;
-        isPms: boolean;
-      }>;
-    }
+    findingData: FindingPickerData,
   ) => {
-    const newFinding: Finding = {
-      id: Date.now().toString(),
-      description:
-        findingData.description,
-      parts: findingData.parts.map((p) => ({
+    const newFinding: Finding =
+      {
         id: Date.now().toString(),
-        partName: p.partName || '',
-        quantity: p.quantity || 1,
-        priceAtTime:
-          p.priceAtTime || 0,
-        isPms: p.isPms || false,
-      })),
-    };
+        description:
+          findingData.description,
+        parts:
+          findingData.parts.map(
+            (
+              p,
+              index,
+            ) => ({
+              id:
+                `${Date.now()}-${index}`,
+              inventoryItemId:
+                p.inventoryItemId,
+              partName:
+                p.partName ||
+                '',
+              quantity:
+                Math.max(
+                  1,
+                  Number(
+                    p.quantity,
+                  ) ||
+                    1,
+                ),
+              priceAtTime:
+                Number(
+                  p.priceAtTime,
+                ) ||
+                0,
+              isPms:
+                Boolean(
+                  p.isPms,
+                ),
+            }),
+          ),
+      };
 
     setFindings([
       ...findings,
@@ -267,121 +479,230 @@ export default function FindingModal({
   };
 
   const handleDefaultFindingSelect = (
-    finding: any
+    finding: any,
   ) => {
-    handleAddFindingFromPicker({
-      description: finding.title,
-      parts: finding.parts.map(
-        (p: any) => ({
-          partName: p.partName,
-          quantity: p.quantity,
-          priceAtTime:
-            parseFloat(
-              p.priceAtTime
-            ) || 0,
-          isPms: p.isPms,
-        })
-      ),
-    });
+    handleAddFindingFromPicker(
+      {
+        description:
+          finding.title,
+        parts:
+          Array.isArray(
+            finding.parts,
+          )
+            ? finding.parts.map(
+                (
+                  p: any,
+                  index: number,
+                ) => ({
+                  /*
+                   * Preserve the inventory reference when a default
+                   * finding contains one.
+                   */
+                  inventoryItemId:
+                    p.inventoryItemId,
+                  partName:
+                    p.partName,
+                  quantity:
+                    p.quantity,
+                  priceAtTime:
+                    parseFloat(
+                      p.priceAtTime,
+                    ) ||
+                    0,
+                  isPms:
+                    p.isPms,
+                }),
+              )
+            : [],
+      },
+    );
 
-    setDefaultPickerOpen(false);
+    setDefaultPickerOpen(
+      false,
+    );
   };
 
   const handleHistoryFindingsSelect =
     async (
       selectedFindings: Array<{
         description: string;
-        parts: Array<{
-          partName: string;
-          quantity: number;
-          priceAtTime: number;
-          isPms: boolean;
-        }>;
-      }>
+        parts: FindingPickerPart[];
+      }>,
     ) => {
-      setIsAddingFromPicker(true);
+      setIsAddingFromPicker(
+        true,
+      );
 
       try {
-        for (const f of selectedFindings) {
-          handleAddFindingFromPicker(f);
+        for (
+          const f of
+            selectedFindings
+        ) {
+          handleAddFindingFromPicker(
+            f,
+          );
         }
 
         toast.success(
-          `${selectedFindings.length} finding(s) added from history.`
+          `${selectedFindings.length} finding(s) added from history.`,
         );
 
-        setHistoryPickerOpen(false);
+        setHistoryPickerOpen(
+          false,
+        );
       } catch (err) {
         toast.error(
-          'Error adding findings from history.'
+          'Error adding findings from history.',
         );
       } finally {
-        setIsAddingFromPicker(false);
+        setIsAddingFromPicker(
+          false,
+        );
       }
     };
 
   const handleSave = async () => {
-    const invalid = findings.some(
-      (f) => !f.description.trim()
-    );
-
-    if (invalid) {
-      toast.error(
-        'Each finding must have a description.'
+    const invalid =
+      findings.some(
+        (
+          f,
+        ) =>
+          !f.description.trim(),
       );
+
+    if (
+      invalid
+    ) {
+      toast.error(
+        'Each finding must have a description.',
+      );
+
       return;
     }
 
-    setSaving(true);
+    const invalidPart = findings.some(
+      (finding) =>
+        finding.parts.some(
+          (part) =>
+            !part.partName.trim() || Number(part.quantity) <= 0,
+        ),
+    );
+
+    if (
+      invalidPart
+    ) {
+      toast.error(
+        'Each part must have a valid name and quantity.',
+      );
+
+      return;
+    }
+
+    setSaving(
+      true,
+    );
 
     try {
       const payload = {
         appointmentId,
-        findings: findings.map((f) => ({
-          description:
-            f.description.trim(),
-          parts: f.parts.map((p) => ({
-            partName:
-              p.partName.trim() ||
-              undefined,
-            quantity: p.quantity,
-            priceAtTime:
-              p.priceAtTime,
-            isPms: p.isPms,
-          })),
-        })),
+        findings:
+          findings.map(
+            (
+              f,
+            ) => ({
+              description:
+                f.description.trim(),
+
+              parts:
+                f.parts.map(
+                  (
+                    p,
+                  ) => ({
+                    /*
+                     * IMPORTANT:
+                     * Keep the inventory item ID when the part
+                     * came from InventoryPicker.
+                     *
+                     * Without this property the server stores
+                     * only partName, so keepAppointmentInventory()
+                     * correctly sees no linked inventory rows and
+                     * returns an empty allocations array.
+                     */
+                    ...(p.inventoryItemId
+                      ? {
+                          inventoryItemId:
+                            p.inventoryItemId,
+                        }
+                      : {}),
+
+                    partName:
+                      p.partName.trim() ||
+                      undefined,
+
+                    quantity:
+                      Math.max(
+                        1,
+                        Number(
+                          p.quantity,
+                        ) ||
+                          1,
+                      ),
+
+                    priceAtTime:
+                      Number(
+                        p.priceAtTime,
+                      ) ||
+                      0,
+
+                    isPms:
+                      Boolean(
+                        p.isPms,
+                      ),
+                  }),
+                ),
+            }),
+          ),
       };
 
       const res =
         await findingsApi.create(
-          payload
+          payload,
         );
 
-      if (res.error) {
+      if (
+        res.error
+      ) {
         toast.error(
           res.errorMessage ||
-            'Failed to record findings.'
+            'Failed to record findings.',
         );
-      } else {
-        toast.success(
-          'Findings recorded.'
-        );
-        onSaved();
+
+        return;
       }
+
+      toast.success(
+        'Findings recorded.',
+      );
+
+      onSaved();
     } catch (err: any) {
       toast.error(
-        err.message ||
-          'Error recording findings.'
+        err?.message ||
+          'Error recording findings.',
       );
     } finally {
-      setSaving(false);
+      setSaving(
+        false,
+      );
     }
   };
 
   return (
     <Dialog
       open={open}
-      onOpenChange={onClose}
+      onOpenChange={
+        onClose
+      }
     >
       <DialogContent
         className="
@@ -441,7 +762,7 @@ export default function FindingModal({
                   variant="outline"
                   onClick={() =>
                     setDefaultPickerOpen(
-                      true
+                      true,
                     )
                   }
                   className="
@@ -467,7 +788,7 @@ export default function FindingModal({
                   variant="outline"
                   onClick={() =>
                     setHistoryPickerOpen(
-                      true
+                      true,
                     )
                   }
                   className="
@@ -493,9 +814,14 @@ export default function FindingModal({
             {/* Finding cards */}
             <div className="space-y-4">
               {findings.map(
-                (finding, idx) => (
+                (
+                  finding,
+                  idx,
+                ) => (
                   <section
-                    key={finding.id}
+                    key={
+                      finding.id
+                    }
                     className="
                       overflow-hidden
                       rounded-lg
@@ -513,7 +839,9 @@ export default function FindingModal({
 
                         <div>
                           <p className="text-sm font-semibold">
-                            Finding #{idx + 1}
+                            Finding #
+                            {idx +
+                              1}
                           </p>
 
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -530,7 +858,7 @@ export default function FindingModal({
                           size="icon"
                           onClick={() =>
                             removeFinding(
-                              finding.id
+                              finding.id,
                             )
                           }
                           aria-label="Remove finding"
@@ -561,10 +889,12 @@ export default function FindingModal({
                           value={
                             finding.description
                           }
-                          onChange={(e) =>
+                          onChange={(
+                            e,
+                          ) =>
                             updateFindingDescription(
                               finding.id,
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="Describe the issue discovered..."
@@ -602,7 +932,7 @@ export default function FindingModal({
                             size="sm"
                             onClick={() =>
                               addPart(
-                                finding.id
+                                finding.id,
                               )
                             }
                             className="
@@ -622,9 +952,13 @@ export default function FindingModal({
                         0 ? (
                           <div className="space-y-3">
                             {finding.parts.map(
-                              (part) => (
+                              (
+                                part,
+                              ) => (
                                 <div
-                                  key={part.id}
+                                  key={
+                                    part.id
+                                  }
                                   className="rounded-lg border border-border bg-muted/20 p-3"
                                 >
                                   <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_90px_120px_auto] md:items-end">
@@ -640,7 +974,7 @@ export default function FindingModal({
                                             part.partName
                                           }
                                           onChange={(
-                                            e
+                                            e,
                                           ) =>
                                             updatePart(
                                               finding.id,
@@ -648,7 +982,7 @@ export default function FindingModal({
                                               'partName',
                                               e
                                                 .target
-                                                .value
+                                                .value,
                                             )
                                           }
                                           placeholder="e.g., Oil Filter"
@@ -665,12 +999,12 @@ export default function FindingModal({
 
                                         <InventoryPicker
                                           onSelect={(
-                                            item
+                                            item,
                                           ) =>
                                             handleInventorySelect(
                                               finding.id,
                                               part.id,
-                                              item
+                                              item,
                                             )
                                           }
                                           className="
@@ -687,6 +1021,14 @@ export default function FindingModal({
                                           </span>
                                         </InventoryPicker>
                                       </div>
+
+                                      {part.inventoryItemId && (
+                                        <div className="flex items-center gap-2">
+                                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
+                                            Inventory linked
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* Quantity */}
@@ -702,7 +1044,7 @@ export default function FindingModal({
                                           part.quantity
                                         }
                                         onChange={(
-                                          e
+                                          e,
                                         ) =>
                                           updatePart(
                                             finding.id,
@@ -710,7 +1052,7 @@ export default function FindingModal({
                                             'quantity',
                                             e
                                               .target
-                                              .value
+                                              .value,
                                           )
                                         }
                                         className="
@@ -736,7 +1078,7 @@ export default function FindingModal({
                                           part.priceAtTime
                                         }
                                         onChange={(
-                                          e
+                                          e,
                                         ) =>
                                           updatePart(
                                             finding.id,
@@ -745,8 +1087,8 @@ export default function FindingModal({
                                             parseFloat(
                                               e
                                                 .target
-                                                .value
-                                            ) || 0
+                                                .value,
+                                            ) || 0,
                                           )
                                         }
                                         disabled={
@@ -770,13 +1112,13 @@ export default function FindingModal({
                                             part.isPms
                                           }
                                           onCheckedChange={(
-                                            checked
+                                            checked,
                                           ) =>
                                             updatePart(
                                               finding.id,
                                               part.id,
                                               'isPms',
-                                              !!checked
+                                              !!checked,
                                             )
                                           }
                                           id={`pms-${part.id}`}
@@ -797,7 +1139,7 @@ export default function FindingModal({
                                         onClick={() =>
                                           removePart(
                                             finding.id,
-                                            part.id
+                                            part.id,
                                           )
                                         }
                                         className="
@@ -816,8 +1158,18 @@ export default function FindingModal({
                                       </Button>
                                     </div>
                                   </div>
+
+                                  {part.inventoryItemId && (
+                                    <div className="mt-3 flex items-start gap-2 rounded-md border border-primary/10 bg-primary/5 px-3 py-2">
+                                      <Package className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+
+                                      <p className="text-[11px] leading-5 text-muted-foreground">
+                                        This part is linked to inventory. Its stock will be kept when the estimate is submitted to billing.
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
-                              )
+                              ),
                             )}
                           </div>
                         ) : (
@@ -846,14 +1198,16 @@ export default function FindingModal({
                       </div>
                     </div>
                   </section>
-                )
+                ),
               )}
             </div>
 
             <Button
               type="button"
               variant="outline"
-              onClick={addFinding}
+              onClick={
+                addFinding
+              }
               className="
                 h-11
                 w-full
@@ -876,8 +1230,12 @@ export default function FindingModal({
             <Button
               type="button"
               variant="outline"
-              onClick={onClose}
-              disabled={saving}
+              onClick={
+                onClose
+              }
+              disabled={
+                saving
+              }
               className="h-11 rounded-md md:h-9"
             >
               Cancel
@@ -885,8 +1243,12 @@ export default function FindingModal({
 
             <Button
               type="button"
-              onClick={handleSave}
-              disabled={saving}
+              onClick={
+                handleSave
+              }
+              disabled={
+                saving
+              }
               className="
                 h-11
                 rounded-md
@@ -907,7 +1269,9 @@ export default function FindingModal({
 
       {/* Picker modals */}
       <DefaultFindingPickerModal
-        open={defaultPickerOpen}
+        open={
+          defaultPickerOpen
+        }
         onOpenChange={
           setDefaultPickerOpen
         }
@@ -917,14 +1281,18 @@ export default function FindingModal({
       />
 
       <HistoryFindingPickerModal
-        open={historyPickerOpen}
+        open={
+          historyPickerOpen
+        }
         onOpenChange={
           setHistoryPickerOpen
         }
         onAddFindings={
           handleHistoryFindingsSelect
         }
-        isAdding={isAddingFromPicker}
+        isAdding={
+          isAddingFromPicker
+        }
         phase="INSPECTION"
       />
     </Dialog>

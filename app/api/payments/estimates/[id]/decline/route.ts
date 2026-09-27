@@ -7,6 +7,8 @@ import { isValidUUID } from "@/utils/shared";
 import { getAppointmentInfo } from "@/utils/payments/get-appointment-info";
 import { paymentsTriggers } from "@/triggers/payments";
 import { mobilePaymentsTriggers } from "@/app-triggers/payments";
+import { restoreAppointmentKeptInventory } from "@/utils/inventory/appointment-inventory";
+import { inventoryTriggers } from "@/triggers/inventory";
 
 // --------------------------------------------------------------------
 // PATCH /api/payments/estimates/:id/decline
@@ -105,6 +107,31 @@ export async function PATCH(
         updatedAt: new Date(),
       })
       .where(eq(Appointments.id, estimate.appointmentId));
+
+    // Return any inventory that was being held for this appointment.
+    // The helper is idempotent because only KEPT rows are restored.
+    const restoredInventory =
+      await restoreAppointmentKeptInventory(
+        Database,
+        estimate.appointmentId,
+      );
+
+    if (restoredInventory.length > 0) {
+      const totalQuantity =
+        restoredInventory.reduce(
+          (sum: number, item: any) =>
+            sum + (Number(item.quantity) || 0),
+          0,
+        );
+
+      inventoryTriggers
+        .onRestored({
+          itemName:
+            `${restoredInventory.length} item(s) from cancelled appointment`,
+          quantity: totalQuantity,
+        })
+        .catch(console.error);
+    }
 
     const info = await getAppointmentInfo(estimate.appointmentId);
     mobilePaymentsTriggers.onEstimateDeclined({

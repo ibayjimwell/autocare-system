@@ -38,6 +38,9 @@ import {
   Filter,
   History,
   X,
+  PackageCheck,
+  CircleDot,
+
 } from 'lucide-react';
 
 import InventoryCard from './inventory-card';
@@ -51,6 +54,7 @@ import PosHistoryModal from './pos-history-modal';
 
 import { useInventory } from '@/hooks/inventory/use-inventory';
 import { inventoryApi } from '@/lib/inventory/inventory';
+import { useInventoryAllocations } from '@/hooks/inventory/use-inventory-allocations';
 import {
   formatCurrency,
   getInventoryMargin,
@@ -104,6 +108,14 @@ export default function InventoryList() {
     setLowStockAlertItem,
     dismissLowStockAlert,
   } = useInventory(true);
+
+  const {
+    keepItems,
+    usedItems,
+    loading: allocationLoading,
+    error: allocationError,
+    loadAllocations,
+  } = useInventoryAllocations();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -1262,6 +1274,243 @@ export default function InventoryList() {
           ) : null}
         </section>
       </div>
+
+      {/* ==========================================================
+          KEEP / USED INVENTORY
+      =========================================================== */}
+
+      <section className="rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <PackageCheck className="h-5 w-5" />
+            </span>
+
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight text-foreground">
+                Appointment Inventory
+              </h2>
+
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                Track parts held for pending customer approval and parts already used in completed service.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void loadAllocations()}
+            disabled={allocationLoading}
+            className="h-11 rounded-md md:h-9"
+          >
+            <RotateCw className={allocationLoading ? 'mr-2 h-4 w-4 animate-spin' : 'mr-2 h-4 w-4'} />
+            Refresh
+          </Button>
+        </div>
+
+        {allocationError ? (
+          <div className="border-b border-destructive/20 bg-destructive/5 px-4 py-3 sm:px-5">
+            <p className="text-xs font-medium text-destructive">
+              {allocationError}
+            </p>
+          </div>
+        ) : null}
+
+        <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-2">
+          {/* KEEP */}
+          <div className="overflow-hidden rounded-lg border border-amber-500/20 bg-amber-500/[0.03]">
+            <div className="flex items-center justify-between border-b border-amber-500/20 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                  <CircleDot className="h-4 w-4" />
+                </span>
+
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Keep
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Held for the appointment
+                  </p>
+                </div>
+              </div>
+
+              <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                {keepItems.length}
+              </span>
+            </div>
+
+            <div className="max-h-[26rem] overflow-y-auto">
+              {allocationLoading ? (
+                <div className="space-y-2 p-4">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-20 animate-pulse rounded-lg bg-muted/40"
+                    />
+                  ))}
+                </div>
+              ) : keepItems.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <Package className="mx-auto h-6 w-6 text-muted-foreground/50" />
+                  <p className="mt-3 text-sm font-semibold text-foreground">
+                    No kept inventory
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Inventory parts reserved for customer-approved work will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {keepItems.map((item: any) => (
+                    <div
+                      key={item.id}
+                      className="p-4 transition-colors hover:bg-amber-500/[0.03]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {item.itemName}
+                          </p>
+
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {item.quantity} {item.unit || 'unit'}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                          Keep
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                        <div className="rounded-md bg-background px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Appointment
+                          </p>
+                          <p className="mt-0.5 font-medium text-foreground">
+                            {item.appointment?.trackingNumber || item.appointmentId}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {item.appointment?.appointmentDate || '—'}{' '}
+                            {item.appointment?.appointmentTime || ''}
+                          </p>
+                        </div>
+
+                        <div className="rounded-md bg-background px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Finding
+                          </p>
+                          <p className="mt-0.5 line-clamp-2 font-medium text-foreground">
+                            {item.finding?.description || 'Finding unavailable'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* USED */}
+          <div className="overflow-hidden rounded-lg border border-emerald-500/20 bg-emerald-500/[0.03]">
+            <div className="flex items-center justify-between border-b border-emerald-500/20 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                  <CircleCheck className="h-4 w-4" />
+                </span>
+
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Used
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Already consumed in service
+                  </p>
+                </div>
+              </div>
+
+              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                {usedItems.length}
+              </span>
+            </div>
+
+            <div className="max-h-[26rem] overflow-y-auto">
+              {allocationLoading ? (
+                <div className="space-y-2 p-4">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-20 animate-pulse rounded-lg bg-muted/40"
+                    />
+                  ))}
+                </div>
+              ) : usedItems.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <PackageCheck className="mx-auto h-6 w-6 text-muted-foreground/50" />
+                  <p className="mt-3 text-sm font-semibold text-foreground">
+                    No used inventory
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Inventory parts marked used after completed service will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {usedItems.map((item: any) => (
+                    <div
+                      key={item.id}
+                      className="p-4 transition-colors hover:bg-emerald-500/[0.03]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {item.itemName}
+                          </p>
+
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {item.quantity} {item.unit || 'unit'}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                          Used
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                        <div className="rounded-md bg-background px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Appointment
+                          </p>
+                          <p className="mt-0.5 font-medium text-foreground">
+                            {item.appointment?.trackingNumber || item.appointmentId}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {item.appointment?.appointmentDate || '—'}{' '}
+                            {item.appointment?.appointmentTime || ''}
+                          </p>
+                        </div>
+
+                        <div className="rounded-md bg-background px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Finding
+                          </p>
+                          <p className="mt-0.5 line-clamp-2 font-medium text-foreground">
+                            {item.finding?.description || 'Finding unavailable'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Mobile action bar */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/50 bg-background/80 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl lg:hidden">

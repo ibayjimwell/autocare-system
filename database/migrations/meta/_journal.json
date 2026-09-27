@@ -260,6 +260,20 @@
       "when": 1790152031968,
       "tag": "0036_windy_lord_hawal",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790497968561,
+      "tag": "0037_curly_falcon",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790498078126,
+      "tag": "0038_pink_iron_lad",
+      "breakpoints": true
     }
   ]
 }

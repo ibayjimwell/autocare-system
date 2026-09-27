@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { InspectionFindings } from "@/database/models/service-tracking/inspection-findings.model";
 import { InspectionFindingParts } from "@/database/models/service-tracking/inspection-finding-parts.model";
-import { eq, inArray} from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { appointmentExists } from "@/utils/service-tracking";
 import { isValidUUID } from "@/utils/shared";
 

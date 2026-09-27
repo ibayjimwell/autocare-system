@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { InspectionFindings } from "@/database/models/service-tracking/inspection-findings.model";
 import { InspectionFindingParts } from "@/database/models/service-tracking/inspection-finding-parts.model";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { isValidUUID } from "@/utils/shared";
 import { recalculateEstimate } from "@/utils/estimates";
+import { InventoryAllocations } from "@/database/models/inventory/inventory-allocation.model";
 import { EstimatedCosts } from "@/database/models";
 
 // ------------------------------------------------------------------
@@ -50,6 +51,40 @@ export async function PUT(
   }
 
   try {
+    const [activeInventoryAllocation] =
+      await Database
+        .select({
+          id: InventoryAllocations.id,
+        })
+        .from(InventoryAllocations)
+        .where(
+          and(
+            eq(
+              InventoryAllocations.findingId,
+              id,
+            ),
+            inArray(
+              InventoryAllocations.status,
+              ['KEEP', 'USED'],
+            ),
+          ),
+        )
+        .limit(1);
+
+    if (activeInventoryAllocation) {
+      return NextResponse.json(
+        {
+          error: true,
+          errorType: "fve",
+          errorTitle: "Finding is locked",
+          errorMessage:
+            "This finding cannot be edited after inventory has been kept or used.",
+          errorLog: null,
+        },
+        { status: 422 },
+      );
+    }
+
     // Update finding description
     const [updated] = await Database.update(InspectionFindings)
       .set({ description: description.trim() })
@@ -169,6 +204,40 @@ export async function DELETE(
         errorMessage: "Finding does not exist.",
         errorLog: null,
       }, { status: 404 });
+    }
+
+    const [activeInventoryAllocation] =
+      await Database
+        .select({
+          id: InventoryAllocations.id,
+        })
+        .from(InventoryAllocations)
+        .where(
+          and(
+            eq(
+              InventoryAllocations.findingId,
+              id,
+            ),
+            inArray(
+              InventoryAllocations.status,
+              ['KEEP', 'USED'],
+            ),
+          ),
+        )
+        .limit(1);
+
+    if (activeInventoryAllocation) {
+      return NextResponse.json(
+        {
+          error: true,
+          errorType: "fve",
+          errorTitle: "Finding is locked",
+          errorMessage:
+            "This finding cannot be deleted after inventory has been kept or used.",
+          errorLog: null,
+        },
+        { status: 422 },
+      );
     }
 
     // Delete the finding (cascade will delete parts)

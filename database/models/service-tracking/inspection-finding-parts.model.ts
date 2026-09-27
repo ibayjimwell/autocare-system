@@ -34,5 +34,8 @@ export const InspectionFindingParts = pgTable(
     findingIdx: index("inspection_finding_parts_finding_idx").on(
       table.findingId,
     ),
+    inventoryItemIdx: index("inspection_finding_parts_inventory_item_idx").on(
+      table.inventoryItemId,
+    ),
   }),
 );

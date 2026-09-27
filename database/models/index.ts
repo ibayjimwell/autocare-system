@@ -52,6 +52,8 @@ export * from "./payments/receipts.model";
 // Inventory
 export * from "./inventory/inventory.model";
 export * from "./inventory/pos-transaction.model";
+export * from "./inventory/inventory-allocation.model";
+export * from "./inventory/enum/inventory-allocation-status.enum";
 
 // Notifications
 export * from "./notifications/push-subscription.model";

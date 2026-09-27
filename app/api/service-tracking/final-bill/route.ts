@@ -44,6 +44,14 @@ import {
   mobilePaymentsTriggers,
 } from '@/app-triggers/payments';
 
+import {
+  markAppointmentInventoryUsed,
+} from '@/utils/inventory/appointment-inventory';
+
+import {
+  inventoryTriggers,
+} from '@/triggers/inventory';
+
 export async function POST(
   req: NextRequest,
 ) {
@@ -196,7 +204,46 @@ export async function POST(
       );
 
     /* ==============================================================
-       5. Notifications
+       5. Move KEPT inventory to USED
+
+       Inventory quantity is not added back here. The quantity was
+       already removed when the estimate was submitted to billing.
+    ============================================================== */
+
+    const usedInventory =
+      await markAppointmentInventoryUsed(
+        Database,
+        appointmentId,
+      );
+
+    if (
+      usedInventory.length > 0
+    ) {
+      const totalQuantity =
+        usedInventory.reduce(
+          (
+            sum: number,
+            item: any,
+          ) =>
+            sum +
+            (Number(
+              item.quantity,
+            ) || 0),
+          0,
+        );
+
+      inventoryTriggers
+        .onUsed({
+          itemName:
+            `${usedInventory.length} item(s) for appointment ${appointmentId}`,
+          quantity:
+            totalQuantity,
+        })
+        .catch(console.error);
+    }
+
+    /* ==============================================================
+       6. Notifications
     ============================================================== */
 
     const info =

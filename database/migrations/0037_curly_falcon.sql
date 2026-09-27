@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "appointments_customer_vehicle_date_active_uidx" ON "appointments" USING btree ("customer_id","vehicle_id","appointment_date") WHERE "appointments"."status" <> 'CANCELLED';--> statement-breakpoint
+CREATE INDEX "inspection_finding_parts_inventory_item_idx" ON "inspection_finding_parts" USING btree ("inventory_item_id");

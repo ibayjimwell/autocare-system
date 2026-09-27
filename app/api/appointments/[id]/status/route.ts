@@ -670,6 +670,52 @@ export async function PATCH(
         .returning();
 
     /* ============================================================
+       RESTORE KEPT INVENTORY ON CANCELLATION
+
+       This covers staff cancellation and customer cancellation.
+       The operation is idempotent because only KEPT allocations
+       can be restored.
+    ============================================================= */
+
+    if (
+      updated.status === "CANCELLED"
+    ) {
+      const restoredInventory =
+        await restoreAppointmentKeptInventory(
+          Database,
+          id,
+        );
+
+      if (
+        restoredInventory.length > 0
+      ) {
+        const totalQuantity =
+          restoredInventory.reduce(
+            (
+              sum: number,
+              item: any,
+            ) =>
+              sum +
+              (Number(
+                item.quantity,
+              ) || 0),
+            0,
+          );
+
+        inventoryTriggers
+          .onRestored({
+            itemName:
+              `${restoredInventory.length} item(s) from cancelled appointment`,
+            quantity:
+              totalQuantity,
+          })
+          .catch(
+            console.error,
+          );
+      }
+    }
+
+    /* ============================================================
        QUEUE MAINTENANCE
        
        A confirmed appointment that becomes CANCELLED must leave
