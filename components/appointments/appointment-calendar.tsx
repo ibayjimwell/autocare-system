@@ -466,13 +466,10 @@ export default function AppointmentCalendar({
                 )}
               >
                 {/* ==================================================
-                    TODAY MARKER
+                    TODAY HIGHLIGHT
+                    The current date is highlighted around the date number
+                    instead of using a small dot marker.
                 =================================================== */}
-
-                {isToday &&
-                  !isSelected && (
-                    <span className="absolute left-1/2 top-1 h-1 w-1 -translate-x-1/2 rounded-full bg-primary" />
-                  )}
 
                 {/* ==================================================
                     RESCHEDULE REQUEST COUNT
@@ -522,12 +519,14 @@ export default function AppointmentCalendar({
 
                 <span
                   className={cn(
-                    'text-sm font-semibold tabular-nums md:text-base',
+                    'inline-flex h-8 min-w-8 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-all md:h-9 md:min-w-9 md:text-base',
                     isSelected
                       ? 'text-primary-foreground'
                       : isClosed
                         ? 'text-muted-foreground'
-                        : 'text-foreground',
+                        : isToday
+                          ? 'border-2 border-primary bg-primary/10 font-bold text-primary shadow-sm ring-2 ring-primary/10'
+                          : 'text-foreground',
                   )}
                 >
                   {format(

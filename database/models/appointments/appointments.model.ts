@@ -6,7 +6,12 @@ import {
   timestamp,
   date,
   time,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+
+import {
+  sql,
+} from 'drizzle-orm';
 
 import {
   Customers,
@@ -76,4 +81,15 @@ export const Appointments = pgTable(
       .defaultNow()
       .notNull(),
   },
+  (table) => ({
+    customerVehicleDateUnique: uniqueIndex(
+      'appointments_customer_vehicle_date_active_uidx',
+    )
+      .on(
+        table.customerId,
+        table.vehicleId,
+        table.appointmentDate,
+      )
+      .where(sql`${table.status} <> 'CANCELLED'`),
+  }),
 );

@@ -77,19 +77,6 @@ export function GlobalConfigModal({ open, onOpenChange }: GlobalConfigModalProps
               className="col-span-3"
             />
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="capacity" className="text-right">
-              Vehicle Capacity
-            </Label>
-            <Input
-              id="capacity"
-              type="number"
-              min="1"
-              value={capacity}
-              onChange={(e) => setCapacity(parseInt(e.target.value) || 1)}
-              className="col-span-3"
-            />
-          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

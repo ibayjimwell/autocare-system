@@ -48,6 +48,7 @@ import {
   Loader2,
   CheckCircle,
   Check,
+  AlertTriangle,
   ChevronsUpDown,
   ClipboardList,
   Wrench,
@@ -59,6 +60,17 @@ import {
 import {
   cn,
 } from '@/lib/utils';
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 import CustomerPickerModal from '@/components/appointments/customer-picker-modal';
 
@@ -111,6 +123,20 @@ interface BookingFormCardProps {
 /* ================================================================
    SERVICE TYPES
 ================================================================ */
+
+function formatDuplicateDate(date: string | null | undefined) {
+  if (!date) {
+    return 'the selected date';
+  }
+
+  const parsed = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return String(date);
+  }
+
+  return format(parsed, 'MMMM d, yyyy');
+}
 
 const SERVICE_TYPES = [
   'ALL',
@@ -194,6 +220,11 @@ export default function BookingFormCard({
     loadingAvailableSlots,
 
     isSubmitting,
+
+    duplicateConflict,
+    mergeDuplicate,
+    mergingDuplicate,
+    clearDuplicateConflict,
 
     submitHandler,
   } =
@@ -1940,6 +1971,133 @@ export default function BookingFormCard({
           selectedCustomer?.fullname
         }
       />
+
+      {/* ==========================================================
+          DOUBLE BOOKING DIALOG
+      =========================================================== */}
+
+      <AlertDialog
+        open={Boolean(duplicateConflict)}
+        onOpenChange={(open) => {
+          if (!open && !mergingDuplicate) {
+            clearDuplicateConflict();
+          }
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-lg rounded-2xl p-0">
+          <AlertDialogHeader className="border-b border-border px-6 py-5">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <AlertDialogTitle className="text-base md:text-lg">
+                  Appointment already booked
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs leading-5 md:text-sm">
+                  {duplicateConflict?.existingAppointment?.appointmentTime
+                    ? `This customer and vehicle are already booked at ${formatTime12h(
+                        duplicateConflict.existingAppointment.appointmentTime,
+                      )} on ${
+                        formatDuplicateDate(
+                          duplicateConflict.existingAppointment.appointmentDate,
+                        )
+                      }.`
+                    : duplicateConflict?.errorMessage ||
+                      'An existing appointment matches this booking.'}
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 px-6 py-5">
+            {Array.isArray(duplicateConflict?.missingServices) &&
+            duplicateConflict.missingServices.length > 0 ? (
+              <>
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <p className="text-sm font-semibold text-foreground">
+                    Add these services to the existing appointment instead?
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    The services below are not included in the existing appointment. Choosing “Yes” keeps the existing appointment time and adds them to that appointment.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-border bg-card">
+                  <div className="border-b border-border px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Services to add
+                    </p>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {duplicateConflict.missingServices.map((service: any) => (
+                      <div
+                        key={service.id}
+                        className="flex items-center gap-3 px-4 py-3"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <PlusCircle className="h-4 w-4" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">
+                          {service.name || service.serviceName || service.id}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4">
+                <p className="text-sm font-medium text-destructive">
+                  This booking cannot be created as another appointment for the same customer, vehicle, and date.
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  The existing appointment must be used instead.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <AlertDialogFooter className="border-t border-border px-6 py-4">
+            {Array.isArray(duplicateConflict?.missingServices) &&
+            duplicateConflict.missingServices.length > 0 ? (
+              <>
+                <AlertDialogCancel
+                  disabled={mergingDuplicate}
+                  onClick={clearDuplicateConflict}
+                  className="h-11 rounded-md px-4"
+                >
+                  No
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={mergingDuplicate}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void mergeDuplicate();
+                  }}
+                  className="h-11 rounded-md px-4"
+                >
+                  {mergingDuplicate ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  Yes, add services
+                </AlertDialogAction>
+              </>
+            ) : (
+              <AlertDialogAction
+                disabled={mergingDuplicate}
+                onClick={clearDuplicateConflict}
+                className="h-11 rounded-md px-4"
+              >
+                Okay
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </Card>
   );
 }

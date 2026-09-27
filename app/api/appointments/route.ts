@@ -10,7 +10,7 @@ import {
   generateTrackingNumber,
   serviceExists,
 } from "@/utils/appointments";
-import { eq, inArray, sql, desc } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, desc, not } from "drizzle-orm";
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from "@/app-triggers/appointments";
 import { getAppointmentConfig, getEffectiveConfigForDate } from '@/utils/configurations';
@@ -142,8 +142,166 @@ export async function GET(req: NextRequest) {
 }
 
 // ------------------------------------------------------------------
-// POST /api/appointments – Create a new appointment
+// POST /api/appointments – Create or merge a new appointment
 // ------------------------------------------------------------------
+
+const formatTimeForMessage = (time: string | null | undefined) => {
+  if (!time) return 'the booked time';
+
+  const [hourText, minuteText] = String(time).split(':');
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return String(time);
+  }
+
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`;
+};
+
+const formatDateForMessage = (date: string | null | undefined) => {
+  if (!date) return 'the selected date';
+
+  const [year, month, day] = String(date).split('-').map(Number);
+
+  if (!year || !month || !day) {
+    return String(date);
+  }
+
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(year, month - 1, day)));
+  } catch {
+    return String(date);
+  }
+};
+
+const normalizeServiceIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value
+        .map((id) => String(id || '').trim())
+        .filter(Boolean),
+    ),
+  );
+};
+
+const findExistingAppointment = async (
+  customerId: string,
+  vehicleId: string,
+  appointmentDate: string,
+) => {
+  const [existing] = await Database.select({
+    id: Appointments.id,
+    customerId: Appointments.customerId,
+    vehicleId: Appointments.vehicleId,
+    services: Appointments.services,
+    trackingNumber: Appointments.trackingNumber,
+    appointmentDate: Appointments.appointmentDate,
+    appointmentTime: Appointments.appointmentTime,
+    status: Appointments.status,
+    notes: Appointments.notes,
+  })
+    .from(Appointments)
+    .where(
+      and(
+        eq(Appointments.customerId, customerId),
+        eq(Appointments.vehicleId, vehicleId),
+        eq(Appointments.appointmentDate, appointmentDate),
+        not(eq(Appointments.status, 'CANCELLED')),
+      ),
+    )
+    .orderBy(asc(Appointments.appointmentTime), asc(Appointments.createdAt))
+    .limit(1);
+
+  return existing || null;
+};
+
+const buildDuplicateDetails = async (
+  existingAppointment: any,
+  requestedServiceIds: string[],
+) => {
+  const existingServiceIds = normalizeServiceIds(
+    existingAppointment?.services,
+  );
+
+  const existingSet = new Set(existingServiceIds);
+  const missingServiceIds = requestedServiceIds.filter(
+    (id) => !existingSet.has(id),
+  );
+
+  let missingServices: any[] = [];
+
+  if (missingServiceIds.length > 0) {
+    missingServices = await Database.select({
+      id: Services.id,
+      name: Services.name,
+      description: Services.description,
+      basePrice: Services.basePrice,
+      estimatedDuration: Services.estimatedDuration,
+      type: Services.type,
+    })
+      .from(Services)
+      .where(inArray(Services.id, missingServiceIds));
+  }
+
+  return {
+    existingServiceIds,
+    missingServiceIds,
+    missingServices,
+  };
+};
+
+const duplicateResponse = ({
+  existingAppointment,
+  missingServices,
+  missingServiceIds,
+}: {
+  existingAppointment: any;
+  missingServices: any[];
+  missingServiceIds: string[];
+}) => {
+  const hasMissingServices = missingServiceIds.length > 0;
+  const bookedTime = formatTimeForMessage(
+    existingAppointment?.appointmentTime,
+  );
+  const bookedDate = formatDateForMessage(
+    existingAppointment?.appointmentDate,
+  );
+
+  return NextResponse.json(
+    {
+      error: true,
+      errorCode: 'APPOINTMENT_DUPLICATE',
+      errorType: 'fve',
+      errorTitle: 'Appointment already booked',
+      errorMessage: hasMissingServices
+        ? `This customer and vehicle already have an appointment at ${bookedTime} on ${bookedDate}.`
+        : `This appointment is already booked at ${bookedTime} on ${bookedDate}.`,
+      duplicateType: hasMissingServices
+        ? 'SERVICES_MISSING'
+        : 'EXACT',
+      existingAppointment: {
+        ...existingAppointment,
+        services: Array.isArray(existingAppointment?.services)
+          ? existingAppointment.services
+          : [],
+      },
+      missingServiceIds,
+      missingServices,
+    },
+    { status: 409 },
+  );
+};
+
 export async function POST(req: NextRequest) {
   let rawData: any;
   try {
@@ -151,9 +309,9 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({
       error: true,
-      errorType: "fe",
-      errorTitle: "Form data error",
-      errorMessage: "Could not read submitted form data.",
+      errorType: 'fe',
+      errorTitle: 'Form data error',
+      errorMessage: 'Could not read submitted form data.',
       errorLog: e instanceof Error ? e.message : String(e),
     }, { status: 400 });
   }
@@ -162,9 +320,9 @@ export async function POST(req: NextRequest) {
   if (errors.length > 0) {
     return NextResponse.json({
       error: true,
-      errorType: "fve",
-      errorTitle: "Validation failed",
-      errorMessage: errors.join(" "),
+      errorType: 'fve',
+      errorTitle: 'Validation failed',
+      errorMessage: errors.join(' '),
       errorLog: errors,
     }, { status: 422 });
   }
@@ -176,52 +334,55 @@ export async function POST(req: NextRequest) {
     if (!effective.isOpen) {
       return NextResponse.json({
         error: true,
-        errorType: "fve",
-        errorTitle: "Shop closed",
+        errorType: 'fve',
+        errorTitle: 'Shop closed',
         errorMessage: `The shop is closed on ${rawData.appointmentDate}${effective.reason ? ': ' + effective.reason : ''}. Please choose another date.`,
         errorLog: null,
       }, { status: 422 });
     }
   } catch (configErr) {
-    console.error("[POST /api/appointments] Config check error:", configErr);
+    console.error('[POST /api/appointments] Config check error:', configErr);
     return NextResponse.json({
       error: true,
-      errorType: "dbe",
-      errorTitle: "Configuration error",
-      errorMessage: "Unable to verify shop availability.",
+      errorType: 'dbe',
+      errorTitle: 'Configuration error',
+      errorMessage: 'Unable to verify shop availability.',
       errorLog: String(configErr),
     }, { status: 500 });
   }
 
   let serviceIds: string[] = [];
+
   if (!rawData.services) {
     return NextResponse.json({
       error: true,
-      errorType: "fve",
-      errorTitle: "Services required",
-      errorMessage: "At least one service must be selected.",
+      errorType: 'fve',
+      errorTitle: 'Services required',
+      errorMessage: 'At least one service must be selected.',
       errorLog: null,
     }, { status: 422 });
   }
 
   try {
-    serviceIds = JSON.parse(rawData.services);
+    serviceIds = normalizeServiceIds(
+      JSON.parse(rawData.services),
+    );
   } catch {
     return NextResponse.json({
       error: true,
-      errorType: "fve",
-      errorTitle: "Invalid services format",
-      errorMessage: "Services must be a JSON array of UUIDs.",
+      errorType: 'fve',
+      errorTitle: 'Invalid services format',
+      errorMessage: 'Services must be a JSON array of UUIDs.',
       errorLog: null,
     }, { status: 422 });
   }
 
-  if (!Array.isArray(serviceIds) || serviceIds.length === 0) {
+  if (serviceIds.length === 0) {
     return NextResponse.json({
       error: true,
-      errorType: "fve",
-      errorTitle: "Invalid services",
-      errorMessage: "At least one service is required.",
+      errorType: 'fve',
+      errorTitle: 'Invalid services',
+      errorMessage: 'At least one service is required.',
       errorLog: null,
     }, { status: 422 });
   }
@@ -230,18 +391,20 @@ export async function POST(req: NextRequest) {
     if (!isValidUUID(id)) {
       return NextResponse.json({
         error: true,
-        errorType: "fve",
-        errorTitle: "Invalid service ID",
+        errorType: 'fve',
+        errorTitle: 'Invalid service ID',
         errorMessage: `Service ID "${id}" is not a valid UUID.`,
         errorLog: null,
       }, { status: 422 });
     }
+
     const exists = await serviceExists(id);
+
     if (!exists) {
       return NextResponse.json({
         error: true,
-        errorType: "fve",
-        errorTitle: "Service not found",
+        errorType: 'fve',
+        errorTitle: 'Service not found',
         errorMessage: `Service "${id}" does not exist.`,
         errorLog: null,
       }, { status: 404 });
@@ -255,11 +418,98 @@ export async function POST(req: NextRequest) {
     trackingNumber: generateTrackingNumber(),
     appointmentDate: rawData.appointmentDate,
     appointmentTime: rawData.appointmentTime,
-    status: "PENDING",
+    status: 'PENDING',
     notes: rawData.notes?.trim() || null,
   };
 
+  const duplicateAction = String(
+    rawData.duplicateAction || '',
+  ).toUpperCase();
+
+  const requestedExistingAppointmentId = String(
+    rawData.existingAppointmentId || '',
+  ).trim();
+
   try {
+    const existingAppointment = await findExistingAppointment(
+      rawData.customerId,
+      rawData.vehicleId,
+      rawData.appointmentDate,
+    );
+
+    if (existingAppointment) {
+      const duplicateDetails = await buildDuplicateDetails(
+        existingAppointment,
+        serviceIds,
+      );
+
+      if (duplicateAction === 'MERGE_SERVICES') {
+        if (
+          !requestedExistingAppointmentId ||
+          !isValidUUID(requestedExistingAppointmentId)
+        ) {
+          return NextResponse.json({
+            error: true,
+            errorType: 'fve',
+            errorTitle: 'Merge target required',
+            errorMessage: 'The existing appointment could not be identified for the service merge.',
+            errorLog: null,
+          }, { status: 422 });
+        }
+
+        if (requestedExistingAppointmentId !== existingAppointment.id) {
+          return NextResponse.json({
+            error: true,
+            errorCode: 'APPOINTMENT_DUPLICATE_STALE',
+            errorType: 'fve',
+            errorTitle: 'Appointment changed',
+            errorMessage: 'The existing appointment changed before the services could be added. Please review the booking and try again.',
+            errorLog: null,
+          }, { status: 409 });
+        }
+
+        const mergedServiceIds = Array.from(
+          new Set([
+            ...duplicateDetails.existingServiceIds,
+            ...serviceIds,
+          ]),
+        );
+
+        const [updatedAppointment] = await Database.update(Appointments)
+          .set({
+            services: mergedServiceIds,
+            updatedAt: new Date(),
+          })
+          .where(eq(Appointments.id, existingAppointment.id))
+          .returning();
+
+        if (!updatedAppointment) {
+          return NextResponse.json({
+            error: true,
+            errorType: 'dbe',
+            errorTitle: 'Merge failed',
+            errorMessage: 'The existing appointment could not be updated.',
+            errorLog: null,
+          }, { status: 500 });
+        }
+
+        return NextResponse.json({
+          error: false,
+          merged: true,
+          message: 'Services added to the existing appointment successfully.',
+          data: updatedAppointment,
+          existingAppointment: updatedAppointment,
+          addedServiceIds: duplicateDetails.missingServiceIds,
+        }, { status: 200 });
+      }
+
+      return duplicateResponse({
+        existingAppointment,
+        missingServices: duplicateDetails.missingServices,
+        missingServiceIds: duplicateDetails.missingServiceIds,
+      });
+    }
+
     const [newAppointment] = await Database.insert(Appointments)
       .values(insertData)
       .returning();
@@ -267,7 +517,7 @@ export async function POST(req: NextRequest) {
     if (newAppointment) {
       appointmentsTriggers.onNew({
         trackingNumber: newAppointment.trackingNumber,
-        customerName: newAppointment.customer?.fullname || 'Customer',
+        customerName: 'Customer',
         appointmentDate: newAppointment.appointmentDate,
       }).catch(console.error);
 
@@ -280,16 +530,50 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       error: false,
-      message: "Appointment created successfully.",
+      message: 'Appointment created successfully.',
       data: newAppointment,
     }, { status: 201 });
-  } catch (e) {
-    console.error("[POST /api/appointments] Error:", e);
+  } catch (e: any) {
+    console.error('[POST /api/appointments] Error:', e);
+
+    /*
+     * The database unique index is a second line of defense against
+     * two simultaneous booking requests creating two appointments for
+     * the same customer + vehicle + date.
+     */
+    if (e?.code === '23505') {
+      try {
+        const existingAfterConflict = await findExistingAppointment(
+          rawData.customerId,
+          rawData.vehicleId,
+          rawData.appointmentDate,
+        );
+
+        if (existingAfterConflict) {
+          const duplicateDetails = await buildDuplicateDetails(
+            existingAfterConflict,
+            serviceIds,
+          );
+
+          return duplicateResponse({
+            existingAppointment: existingAfterConflict,
+            missingServices: duplicateDetails.missingServices,
+            missingServiceIds: duplicateDetails.missingServiceIds,
+          });
+        }
+      } catch (lookupError) {
+        console.error(
+          '[POST /api/appointments] Failed to resolve unique constraint conflict:',
+          lookupError,
+        );
+      }
+    }
+
     return NextResponse.json({
       error: true,
-      errorType: "dbe",
-      errorTitle: "Database insertion failed",
-      errorMessage: "Could not create appointment.",
+      errorType: 'dbe',
+      errorTitle: 'Database insertion failed',
+      errorMessage: 'Could not create appointment.',
       errorLog: e instanceof Error ? e.message : String(e),
     }, { status: 500 });
   }

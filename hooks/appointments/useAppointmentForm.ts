@@ -83,6 +83,20 @@ export function useAppointmentForm(
     false,
   );
 
+  /* ==============================================================
+     DOUBLE BOOKING CONFLICT
+  ============================================================== */
+
+  const [
+    duplicateConflict,
+    setDuplicateConflict,
+  ] = useState<any>(null);
+
+  const [
+    mergingDuplicate,
+    setMergingDuplicate,
+  ] = useState(false);
+
   const [
     customTime,
     setCustomTime,
@@ -732,101 +746,85 @@ export function useAppointmentForm(
       async (
         data: AppointmentFormData,
       ) => {
-        setIsSubmitting(
-          true,
-        );
+        setIsSubmitting(true);
+        setDuplicateConflict(null);
 
         try {
-          const payload =
-            {
-              customerId:
-                data.customerId,
+          const payload = {
+            customerId: data.customerId,
+            vehicleId: data.vehicleId,
+            services: data.services,
+            appointmentDate: format(
+              data.appointmentDate,
+              'yyyy-MM-dd',
+            ),
+            appointmentTime: data.appointmentTime,
+            notes: data.notes || undefined,
+          };
 
-              vehicleId:
-                data.vehicleId,
+          const res = await appointmentsApi.create(payload);
 
-              services:
-                data.services,
+          if (res?.error) {
+            if (res?.errorCode === 'APPOINTMENT_DUPLICATE') {
+              setDuplicateConflict({
+                ...res,
+                request: payload,
+                requestFormData: data,
+              });
 
-              appointmentDate:
-                format(
-                  data.appointmentDate,
-                  'yyyy-MM-dd',
-                ),
+              return {
+                success: false,
+                duplicate: true,
+                conflict: res,
+              };
+            }
 
-              appointmentTime:
-                data.appointmentTime,
-
-              notes:
-                data.notes ||
-                undefined,
-            };
-
-          const res =
-            await appointmentsApi.create(
-              payload,
-            );
-
-          if (
-            res.error
-          ) {
             toast.error(
-              res.errorMessage ||
-                'Booking failed.',
+              res.errorMessage || 'Booking failed.',
             );
 
-            return;
+            return {
+              success: false,
+            };
           }
 
           toast.success(
             'Appointment booked successfully.',
           );
 
-          /*
-           * Keep the selected customer/date/services after
-           * successful submission, matching the previous behavior.
-           *
-           * Only the appointment time and notes are reset.
-           */
           reset({
             ...data,
-
-            appointmentTime:
-              '',
-
-            notes:
-              '',
+            appointmentTime: '',
+            notes: '',
           });
 
-          setCustomTime(
-            '',
-          );
-
-          setCustomTimeChecked(
-            null,
-          );
-
-          setSelectedSlotType(
-            'preset',
-          );
+          setCustomTime('');
+          setCustomTimeChecked(null);
+          setSelectedSlotType('preset');
+          setDuplicateConflict(null);
 
           onSuccess();
-        } catch (
-          err: any
-        ) {
+
+          return {
+            success: true,
+            appointment: res?.data || null,
+            appointmentId: res?.data?.id || null,
+          };
+        } catch (err: any) {
           console.error(
             '[useAppointmentForm] Failed to create appointment:',
             err,
           );
 
           toast.error(
-            err?.message ||
-              'Something went wrong.',
+            err?.message || 'Something went wrong.',
           );
+
+          return {
+            success: false,
+          };
         } finally {
-          setIsSubmitting(
-            false,
-          );
+          setIsSubmitting(false);
         }
       },
       [
@@ -834,6 +832,96 @@ export function useAppointmentForm(
         onSuccess,
       ],
     );
+
+  /* ==============================================================
+     MERGE DUPLICATE SERVICES
+  ============================================================== */
+
+  const mergeDuplicate = useCallback(
+    async () => {
+      if (
+        !duplicateConflict?.existingAppointment?.id ||
+        !Array.isArray(duplicateConflict?.missingServices) ||
+        duplicateConflict.missingServices.length === 0
+      ) {
+        return false;
+      }
+
+      setMergingDuplicate(true);
+
+      try {
+        const original = duplicateConflict.request;
+
+        if (!original) {
+          toast.error(
+            'The original booking details are no longer available. Please submit again.',
+          );
+          return false;
+        }
+
+        const res = await appointmentsApi.create({
+          ...original,
+          duplicateAction: 'MERGE_SERVICES',
+          existingAppointmentId:
+            duplicateConflict.existingAppointment.id,
+        });
+
+        if (res?.error) {
+          toast.error(
+            res.errorMessage ||
+              'Failed to add the services to the existing appointment.',
+          );
+          return false;
+        }
+
+        toast.success(
+          'Services were added to the existing appointment.',
+        );
+
+        setDuplicateConflict(null);
+
+        const originalData = duplicateConflict.requestFormData;
+
+        if (originalData) {
+          reset({
+            ...originalData,
+            appointmentTime: '',
+            notes: '',
+          });
+        }
+
+        setCustomTime('');
+        setCustomTimeChecked(null);
+        setSelectedSlotType('preset');
+        onSuccess();
+
+        return true;
+      } catch (err: any) {
+        console.error(
+          '[useAppointmentForm] Failed to merge duplicate appointment:',
+          err,
+        );
+
+        toast.error(
+          err?.message ||
+            'Failed to add the services to the existing appointment.',
+        );
+
+        return false;
+      } finally {
+        setMergingDuplicate(false);
+      }
+    },
+    [
+      duplicateConflict,
+      reset,
+      onSuccess,
+    ],
+  );
+
+  const clearDuplicateConflict = useCallback(() => {
+    setDuplicateConflict(null);
+  }, []);
 
   /* ==============================================================
      RETURN
@@ -876,6 +964,11 @@ export function useAppointmentForm(
 
     isSubmitting,
 
+    duplicateConflict,
+    mergeDuplicate,
+    mergingDuplicate,
+    clearDuplicateConflict,
+
     /* ============================================================
        CUSTOM TIME
     ============================================================= */
@@ -906,6 +999,3 @@ export function useAppointmentForm(
   };
 }
 
-/* ================================================================
-   APPOINTMENTS API
-================================================================ */
