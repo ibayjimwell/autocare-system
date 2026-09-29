@@ -107,7 +107,8 @@ export function useEstimateActions(
   const handleApproveEstimate =
     useCallback(
       async (
-        estimateId: string
+        estimateId: string,
+        includedFindingIds: string[] = [],
       ): Promise<boolean> => {
         if (
           !estimateId
@@ -126,7 +127,8 @@ export function useEstimateActions(
         try {
           const res =
             await estimatesApi.approve(
-              estimateId
+              estimateId,
+              includedFindingIds,
             );
 
           if (
@@ -277,3 +279,17 @@ export function useEstimateActions(
     actionLoading,
   };
 }
+
+export interface EstimateFeeInput {
+  title: string;
+  amount: number;
+}
+
+export interface EstimateDiscountInput {
+  title: string;
+  type:
+    | 'fixed'
+    | 'percentage';
+  value: number;
+}
+

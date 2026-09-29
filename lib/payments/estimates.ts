@@ -1,16 +1,3 @@
-export interface EstimateFeeInput {
-  title: string;
-  amount: number;
-}
-
-export interface EstimateDiscountInput {
-  title: string;
-  type:
-    | 'fixed'
-    | 'percentage';
-  value: number;
-}
-
 async function parseResponse(
   response: Response
 ) {
@@ -344,7 +331,8 @@ export const estimatesApi = {
   // ================================================================
 
   approve: async (
-    estimateId: string
+    estimateId: string,
+    includedFindingIds: string[] = [],
   ) => {
     const res =
       await fetch(
@@ -354,6 +342,12 @@ export const estimatesApi = {
         {
           method:
             'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            includedFindingIds,
+          }),
         }
       );
 
@@ -402,7 +396,8 @@ export const estimatesApi = {
 
   toggleFinding: async (
     estimateId: string,
-    findingId: string
+    findingId: string,
+    included: boolean,
   ) => {
     const res =
       await fetch(
@@ -414,6 +409,12 @@ export const estimatesApi = {
         {
           method:
             'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            included,
+          }),
         }
       );
 

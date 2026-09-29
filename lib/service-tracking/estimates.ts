@@ -30,9 +30,11 @@ export const estimatesApi = {
   },
 
   // APPROVE estimate
-  approve: async (estimateId: string) => {
-    const res = await fetch(`/api/billing/estimates/${estimateId}/approve`, {
+  approve: async (estimateId: string, includedFindingIds: string[] = []) => {
+    const res = await fetch(`/api/payments/estimates/${estimateId}/approve`, {
       method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ includedFindingIds }),
     });
     return res.json();
   },
@@ -48,10 +50,20 @@ export const estimatesApi = {
   },
 
   // TOGGLE finding inclusion in estimate
-  toggleFinding: async (estimateId: string, findingId: string) => {
-    const res = await fetch(`/api/billing/estimates/${estimateId}/findings/${findingId}/toggle`, {
-      method: 'PATCH',
-    });
+  toggleFinding: async (
+    estimateId: string,
+    findingId: string,
+    included: boolean,
+  ) => {
+    const res = await fetch(
+      `/api/payments/estimates/${estimateId}/findings/${findingId}/toggle`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ included }),
+      },
+    );
     return res.json();
   },
 };
+

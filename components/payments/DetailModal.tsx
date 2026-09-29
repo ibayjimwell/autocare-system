@@ -34,6 +34,7 @@ import ServiceCard from '@/components/services/service-card';
 
 import {
   CheckCircle,
+  Check,
   Eye,
   FileText,
   Pencil,
@@ -164,6 +165,14 @@ interface DetailModalProps {
   onSaveDiscount: () => void;
 
   onSavePart: () => void;
+
+  onToggleFinding?: (
+    estimateId: string,
+    findingId: string,
+    included: boolean,
+  ) => void | Promise<void>;
+
+  togglingFindingId?: string | null;
 }
 
 /* ================================================================
@@ -336,6 +345,10 @@ function getFindingParts(
 function getFindingSubtotal(
   finding: any,
 ): number {
+  if (finding?.included === false) {
+    return 0;
+  }
+
   const explicit =
     toSafeNumber(
       finding?.partsSubtotal,
@@ -464,6 +477,8 @@ export default function DetailModal({
   onSaveFee,
   onSaveDiscount,
   onSavePart,
+  onToggleFinding,
+  togglingFindingId,
 }: DetailModalProps) {
   /*
    * Keep the existing behavior:
@@ -490,6 +505,10 @@ export default function DetailModal({
       'estimate' ||
     isFinalBillEditable;
 
+  const isWaitingForApprovalEstimate =
+    detailType === 'estimate' &&
+    selectedItem?.status === 'WAITING_FOR_APPROVAL';
+
   /*
    * Safe data references.
    */
@@ -497,6 +516,14 @@ export default function DetailModal({
     getFindings(
       selectedItem,
     );
+
+  const includedFindingCount =
+    findings.length > 0
+      ? findings.filter(
+          (finding: any) =>
+            finding?.included !== false,
+        ).length
+      : 0;
 
   const fees =
     safeArray(
@@ -759,7 +786,22 @@ export default function DetailModal({
                     FileText
                   }
                   title="Findings"
+                  action={
+                    isWaitingForApprovalEstimate ? (
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {includedFindingCount} of {findings.length} selected
+                      </span>
+                    ) : undefined
+                  }
                 >
+                  {isWaitingForApprovalEstimate && (
+                    <div className="mb-3 rounded-lg border border-primary/15 bg-primary/[0.04] px-3 py-2.5">
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Select the findings the customer wants performed. Unselected findings are removed from the estimate total.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     {findings.map(
                       (
@@ -788,19 +830,73 @@ export default function DetailModal({
                                 : 'bg-muted/30 opacity-60',
                             )}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <p className="min-w-0 whitespace-pre-wrap text-sm font-medium text-foreground">
-                                {
-                                  finding.description
-                                }
-                              </p>
+                            <div className="flex items-start gap-3">
+                              {isWaitingForApprovalEstimate && (
+                                <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={finding.included !== false}
+                                  aria-label={`${finding.included !== false ? 'Remove' : 'Include'} finding: ${finding.description || 'Finding'}`}
+                                  disabled={
+                                    !onToggleFinding ||
+                                    togglingFindingId === finding.id
+                                  }
+                                  onClick={() =>
+                                    onToggleFinding?.(
+                                      selectedItem.id,
+                                      finding.id,
+                                      finding.included === false,
+                                    )
+                                  }
+                                  className={cn(
+                                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                                    finding.included !== false
+                                      ? 'border-primary bg-primary text-primary-foreground'
+                                      : 'border-border bg-background text-transparent',
+                                  )}
+                                >
+                                  {finding.included !== false && (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
 
-                              <span className="shrink-0 text-xs font-semibold text-foreground">
-                                ₱
-                                {safeCurrency(
-                                  findingSubtotal,
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                  <p
+                                    className={cn(
+                                      'min-w-0 whitespace-pre-wrap text-sm font-medium',
+                                      finding.included !== false
+                                        ? 'text-foreground'
+                                        : 'text-muted-foreground line-through',
+                                    )}
+                                  >
+                                    {finding.description}
+                                  </p>
+
+                                  <span className="shrink-0 text-xs font-semibold text-foreground">
+                                    ₱
+                                    {safeCurrency(
+                                      findingSubtotal,
+                                    )}
+                                  </span>
+                                </div>
+
+                                {isWaitingForApprovalEstimate && (
+                                  <span
+                                    className={cn(
+                                      'mt-1 inline-flex text-[11px] font-medium',
+                                      finding.included !== false
+                                        ? 'text-primary'
+                                        : 'text-muted-foreground',
+                                    )}
+                                  >
+                                    {finding.included !== false
+                                      ? 'Included in estimate'
+                                      : 'Not selected — excluded from total'}
+                                  </span>
                                 )}
-                              </span>
+                              </div>
                             </div>
 
                             {parts.length >
@@ -1677,3 +1773,4 @@ function EmptyLine({
     </div>
   );
 }
+

@@ -1,17 +1,3 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Database } from "@/lib/drizzle";
-import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
-import { EstimateFindings } from "@/database/models/payments/estimate-findings.model";
-import { EstimateFindingParts } from "@/database/models/payments/estimate-finding-parts.model";
-import { EstimateTasks } from "@/database/models/payments/estimate-tasks.model";
-import { Appointments } from "@/database/models/appointments/appointments.model";
-import { Services } from "@/database/models/services/services.model";
-import { InspectionFindings } from "@/database/models/service-tracking/inspection-findings.model";
-import { InspectionFindingParts } from "@/database/models/service-tracking/inspection-finding-parts.model";
-import { InspectionTasks } from "@/database/models/service-tracking/inspection-tasks.model";
-import { eq, inArray, and } from "drizzle-orm";
-import { isValidUUID } from "@/utils/shared";
-
 // --------------------------------------------------------------------------
 // PUT /api/service-tracking/estimates/[id] – Refresh estimate with latest data
 // --------------------------------------------------------------------------
@@ -103,10 +89,26 @@ export async function PUT(
       );
     }
 
-    // 2. Fetch latest findings with parts
+    // 2. Fetch latest findings with parts and preserve the customer's
+    // existing include/exclude choices when an estimate is refreshed.
     const findings = await Database.select()
       .from(InspectionFindings)
       .where(eq(InspectionFindings.appointmentId, appointmentId));
+
+    const existingFindingSelections = await Database.select({
+      findingId: EstimateFindings.findingId,
+      included: EstimateFindings.included,
+    })
+      .from(EstimateFindings)
+      .where(eq(EstimateFindings.estimateId, estimateId));
+
+    const includedByFindingId = new Map(
+      existingFindingSelections.map((row) => [
+        row.findingId,
+        row.included !== false,
+      ]),
+    );
+
     let findingsSubtotal = 0;
     const estimateFindingsData = [];
     for (const f of findings) {
@@ -125,11 +127,19 @@ export async function PUT(
           totalPrice: total.toString(),
         };
       });
-      findingsSubtotal += findingPartsTotal;
+      const included =
+        includedByFindingId.has(f.id)
+          ? includedByFindingId.get(f.id) === true
+          : true;
+
+      if (included) {
+        findingsSubtotal += findingPartsTotal;
+      }
+
       estimateFindingsData.push({
         findingId: f.id,
         description: f.description,
-        included: true,
+        included,
         partsSubtotal: findingPartsTotal.toString(),
         parts: partsData,
       });
@@ -232,3 +242,13 @@ export async function PUT(
     );
   }
 }
+
+import { NextRequest, NextResponse } from "next/server";
+import { Database } from "@/lib/drizzle";
+import { InspectionFindings } from "@/database/models/service-tracking/inspection-findings.model";
+import { InspectionFindingParts } from "@/database/models/service-tracking/inspection-finding-parts.model";
+import { eq, inArray } from "drizzle-orm";
+import { appointmentExists } from "@/utils/service-tracking";
+import { isValidUUID } from "@/utils/shared";
+
+// ------------------------------------------------------------------

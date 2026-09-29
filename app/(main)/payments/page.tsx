@@ -346,6 +346,11 @@ export default function PaymentsPage() {
       false,
     );
 
+  const [
+    findingToggleLoadingId,
+    setFindingToggleLoadingId,
+  ] = useState<string | null>(null);
+
   /* ==============================================================
      LOAD FULL ESTIMATE
   ============================================================== */
@@ -469,6 +474,67 @@ export default function PaymentsPage() {
       },
       [
         loadEstimateForConfirmation,
+      ],
+    );
+
+  /* ==============================================================
+     TOGGLE ESTIMATE FINDING
+  ============================================================== */
+
+  const handleToggleEstimateFinding =
+    useCallback(
+      async (
+        estimateId: string,
+        findingId: string,
+        included: boolean,
+      ) => {
+        if (
+          !estimateId ||
+          !findingId ||
+          findingToggleLoadingId
+        ) {
+          return;
+        }
+
+        setFindingToggleLoadingId(findingId);
+
+        try {
+          const response =
+            await estimatesApi.toggleFinding(
+              estimateId,
+              findingId,
+              included,
+            );
+
+          if (response?.error) {
+            throw new Error(
+              response.errorMessage ||
+                'Unable to update finding selection.',
+            );
+          }
+
+          await Promise.all([
+            detail.refreshDetail(),
+            reload(),
+          ]);
+        } catch (error: any) {
+          console.error(
+            '[PaymentsPage] Failed to toggle estimate finding:',
+            error,
+          );
+
+          toast.error(
+            error?.message ||
+              'Unable to update the selected finding.',
+          );
+        } finally {
+          setFindingToggleLoadingId(null);
+        }
+      },
+      [
+        detail.refreshDetail,
+        findingToggleLoadingId,
+        reload,
       ],
     );
 
@@ -627,9 +693,26 @@ export default function PaymentsPage() {
         );
 
         try {
+          const selectedFindingIds =
+            Array.isArray(
+              (confirmationEstimate as any)?.findings,
+            )
+              ? (confirmationEstimate as any).findings
+                  .filter(
+                    (finding: any) =>
+                      finding?.id &&
+                      finding?.included !== false,
+                  )
+                  .map(
+                    (finding: any) =>
+                      finding.id,
+                  )
+              : [];
+
           const success =
             await estimateActions.handleApproveEstimate(
               confirmationEstimate.id,
+              selectedFindingIds,
             );
 
           if (
@@ -1400,6 +1483,12 @@ export default function PaymentsPage() {
         onSavePart={
           adjustments.handleEditPartSave
         }
+        onToggleFinding={
+          handleToggleEstimateFinding
+        }
+        togglingFindingId={
+          findingToggleLoadingId
+        }
       />
 
       {/* ==========================================================
@@ -1855,4 +1944,5 @@ function SummaryMetric({
     </div>
   );
 }
+
 
