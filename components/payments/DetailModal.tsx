@@ -32,6 +32,8 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 
 import ServiceCard from '@/components/services/service-card';
 
+import PrintPaymentDocumentButton from '@/components/payments/PrintPaymentDocumentButton';
+
 import {
   CheckCircle,
   Check,
@@ -39,6 +41,7 @@ import {
   FileText,
   Pencil,
   Percent,
+  Printer,
   Plus,
   PlusCircle,
   ReceiptText,
@@ -623,13 +626,20 @@ export default function DetailModal({
               </span>
 
               {selectedItem && (
-                <StatusBadge
-                  status={
-                    selectedItem.status ||
-                    'PENDING'
-                  }
-                  className="w-fit text-[10px]"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <PrintPaymentDocumentButton
+                    detailType={detailType}
+                    selectedItem={selectedItem}
+                  />
+
+                  <StatusBadge
+                    status={
+                      selectedItem.status ||
+                      'PENDING'
+                    }
+                    className="w-fit text-[10px]"
+                  />
+                </div>
               )}
             </DialogTitle>
           </DialogHeader>
@@ -1773,4 +1783,3 @@ function EmptyLine({
     </div>
   );
 }
-
