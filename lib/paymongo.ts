@@ -1,5 +1,3 @@
-// lib/paymongo.ts
-
 const PAYMONGO_SECRET_KEY =
   process.env.PAYMONGO_SECRET_KEY;
 
@@ -15,28 +13,47 @@ const BASE_URL =
 const encodedKey =
   Buffer.from(
     `${PAYMONGO_SECRET_KEY}:`,
-  ).toString(
-    'base64',
-  );
+  ).toString('base64');
 
 const FETCH_TIMEOUT_MS =
-  15_000; // 15 seconds per attempt
+  15_000;
 
 const MAX_RETRIES =
-  3; // total attempts = 4 (initial + 3)
+  3;
 
 const RETRY_DELAY_MS =
-  1_000; // initial backoff (1 sec), doubles each retry
+  1_000;
+
+export type PayMongoPaymentMethodType =
+  'card' |
+  'gcash' |
+  'paymaya';
 
 interface CreatePaymentLinkPayload {
-  amount: number; // in centavos
+  amount: number;
   description: string;
   remarks?: string;
 }
 
-// ----------------------------------------------------------------------------
-// Helper: fetch with timeout
-// ----------------------------------------------------------------------------
+interface CreatePaymentIntentPayload {
+  amount: number;
+  paymentMethod: PayMongoPaymentMethodType;
+  description: string;
+  statementDescriptor?: string;
+  metadata?: Record<string, string>;
+}
+
+function getDetailFromPayMongoResponse(
+  json: any,
+  fallback: string,
+) {
+  return (
+    json?.errors?.[0]?.detail ||
+    json?.errors?.[0]?.code ||
+    json?.error ||
+    fallback
+  );
+}
 
 async function fetchWithTimeout(
   url: string,
@@ -49,41 +66,23 @@ async function fetchWithTimeout(
 
   const timeoutId =
     setTimeout(
-      () =>
-        controller.abort(),
+      () => controller.abort(),
       timeoutMs,
     );
 
-  const signal =
-    controller.signal;
-
   try {
-    const response =
-      await fetch(
-        url,
-        {
-          ...options,
-          signal,
-        },
-      );
-
-    clearTimeout(
-      timeoutId,
+    return await fetch(
+      url,
+      {
+        ...options,
+        signal:
+          controller.signal,
+      },
     );
-
-    return response;
-  } catch (err) {
-    clearTimeout(
-      timeoutId,
-    );
-
-    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
-
-// ----------------------------------------------------------------------------
-// Helper: sleep
-// ----------------------------------------------------------------------------
 
 function sleep(
   ms: number,
@@ -97,12 +96,44 @@ function sleep(
   );
 }
 
-// ----------------------------------------------------------------------------
-// createPaymongoPaymentLink – with retry
-// ----------------------------------------------------------------------------
+async function parsePayMongoJson(
+  response: Response,
+) {
+  const responseText =
+    await response.text();
 
-export async function createPaymongoPaymentLink(
-  payload: CreatePaymentLinkPayload,
+  try {
+    return JSON.parse(
+      responseText,
+    );
+  } catch {
+    throw new Error(
+      `PayMongo returned a non-JSON response (HTTP ${response.status}).`,
+    );
+  }
+}
+
+function getHeaders(
+  includeContentType = true,
+) {
+  return {
+    ...(includeContentType
+      ? {
+          'Content-Type':
+            'application/json',
+        }
+      : {}),
+    Authorization:
+      `Basic ${encodedKey}`,
+  };
+}
+
+/* ============================================================================
+   PAYMENT INTENT — DIRECT PAYMENT METHOD FLOW
+   ========================================================================== */
+
+export async function createPaymongoPaymentIntent(
+  payload: CreatePaymentIntentPayload,
 ) {
   const requestBody = {
     data: {
@@ -110,413 +141,142 @@ export async function createPaymongoPaymentLink(
         amount:
           payload.amount,
 
+        currency:
+          'PHP',
+
+        payment_method_allowed: [
+          payload.paymentMethod,
+        ],
+
         description:
           payload.description,
 
-        remarks:
-          payload.remarks ||
-          '',
+        capture_type:
+          'automatic',
+
+        ...(payload.statementDescriptor
+          ? {
+              statement_descriptor:
+                payload.statementDescriptor,
+            }
+          : {}),
+
+        ...(payload.metadata
+          ? {
+              metadata:
+                payload.metadata,
+            }
+          : {}),
       },
     },
   };
 
-  const requestHeaders = {
-    'Content-Type':
-      'application/json',
-
-    Authorization:
-      `Basic ${encodedKey}`,
-  };
-
   const url =
-    `${BASE_URL}/links`;
+    `${BASE_URL}/payment_intents`;
 
   let lastError:
-    Error | null =
-    null;
+    Error | null = null;
 
   for (
     let attempt = 0;
     attempt <= MAX_RETRIES;
-    attempt++
+    attempt += 1
   ) {
     try {
-      console.log(
-        `[PayMongo] Attempt ${attempt + 1} – Request URL:`,
-        url,
-      );
-
-      /*
-       * Do not log the full Authorization header in production.
-       * Only keep the request body and URL visible for debugging.
-       */
-      console.log(
-        '[PayMongo] Request Body:',
-        JSON.stringify(
-          requestBody,
-        ),
-      );
-
       const response =
         await fetchWithTimeout(
           url,
           {
-            method:
-              'POST',
-
+            method: 'POST',
             headers:
-              requestHeaders,
-
-            body:
-              JSON.stringify(
-                requestBody,
-              ),
+              getHeaders(),
+            body: JSON.stringify(
+              requestBody,
+            ),
           },
-          FETCH_TIMEOUT_MS,
         );
 
-      console.log(
-        '[PayMongo] Response Status:',
-        response.status,
-        response.statusText,
-      );
+      const json =
+        await parsePayMongoJson(
+          response,
+        );
 
-      const responseText =
-        await response.text();
-
-      console.log(
-        '[PayMongo] Raw Response (first 2000 chars):',
-        responseText.substring(
-          0,
-          2000,
-        ),
-      );
-
-      // If 5xx and we have retries left, wait and retry
       if (
-        response.status >=
-          500 &&
-        attempt <
-          MAX_RETRIES
+        response.status >= 500 &&
+        attempt < MAX_RETRIES
       ) {
-        const waitTime =
-          RETRY_DELAY_MS *
-          Math.pow(
-            2,
-            attempt,
-          );
-
-        console.warn(
-          `[PayMongo] 5xx error (${response.status}). Retrying in ${waitTime}ms...`,
-        );
-
         await sleep(
-          waitTime,
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
         );
-
         continue;
       }
 
-      // Try to parse JSON
-      let json: any;
-
-      try {
-        json =
-          JSON.parse(
-            responseText,
-          );
-      } catch {
-        console.error(
-          '[PayMongo] Non-JSON response:',
-          responseText,
-        );
-
-        throw new Error(
-          `PayMongo returned non-JSON response (status ${response.status}). ` +
-            `Body start: ${responseText.substring(
-              0,
-              200,
-            )}`,
-        );
-      }
-
       if (!response.ok) {
-        const detail =
-          json?.errors?.[0]
-            ?.detail ||
-          json?.error ||
-          'Unknown PayMongo error';
-
-        console.error(
-          '[PayMongo] API error:',
-          JSON.stringify(
+        throw new Error(
+          getDetailFromPayMongoResponse(
             json,
+            'Unable to create PayMongo Payment Intent.',
           ),
         );
+      }
 
+      const resource =
+        json?.data;
+
+      if (!resource?.id) {
         throw new Error(
-          detail,
+          'PayMongo did not return a Payment Intent resource.',
         );
       }
-
-      // Success
-      const link =
-        json.data;
-
-      return {
-        checkoutUrl:
-          link.attributes
-            .checkout_url,
-
-        referenceNumber:
-          link.attributes
-            .reference_number,
-
-        id:
-          link.id,
-      };
-    } catch (err) {
-      lastError =
-        err instanceof Error
-          ? err
-          : new Error(
-              String(err),
-            );
-
-      // If it's an abort/timeout error, log and possibly retry
-      if (
-        lastError.message.includes(
-          'aborted',
-        ) &&
-        attempt <
-          MAX_RETRIES
-      ) {
-        const waitTime =
-          RETRY_DELAY_MS *
-          Math.pow(
-            2,
-            attempt,
-          );
-
-        console.warn(
-          `[PayMongo] Request timed out. Retrying in ${waitTime}ms...`,
-        );
-
-        await sleep(
-          waitTime,
-        );
-
-        continue;
-      }
-
-      // If it's not a retriable error, break
-      if (
-        !lastError.message.includes(
-          'Gateway Timeout',
-        ) &&
-        !lastError.message.includes(
-          'timed out',
-        ) &&
-        !lastError.message.includes(
-          '5xx',
-        )
-      ) {
-        break;
-      }
-    }
-  }
-
-  throw (
-    lastError ||
-    new Error(
-      'Failed to create payment link after retries',
-    )
-  );
-}
-
-// ----------------------------------------------------------------------------
-// getPaymentLinkStatus – with retry
-// ----------------------------------------------------------------------------
-
-export async function getPaymentLinkStatus(
-  linkId: string,
-) {
-  const url =
-    `${BASE_URL}/links/${linkId}`;
-
-  const headers = {
-    Authorization:
-      `Basic ${encodedKey}`,
-  };
-
-  let lastError:
-    Error | null =
-    null;
-
-  for (
-    let attempt = 0;
-    attempt <= MAX_RETRIES;
-    attempt++
-  ) {
-    try {
-      console.log(
-        `[PayMongo Status] Attempt ${attempt + 1} – URL:`,
-        url,
-      );
-
-      const response =
-        await fetchWithTimeout(
-          url,
-          {
-            method:
-              'GET',
-
-            headers,
-          },
-          FETCH_TIMEOUT_MS,
-        );
-
-      console.log(
-        '[PayMongo Status] Response Status:',
-        response.status,
-      );
-
-      const responseText =
-        await response.text();
-
-      console.log(
-        '[PayMongo Status] Raw body (first 2000 chars):',
-        responseText.substring(
-          0,
-          2000,
-        ),
-      );
-
-      if (
-        response.status >=
-          500 &&
-        attempt <
-          MAX_RETRIES
-      ) {
-        const waitTime =
-          RETRY_DELAY_MS *
-          Math.pow(
-            2,
-            attempt,
-          );
-
-        console.warn(
-          `[PayMongo Status] 5xx (${response.status}). Retrying in ${waitTime}ms...`,
-        );
-
-        await sleep(
-          waitTime,
-        );
-
-        continue;
-      }
-
-      let json: any;
-
-      try {
-        json =
-          JSON.parse(
-            responseText,
-          );
-      } catch {
-        console.error(
-          '[PayMongo Status] Non-JSON response:',
-          responseText,
-        );
-
-        throw new Error(
-          'PayMongo returned non-JSON response',
-        );
-      }
-
-      if (!response.ok) {
-        const detail =
-          json?.errors?.[0]
-            ?.detail ||
-          'Failed to fetch payment link status';
-
-        throw new Error(
-          detail,
-        );
-      }
-
-      const link =
-        json.data;
-
-      const payments =
-        link.attributes
-          .payments || [];
-
-      /*
-       * Legacy Payment Links return the actual successful
-       * payment in the payments collection.
-       */
-      const paidPayment =
-        payments.find(
-          (payment: any) =>
-            payment?.attributes
-              ?.status ===
-            'paid',
-        );
-
-      const isPaid =
-        Boolean(
-          paidPayment,
-        );
 
       return {
         id:
-          link.id,
-
-        amount:
-          link.attributes
-            .amount,
-
+          resource.id,
+        type:
+          resource.type,
+        clientKey:
+          resource.attributes
+            ?.client_key,
         status:
-          link.attributes
-            .status,
-
-        isPaid,
-
-        referenceNumber:
-          link.attributes
-            .reference_number,
+          resource.attributes
+            ?.status,
+        amount:
+          resource.attributes
+            ?.amount,
+        currency:
+          resource.attributes
+            ?.currency,
+        paymentMethodAllowed:
+          resource.attributes
+            ?.payment_method_allowed,
       };
-    } catch (err) {
+    } catch (error) {
       lastError =
-        err instanceof Error
-          ? err
+        error instanceof Error
+          ? error
           : new Error(
-              String(err),
+              String(error),
             );
 
+      const message =
+        lastError.message.toLowerCase();
+
+      const retryable =
+        message.includes('aborted') ||
+        message.includes('timeout') ||
+        message.includes('timed out') ||
+        message.includes('non-json') ||
+        message.includes('5xx');
+
       if (
-        lastError.message.includes(
-          'aborted',
-        ) &&
-        attempt <
-          MAX_RETRIES
+        retryable &&
+        attempt < MAX_RETRIES
       ) {
-        const waitTime =
-          RETRY_DELAY_MS *
-          Math.pow(
-            2,
-            attempt,
-          );
-
-        console.warn(
-          `[PayMongo Status] Timeout. Retrying in ${waitTime}ms...`,
-        );
-
         await sleep(
-          waitTime,
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
         );
-
         continue;
       }
 
@@ -527,7 +287,345 @@ export async function getPaymentLinkStatus(
   throw (
     lastError ||
     new Error(
-      'Failed to fetch payment link status after retries',
+      'Failed to create PayMongo Payment Intent after retries.',
+    )
+  );
+}
+
+export async function getPaymongoPaymentIntent(
+  paymentIntentId: string,
+) {
+  const url =
+    `${BASE_URL}/payment_intents/${encodeURIComponent(
+      paymentIntentId,
+    )}`;
+
+  let lastError:
+    Error | null = null;
+
+  for (
+    let attempt = 0;
+    attempt <= MAX_RETRIES;
+    attempt += 1
+  ) {
+    try {
+      const response =
+        await fetchWithTimeout(
+          url,
+          {
+            method: 'GET',
+            headers:
+              getHeaders(false),
+          },
+        );
+
+      const json =
+        await parsePayMongoJson(
+          response,
+        );
+
+      if (
+        response.status >= 500 &&
+        attempt < MAX_RETRIES
+      ) {
+        await sleep(
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
+        );
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          getDetailFromPayMongoResponse(
+            json,
+            'Unable to retrieve PayMongo Payment Intent.',
+          ),
+        );
+      }
+
+      return json;
+    } catch (error) {
+      lastError =
+        error instanceof Error
+          ? error
+          : new Error(
+              String(error),
+            );
+
+      const message =
+        lastError.message.toLowerCase();
+
+      const retryable =
+        message.includes('aborted') ||
+        message.includes('timeout') ||
+        message.includes('timed out') ||
+        message.includes('non-json');
+
+      if (
+        retryable &&
+        attempt < MAX_RETRIES
+      ) {
+        await sleep(
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
+        );
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  throw (
+    lastError ||
+    new Error(
+      'Failed to retrieve PayMongo Payment Intent after retries.',
+    )
+  );
+}
+
+/* ============================================================================
+   LEGACY PAYMENT LINKS — KEPT SO OTHER AUTOCare CALLERS DO NOT BREAK
+   ========================================================================== */
+
+export async function createPaymongoPaymentLink(
+  payload: CreatePaymentLinkPayload,
+) {
+  const requestBody = {
+    data: {
+      attributes: {
+        amount:
+          payload.amount,
+        description:
+          payload.description,
+        remarks:
+          payload.remarks || '',
+      },
+    },
+  };
+
+  const url =
+    `${BASE_URL}/links`;
+
+  let lastError:
+    Error | null = null;
+
+  for (
+    let attempt = 0;
+    attempt <= MAX_RETRIES;
+    attempt += 1
+  ) {
+    try {
+      const response =
+        await fetchWithTimeout(
+          url,
+          {
+            method: 'POST',
+            headers:
+              getHeaders(),
+            body: JSON.stringify(
+              requestBody,
+            ),
+          },
+        );
+
+      const json =
+        await parsePayMongoJson(
+          response,
+        );
+
+      if (
+        response.status >= 500 &&
+        attempt < MAX_RETRIES
+      ) {
+        await sleep(
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
+        );
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          getDetailFromPayMongoResponse(
+            json,
+            'Unable to create PayMongo payment link.',
+          ),
+        );
+      }
+
+      const link =
+        json?.data;
+
+      return {
+        checkoutUrl:
+          link?.attributes
+            ?.checkout_url ??
+          link?.attributes?.url,
+
+        referenceNumber:
+          link?.attributes
+            ?.reference_number,
+
+        id:
+          link?.id,
+      };
+    } catch (error) {
+      lastError =
+        error instanceof Error
+          ? error
+          : new Error(
+              String(error),
+            );
+
+      const message =
+        lastError.message.toLowerCase();
+
+      const retryable =
+        message.includes('aborted') ||
+        message.includes('timeout') ||
+        message.includes('timed out') ||
+        message.includes('non-json');
+
+      if (
+        retryable &&
+        attempt < MAX_RETRIES
+      ) {
+        await sleep(
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
+        );
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  throw (
+    lastError ||
+    new Error(
+      'Failed to create payment link after retries.',
+    )
+  );
+}
+
+export async function getPaymentLinkStatus(
+  linkId: string,
+) {
+  const url =
+    `${BASE_URL}/links/${encodeURIComponent(
+      linkId,
+    )}`;
+
+  let lastError:
+    Error | null = null;
+
+  for (
+    let attempt = 0;
+    attempt <= MAX_RETRIES;
+    attempt += 1
+  ) {
+    try {
+      const response =
+        await fetchWithTimeout(
+          url,
+          {
+            method: 'GET',
+            headers:
+              getHeaders(false),
+          },
+        );
+
+      const json =
+        await parsePayMongoJson(
+          response,
+        );
+
+      if (
+        response.status >= 500 &&
+        attempt < MAX_RETRIES
+      ) {
+        await sleep(
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
+        );
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          getDetailFromPayMongoResponse(
+            json,
+            'Failed to fetch payment link status.',
+          ),
+        );
+      }
+
+      const link =
+        json?.data;
+
+      const payments =
+        link?.attributes
+          ?.payments || [];
+
+      const paidPayment =
+        payments.find(
+          (payment: any) =>
+            payment?.attributes
+              ?.status === 'paid',
+        );
+
+      return {
+        id:
+          link?.id,
+        amount:
+          link?.attributes?.amount,
+        status:
+          link?.attributes?.status,
+        isPaid:
+          Boolean(paidPayment),
+        referenceNumber:
+          link?.attributes
+            ?.reference_number,
+      };
+    } catch (error) {
+      lastError =
+        error instanceof Error
+          ? error
+          : new Error(
+              String(error),
+            );
+
+      const message =
+        lastError.message.toLowerCase();
+
+      const retryable =
+        message.includes('aborted') ||
+        message.includes('timeout') ||
+        message.includes('timed out') ||
+        message.includes('non-json');
+
+      if (
+        retryable &&
+        attempt < MAX_RETRIES
+      ) {
+        await sleep(
+          RETRY_DELAY_MS *
+            Math.pow(2, attempt),
+        );
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  throw (
+    lastError ||
+    new Error(
+      'Failed to fetch payment link status after retries.',
     )
   );
 }

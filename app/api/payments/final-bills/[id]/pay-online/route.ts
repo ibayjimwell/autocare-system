@@ -20,8 +20,33 @@ import {
 } from '@/utils/shared';
 
 import {
-  createPaymongoPaymentLink,
+  createPaymongoPaymentIntent,
 } from '@/lib/paymongo';
+
+const ALLOWED_PAYMENT_METHODS = new Set([
+  'gcash',
+  'paymaya',
+  'card',
+]);
+
+function normalizePaymentMethod(
+  value: unknown,
+) {
+  if (
+    typeof value !== 'string'
+  ) {
+    return null;
+  }
+
+  const normalized =
+    value.trim().toLowerCase();
+
+  return ALLOWED_PAYMENT_METHODS.has(
+    normalized,
+  )
+    ? normalized
+    : null;
+}
 
 export async function POST(
   req: NextRequest,
@@ -42,6 +67,42 @@ export async function POST(
         error: true,
         errorMessage:
           'Invalid bill ID',
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  let body: unknown;
+
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Invalid request body.',
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  const paymentMethod =
+    normalizePaymentMethod(
+      (body as Record<string, unknown> | null)
+        ?.paymentMethod,
+    );
+
+  if (!paymentMethod) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Unsupported payment method. Choose GCash, Maya, or card.',
       },
       {
         status: 400,
@@ -91,9 +152,6 @@ export async function POST(
       );
     }
 
-    /*
-     * Only an OFFICIAL bill should be opened for customer payment.
-     */
     if (
       bill.status !==
       'OFFICIAL'
@@ -136,39 +194,41 @@ export async function POST(
         amount * 100,
       );
 
-    const description =
-      `Payment for invoice ${bill.id.slice(
-        0,
-        8,
-      )}`;
-
-    const paymentLink =
-      await createPaymongoPaymentLink({
+    const paymentIntent =
+      await createPaymongoPaymentIntent({
         amount:
           amountInCentavos,
 
-        description,
+        paymentMethod,
 
-        remarks:
-          `Final Cost ${bill.id}`,
+        description:
+          'AutoCare Final Cost Payment',
+
+        metadata: {
+          final_bill_id:
+            bill.id,
+          appointment_id:
+            bill.appointmentId,
+          payment_method:
+            paymentMethod,
+        },
       });
 
     return NextResponse.json(
       {
         error: false,
-
         message:
-          'Payment link created.',
-
+          'Payment Intent created.',
         data: {
-          checkoutUrl:
-            paymentLink.checkoutUrl,
-
-          paymongoLinkId:
-            paymentLink.id,
-
-          referenceNumber:
-            paymentLink.referenceNumber,
+          paymentIntentId:
+            paymentIntent.id,
+          clientKey:
+            paymentIntent.clientKey,
+          status:
+            paymentIntent.status,
+          amount:
+            paymentIntent.amount,
+          paymentMethod,
         },
       },
       {
@@ -184,14 +244,12 @@ export async function POST(
     return NextResponse.json(
       {
         error: true,
-
         errorTitle:
-          'Payment creation failed',
-
+          'Payment setup failed',
         errorMessage:
           error instanceof Error
             ? error.message
-            : 'Unable to create PayMongo link.',
+            : 'Unable to create PayMongo Payment Intent.',
       },
       {
         status: 500,

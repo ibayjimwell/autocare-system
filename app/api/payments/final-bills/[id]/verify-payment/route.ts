@@ -1,5 +1,3 @@
-// app/api/payments/final-bills/[id]/verify-payment/route.ts
-
 import {
   NextRequest,
   NextResponse,
@@ -30,7 +28,7 @@ import {
 } from '@/utils/shared';
 
 import {
-  getPaymentLinkStatus,
+  getPaymongoPaymentIntent,
 } from '@/lib/paymongo';
 
 import {
@@ -41,9 +39,64 @@ import {
   mobilePaymentsTriggers,
 } from '@/app-triggers/payments';
 
-// --------------------------------------------------------------
+function getPaymentIntentId(
+  value: unknown,
+) {
+  if (
+    typeof value !== 'string'
+  ) {
+    return null;
+  }
+
+  const normalized =
+    value.trim();
+
+  if (
+    !normalized.startsWith('pi_')
+  ) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function getIntentAttributes(
+  response: any,
+) {
+  return (
+    response?.data?.attributes ??
+    response?.attributes ??
+    {}
+  );
+}
+
+function getIntentMetadata(
+  response: any,
+) {
+  return (
+    getIntentAttributes(
+      response,
+    )?.metadata ?? {}
+  );
+}
+
+function getIntentPaymentMethod(
+  response: any,
+) {
+  const attributes =
+    getIntentAttributes(
+      response,
+    );
+
+  return (
+    attributes?.payment_method_allowed?.[0] ??
+    null
+  );
+}
+
+// -----------------------------------------------------------------------------
 // POST /api/payments/final-bills/[id]/verify-payment
-// --------------------------------------------------------------
+// -----------------------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   {
@@ -70,17 +123,11 @@ export async function POST(
     );
   }
 
-  let body;
+  let body: unknown;
 
   try {
-    body =
-      await req.json();
-  } catch (error) {
-    console.error(
-      '[VerifyPayment] Invalid JSON body:',
-      error,
-    );
-
+    body = await req.json();
+  } catch {
     return NextResponse.json(
       {
         error: true,
@@ -93,21 +140,18 @@ export async function POST(
     );
   }
 
-  const {
-    paymongoLinkId,
-  } =
-    body ?? {};
+  const paymentIntentId =
+    getPaymentIntentId(
+      (body as Record<string, unknown> | null)
+        ?.paymentIntentId,
+    );
 
-  if (
-    typeof paymongoLinkId !==
-      'string' ||
-    !paymongoLinkId.trim()
-  ) {
+  if (!paymentIntentId) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'Missing paymongoLinkId',
+          'Missing or invalid paymentIntentId.',
       },
       {
         status: 400,
@@ -115,7 +159,6 @@ export async function POST(
     );
   }
 
-  // Check current bill status
   const [bill] =
     await Database
       .select()
@@ -141,12 +184,6 @@ export async function POST(
     );
   }
 
-  /*
-   * Idempotent behavior:
-   *
-   * If another verification/webhook already marked the bill PAID,
-   * don't try to process the same payment again.
-   */
   if (
     bill.status ===
     'PAID'
@@ -154,9 +191,9 @@ export async function POST(
     return NextResponse.json(
       {
         error: false,
+        paid: true,
         message:
           'Bill already paid',
-        paid: true,
         referenceNumber:
           null,
       },
@@ -166,25 +203,44 @@ export async function POST(
     );
   }
 
-  // Verify with PayMongo
-  let linkStatus;
+  if (
+    bill.status !==
+    'OFFICIAL'
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          `This bill is currently ${bill.status} and is not ready for payment.`,
+      },
+      {
+        status: 422,
+      },
+    );
+  }
+
+  /*
+   * Retrieve the Payment Intent with the server-side secret key.
+   * Never trust the payment result supplied by the mobile client.
+   */
+  let paymentIntent;
 
   try {
-    linkStatus =
-      await getPaymentLinkStatus(
-        paymongoLinkId.trim(),
+    paymentIntent =
+      await getPaymongoPaymentIntent(
+        paymentIntentId,
       );
-  } catch (err) {
+  } catch (error) {
     console.error(
-      '[VerifyPayment] PayMongo error:',
-      err,
+      '[VerifyPayment] PayMongo Payment Intent retrieval failed:',
+      error,
     );
 
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'Unable to verify payment at this time.',
+          'Unable to verify the payment with PayMongo right now.',
       },
       {
         status: 502,
@@ -192,13 +248,133 @@ export async function POST(
     );
   }
 
-  if (!linkStatus.isPaid) {
+  const intentAttributes =
+    getIntentAttributes(
+      paymentIntent,
+    );
+
+  const metadata =
+    getIntentMetadata(
+      paymentIntent,
+    );
+
+  /*
+   * Bind the remote Payment Intent to this exact Final Cost.
+   * This prevents a client from submitting another bill's Payment Intent.
+   */
+  if (
+    metadata?.final_bill_id !==
+    billId
+  ) {
+    console.error(
+      '[VerifyPayment] Payment Intent does not belong to Final Cost:',
+      {
+        billId,
+        paymentIntentId,
+      },
+    );
+
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Payment verification failed because the payment does not belong to this Final Cost.',
+      },
+      {
+        status: 403,
+      },
+    );
+  }
+
+  const expectedAmount =
+    Math.round(
+      (Number.parseFloat(
+        String(
+          bill.grandTotal ?? 0,
+        ),
+      ) || 0) * 100,
+    );
+
+  const remoteAmount =
+    Number(
+      intentAttributes?.amount ??
+        0,
+    );
+
+  if (
+    expectedAmount <= 0 ||
+    remoteAmount !==
+      expectedAmount
+  ) {
+    console.error(
+      '[VerifyPayment] Payment amount mismatch:',
+      {
+        billId,
+        paymentIntentId,
+        expectedAmount,
+        remoteAmount,
+      },
+    );
+
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Payment verification failed because the payment amount does not match the Final Cost.',
+      },
+      {
+        status: 409,
+      },
+    );
+  }
+
+  const paymentMethod =
+    getIntentPaymentMethod(
+      paymentIntent,
+    );
+
+  const expectedPaymentMethod =
+    metadata?.payment_method;
+
+  if (
+    expectedPaymentMethod &&
+    paymentMethod &&
+    expectedPaymentMethod !==
+      paymentMethod
+  ) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Payment verification failed because the payment method does not match the payment session.',
+      },
+      {
+        status: 409,
+      },
+    );
+  }
+
+  const intentStatus =
+    String(
+      intentAttributes?.status ??
+        '',
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    intentStatus !==
+    'succeeded'
+  ) {
     return NextResponse.json(
       {
         error: false,
         paid: false,
+        status:
+          intentStatus ||
+          'unknown',
         message:
-          'Payment not yet completed.',
+          'Payment has not completed yet.',
       },
       {
         status: 200,
@@ -207,56 +383,8 @@ export async function POST(
   }
 
   /*
-   * PayMongo has confirmed that the payment is successful.
-   *
-   * Keep receipt generation separate from the PAID update.
-   * This guarantees the Final Cost can still become PAID even if
-   * receipt generation has an unrelated failure.
-   */
-  let referenceNumber =
-    linkStatus.referenceNumber ??
-    null;
-
-  let receiptData =
-    null;
-
-  let receiptWarning =
-    null;
-
-  try {
-    const receiptResult =
-      await generatePaymentReceipt(
-        billId,
-      );
-
-    referenceNumber =
-      receiptResult?.referenceNumber ??
-      referenceNumber;
-
-    receiptData =
-      receiptResult?.receiptData ??
-      null;
-  } catch (err) {
-    console.error(
-      '[VerifyPayment] Receipt generation failed:',
-      err,
-    );
-
-    receiptWarning =
-      err instanceof Error
-        ? err.message
-        : 'Payment succeeded but receipt generation failed.';
-  }
-
-  /*
-   * IMPORTANT:
-   *
-   * Explicitly persist PAID.
-   *
-   * The previous implementation relied on
-   * generatePaymentReceipt() to perform this update.
-   * That created a failure point where PayMongo was paid but
-   * final_bills.status could remain OFFICIAL.
+   * PayMongo has confirmed that the Payment Intent succeeded.
+   * Persist PAID before any optional notification work.
    */
   let updatedBill;
 
@@ -277,10 +405,10 @@ export async function POST(
 
     updatedBill =
       result?.[0] ?? null;
-  } catch (err) {
+  } catch (error) {
     console.error(
       '[VerifyPayment] Failed to mark Final Cost as PAID:',
-      err,
+      error,
     );
 
     return NextResponse.json(
@@ -310,9 +438,37 @@ export async function POST(
     );
   }
 
+  let referenceNumber = null;
+  let receiptData = null;
+  let receiptWarning = null;
+
+  try {
+    const receiptResult =
+      await generatePaymentReceipt(
+        billId,
+      );
+
+    referenceNumber =
+      receiptResult?.referenceNumber ??
+      null;
+
+    receiptData =
+      receiptResult?.receiptData ??
+      null;
+  } catch (error) {
+    console.error(
+      '[VerifyPayment] Receipt generation failed:',
+      error,
+    );
+
+    receiptWarning =
+      error instanceof Error
+        ? error.message
+        : 'Payment succeeded but receipt generation failed.';
+  }
+
   /*
-   * Send the customer notification only after the database
-   * successfully contains the PAID state.
+   * Notify the customer after PAID has been persisted.
    */
   try {
     const [appointment] =
@@ -345,15 +501,11 @@ export async function POST(
           .onFinalBillPaid({
             customerId:
               customer.id,
-
             trackingNumber:
               appointment.trackingNumber,
-
             appointmentId:
               bill.appointmentId,
-
-            billId:
-              billId,
+            billId,
           })
           .catch(
             console.error,
@@ -361,38 +513,23 @@ export async function POST(
       }
     }
   } catch (notificationError) {
-    /*
-     * Notification failure must never undo a successful payment.
-     */
     console.error(
       '[VerifyPayment] Payment notification failed:',
       notificationError,
     );
   }
 
-  /*
-   * The payment itself has succeeded.
-   *
-   * Return HTTP 200 even if receipt generation had a warning.
-   * This prevents the mobile app from incorrectly displaying
-   * the payment as failed after the database has already changed
-   * to PAID.
-   */
   return NextResponse.json(
     {
       error: false,
-
       paid: true,
-
+      paymentIntentId,
       message:
         receiptWarning
           ? 'Payment verified and Final Cost marked as paid. Receipt generation requires attention.'
           : 'Payment verified and processed.',
-
       referenceNumber,
-
       receiptData,
-
       receiptWarning,
     },
     {
