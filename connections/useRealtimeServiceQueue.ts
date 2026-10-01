@@ -5,30 +5,44 @@ import {
 } from 'react';
 
 import {
+  useRealtimeTable,
+} from './useRealtimeTable';
+
+import type {
   RealtimePostgresChangesPayload,
 } from '@supabase/supabase-js';
 
-import {
-  useRealtimeTable,
-} from './useRealtimeTable';
+/* ================================================================
+   TYPES
+================================================================ */
+
+type ServiceQueueRealtimeMode =
+  | 'CONFIRMED'
+  | 'IN_PROGRESS';
 
 interface UseRealtimeServiceQueueProps {
   onDataChanged: () => void;
   date: string;
+  mode?: ServiceQueueRealtimeMode;
 }
+
+/* ================================================================
+   REALTIME SERVICE QUEUE
+================================================================ */
 
 export function useRealtimeServiceQueue({
   onDataChanged,
   date,
+  mode = 'CONFIRMED',
 }: UseRealtimeServiceQueueProps) {
-  const handleServiceQueueChange =
+  const handleQueueChange =
     useCallback(
       (
         payload: RealtimePostgresChangesPayload<any>,
       ) => {
         console.log(
-          '📋 [Realtime Queue] service_queue change detected:',
-          payload.eventType,
+          '📋 Service queue change detected, refreshing...',
+          payload?.eventType,
         );
 
         onDataChanged();
@@ -44,8 +58,8 @@ export function useRealtimeServiceQueue({
         payload: RealtimePostgresChangesPayload<any>,
       ) => {
         console.log(
-          '📋 [Realtime Queue] appointment change detected:',
-          payload.eventType,
+          '📅 Appointment change detected for service queue, refreshing...',
+          payload?.eventType,
         );
 
         onDataChanged();
@@ -55,31 +69,45 @@ export function useRealtimeServiceQueue({
       ],
     );
 
-  /* =============================================================
-     SERVICE QUEUE CHANGES
-  ============================================================= */
+  /* ==============================================================
+     SERVICE QUEUE SUBSCRIPTION
+
+     CONFIRMED:
+       Keep the existing date-specific subscription.
+
+     IN_PROGRESS:
+       Subscribe to the entire service_queue table because an
+       IN_PROGRESS job can belong to any appointment date.
+  ============================================================== */
 
   useRealtimeTable(
     'service_queue',
-    date
-      ? `queue_date=eq.${date}`
-      : null,
-    handleServiceQueueChange,
+    mode ===
+      'IN_PROGRESS'
+      ? undefined
+      : date
+        ? `queue_date=eq.${date}`
+        : undefined,
+    handleQueueChange,
   );
 
-  /* =============================================================
-     APPOINTMENT CHANGES
+  /* ==============================================================
+     APPOINTMENT SUBSCRIPTION
 
-     IN_PROGRESS is an appointment status. Observing appointments
-     ensures the work queue refreshes when an appointment enters or
-     leaves IN_PROGRESS, even when no service_queue row is changed.
-  ============================================================= */
+     IN_PROGRESS must also respond to appointment status changes.
+     This covers legacy appointments that entered IN_PROGRESS without
+     a service_queue row and ensures an older-date repair appears in
+     the tab immediately after its status changes.
+
+     CONFIRMED keeps the existing service_queue-focused behavior.
+  ============================================================== */
 
   useRealtimeTable(
     'appointments',
-    date
-      ? `appointment_date=eq.${date}`
-      : null,
+    mode ===
+      'IN_PROGRESS'
+      ? undefined
+      : 'id=eq.00000000-0000-0000-0000-000000000000',
     handleAppointmentChange,
   );
 }

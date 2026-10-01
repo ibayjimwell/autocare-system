@@ -284,9 +284,25 @@ export async function PATCH(
       );
     }
 
+    /*
+     * Queue action date rules:
+     *
+     * CONFIRMED appointments:
+     * - Queue actions are only allowed for today's appointments.
+     *
+     * IN_PROGRESS appointments:
+     * - Queue actions are allowed regardless of appointment date.
+     * - This is required because an appointment can remain IN_PROGRESS
+     *   after its original appointment date.
+     *
+     * Other appointment statuses:
+     * - Keep the existing today-only restriction.
+     */
     if (
+      appointment.status !==
+        'IN_PROGRESS' &&
       appointment.appointmentDate !==
-      getManilaDate()
+        getManilaDate()
     ) {
       return NextResponse.json(
         {
@@ -313,10 +329,15 @@ export async function PATCH(
     /*
      * Some existing IN_PROGRESS appointments were created before the
      * dedicated work queue existed and therefore have no ServiceQueue row.
+     *
      * Create the work-queue entry lazily when Work This is pressed.
      *
      * The GET /api/queue route also exposes these appointments as virtual
      * PENDING entries so they are visible before this action occurs.
+     *
+     * IMPORTANT:
+     * This is intentionally allowed regardless of appointment date because
+     * IN_PROGRESS appointments are not restricted to today's date.
      */
     if (!entry) {
       if (
@@ -332,7 +353,9 @@ export async function PATCH(
         const now =
           new Date();
 
-        const [createdEntry] =
+        const [
+          createdEntry,
+        ] =
           await Database
             .insert(ServiceQueue)
             .values({
@@ -372,7 +395,7 @@ export async function PATCH(
      */
     if (
       appointment.status ===
-      'CONFIRMED' &&
+        'CONFIRMED' &&
       ![
         'PENDING',
         'ARRIVING',
@@ -439,6 +462,7 @@ export async function PATCH(
     ) {
       updates.arrivingAt =
         now;
+
       updates.arrivalResponseAt =
         now;
     }
@@ -449,8 +473,10 @@ export async function PATCH(
     ) {
       updates.arrivedAt =
         now;
+
       updates.arrivalResponseAt =
         now;
+
       updates.arrivingAt =
         entry.arrivingAt ??
         now;
@@ -462,8 +488,10 @@ export async function PATCH(
     ) {
       updates.arrivalResponseAt =
         now;
+
       updates.arrivingAt =
         null;
+
       updates.arrivedAt =
         null;
     }

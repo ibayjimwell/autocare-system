@@ -14,12 +14,15 @@
  * - next/server
  * - server-only utilities
  *
- * This module must contain only browser-safe API requests.
  * The actual database implementation lives in:
  *
- * app/api/queue/route.ts
+ *   app/api/queue/route.ts
  * ================================================================
  */
+
+type ServiceQueueMode =
+  | 'CONFIRMED'
+  | 'IN_PROGRESS';
 
 async function requestJson(
   url: string,
@@ -103,15 +106,47 @@ async function requestJson(
 export const serviceQueueApi = {
   /* ================================================================
      LIST
+
+     CONFIRMED:
+       /api/queue?date=YYYY-MM-DD&mode=CONFIRMED
+
+     IN_PROGRESS:
+       /api/queue?mode=IN_PROGRESS
+
+     IN_PROGRESS intentionally omits the date so the backend can
+     return every active repair regardless of appointment date.
   ================================================================= */
 
   list: async (
     date: string,
+    mode: ServiceQueueMode = 'CONFIRMED',
   ) => {
-    return requestJson(
-      `/api/queue?date=${encodeURIComponent(
+    const query =
+      new URLSearchParams();
+
+    query.set(
+      'mode',
+      mode,
+    );
+
+    if (
+      mode ===
+        'CONFIRMED'
+    ) {
+      if (!date) {
+        throw new Error(
+          'A valid date is required for the confirmed queue.',
+        );
+      }
+
+      query.set(
+        'date',
         date,
-      )}`,
+      );
+    }
+
+    return requestJson(
+      `/api/queue?${query.toString()}`,
       {
         method: 'GET',
       },

@@ -53,6 +53,10 @@ const WORK_QUEUE_STATUSES = [
   'WORKING',
 ] as const;
 
+type QueueMode =
+  | 'CONFIRMED'
+  | 'IN_PROGRESS';
+
 /* ================================================================
    HELPERS
 ================================================================ */
@@ -333,13 +337,16 @@ function compareWork(
   right: any,
 ): number {
   /*
-   * IN_PROGRESS queue order is driven by UpdatedAt.
+   * IN_PROGRESS queue order remains compatible with the existing
+   * behavior:
    *
-   * Pending jobs are kept ahead of already-working jobs so the first
-   * and second queue positions represent the next jobs that can be
-   * started. Within the same queue state, the latest queue update is
-   * ordered deterministically, with appointment UpdatedAt and createdAt
-   * as stable fallbacks.
+   *   PENDING before WORKING
+   *   ServiceQueue.updatedAt ASC within the same state
+   *   Appointments.updatedAt ASC fallback
+   *   createdAt ASC deterministic fallback
+   *
+   * The important change is that this comparison is now applied to
+   * every IN_PROGRESS appointment, regardless of appointment date.
    */
   const statusPriority: Record<
     string,
@@ -372,7 +379,8 @@ function compareWork(
     );
 
   if (
-    queueUpdatedDifference !== 0
+    queueUpdatedDifference !==
+    0
   ) {
     return queueUpdatedDifference;
   }
@@ -386,7 +394,8 @@ function compareWork(
     );
 
   if (
-    appointmentUpdatedDifference !== 0
+    appointmentUpdatedDifference !==
+    0
   ) {
     return appointmentUpdatedDifference;
   }
@@ -400,7 +409,8 @@ function compareWork(
     );
 
   if (
-    createdDifference !== 0
+    createdDifference !==
+    0
   ) {
     return createdDifference;
   }
@@ -415,86 +425,140 @@ function compareWork(
 }
 
 /* ================================================================
-   GET /api/queue?date=YYYY-MM-DD
+   GET /api/queue
+
+   CONFIRMED MODE
+     GET /api/queue?mode=CONFIRMED&date=YYYY-MM-DD
+
+   IN_PROGRESS MODE
+     GET /api/queue?mode=IN_PROGRESS
+
+   IN_PROGRESS mode deliberately does not apply appointmentDate.
 ================================================================ */
 
 export async function GET(
   req: NextRequest,
 ) {
-  const date =
+  const searchParams =
     new URL(
       req.url,
-    ).searchParams.get(
+    ).searchParams;
+
+  const requestedMode =
+    String(
+      searchParams.get(
+        'mode',
+      ) ??
+        'CONFIRMED',
+    )
+      .trim()
+      .toUpperCase();
+
+  const mode: QueueMode =
+    requestedMode ===
+    'IN_PROGRESS'
+      ? 'IN_PROGRESS'
+      : 'CONFIRMED';
+
+  const date =
+    searchParams.get(
       'date',
     );
 
   if (
-    !date ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(
-      date,
+    mode ===
+      'CONFIRMED' &&
+    (
+      !date ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(
+        date,
+      )
     )
   ) {
     return NextResponse.json(
       {
         error: true,
         errorMessage:
-          'Valid date (YYYY-MM-DD) is required.',
+          'Valid date (YYYY-MM-DD) is required for the confirmed queue.',
       },
-      { status: 400 },
+      {
+        status: 400,
+      },
     );
   }
 
   try {
+    /* ============================================================
+       MAIN QUEUE QUERY
+    ============================================================= */
+
     const rows =
       await Database
         .select({
           queueId:
             ServiceQueue.id,
+
           storedQueueNumber:
             ServiceQueue.queueNumber,
+
           appointmentId:
             ServiceQueue.appointmentId,
 
           queueStatus:
             ServiceQueue.status,
+
           storedQueueDate:
             ServiceQueue.queueDate,
 
           arrivalRequestAt:
             ServiceQueue.arrivalRequestAt,
+
           arrivalResponseAt:
             ServiceQueue.arrivalResponseAt,
+
           arrivingAt:
             ServiceQueue.arrivingAt,
+
           arrivedAt:
             ServiceQueue.arrivedAt,
+
           workingAt:
             ServiceQueue.workingAt,
+
           queueUpdatedAt:
             ServiceQueue.updatedAt,
 
           appointmentDate:
             Appointments.appointmentDate,
+
           appointmentTime:
             Appointments.appointmentTime,
+
           createdAt:
             Appointments.createdAt,
+
           updatedAt:
             Appointments.updatedAt,
+
           status:
             Appointments.status,
+
           trackingNumber:
             Appointments.trackingNumber,
+
           services:
             Appointments.services,
 
           customer: {
             id:
               Customers.id,
+
             fullname:
               Customers.fullname,
+
             email:
               Customers.email,
+
             phone:
               Customers.phone,
           },
@@ -502,12 +566,16 @@ export async function GET(
           vehicle: {
             id:
               Vehicles.id,
+
             make:
               Vehicles.make,
+
             model:
               Vehicles.model,
+
             year:
               Vehicles.year,
+
             plateNumber:
               Vehicles.plateNumber,
           },
@@ -537,30 +605,39 @@ export async function GET(
           ),
         )
         .where(
-          and(
-            eq(
-              Appointments.appointmentDate,
-              date,
-            ),
-            inArray(
-              Appointments.status,
-              [
-                ...QUEUED_APPOINTMENT_STATUSES,
-              ],
-            ),
-          ),
+          mode ===
+            'IN_PROGRESS'
+            ? eq(
+                Appointments.status,
+                'IN_PROGRESS',
+              )
+            : and(
+                eq(
+                  Appointments.appointmentDate,
+                  date!,
+                ),
+
+                inArray(
+                  Appointments.status,
+                  [
+                    ...QUEUED_APPOINTMENT_STATUSES,
+                  ],
+                ),
+              ),
         );
 
     /* ============================================================
-       INCLUDE LEGACY IN_PROGRESS APPOINTMENTS WITHOUT A QUEUE ROW
-    =============================================================
+       LEGACY IN_PROGRESS APPOINTMENTS WITHOUT A QUEUE ROW
 
-    /*
-     * Older appointments can reach IN_PROGRESS without having a
-     * service_queue row. Do not let those appointments disappear from
-     * the In Progress tab. They are represented as a temporary PENDING
-     * queue row until Work This creates the persisted ServiceQueue row.
-     */
+       Some older appointments may already be IN_PROGRESS but have no
+       persisted service_queue row. They must still appear in the
+       all-dates In Progress tab.
+
+       These records are represented as a temporary PENDING queue row.
+       Clicking Work This will create/synchronize the persisted queue
+       row through the existing status endpoint.
+    ============================================================= */
+
     const existingQueueAppointmentIds =
       new Set(
         rows.map(
@@ -572,78 +649,89 @@ export async function GET(
       );
 
     const missingInProgressAppointments =
-      await Database
-        .select({
-          appointmentId:
-            Appointments.id,
-          appointmentDate:
-            Appointments.appointmentDate,
-          appointmentTime:
-            Appointments.appointmentTime,
-          createdAt:
-            Appointments.createdAt,
-          updatedAt:
-            Appointments.updatedAt,
-          status:
-            Appointments.status,
-          trackingNumber:
-            Appointments.trackingNumber,
-          services:
-            Appointments.services,
+      mode ===
+      'IN_PROGRESS'
+        ? await Database
+            .select({
+              appointmentId:
+                Appointments.id,
 
-          customer: {
-            id:
-              Customers.id,
-            fullname:
-              Customers.fullname,
-            email:
-              Customers.email,
-            phone:
-              Customers.phone,
-          },
+              appointmentDate:
+                Appointments.appointmentDate,
 
-          vehicle: {
-            id:
-              Vehicles.id,
-            make:
-              Vehicles.make,
-            model:
-              Vehicles.model,
-            year:
-              Vehicles.year,
-            plateNumber:
-              Vehicles.plateNumber,
-          },
-        })
-        .from(
-          Appointments,
-        )
-        .leftJoin(
-          Customers,
-          eq(
-            Appointments.customerId,
-            Customers.id,
-          ),
-        )
-        .leftJoin(
-          Vehicles,
-          eq(
-            Appointments.vehicleId,
-            Vehicles.id,
-          ),
-        )
-        .where(
-          and(
-            eq(
-              Appointments.appointmentDate,
-              date,
-            ),
-            eq(
-              Appointments.status,
-              'IN_PROGRESS',
-            ),
-          ),
-        );
+              appointmentTime:
+                Appointments.appointmentTime,
+
+              createdAt:
+                Appointments.createdAt,
+
+              updatedAt:
+                Appointments.updatedAt,
+
+              status:
+                Appointments.status,
+
+              trackingNumber:
+                Appointments.trackingNumber,
+
+              services:
+                Appointments.services,
+
+              customer: {
+                id:
+                  Customers.id,
+
+                fullname:
+                  Customers.fullname,
+
+                email:
+                  Customers.email,
+
+                phone:
+                  Customers.phone,
+              },
+
+              vehicle: {
+                id:
+                  Vehicles.id,
+
+                make:
+                  Vehicles.make,
+
+                model:
+                  Vehicles.model,
+
+                year:
+                  Vehicles.year,
+
+                plateNumber:
+                  Vehicles.plateNumber,
+              },
+            })
+            .from(
+              Appointments,
+            )
+            .leftJoin(
+              Customers,
+              eq(
+                Appointments.customerId,
+                Customers.id,
+              ),
+            )
+            .leftJoin(
+              Vehicles,
+              eq(
+                Appointments.vehicleId,
+                Vehicles.id,
+              ),
+            )
+            .where(
+              eq(
+                Appointments.status,
+                'IN_PROGRESS',
+              ),
+            )
+        : [];
 
     const syntheticInProgressRows =
       missingInProgressAppointments
@@ -655,54 +743,69 @@ export async function GET(
               ),
             ),
         )
-        .map(row => ({
-          queueId:
-            `virtual-${row.appointmentId}`,
+        .map(
+          row => ({
+            queueId:
+              `virtual-${row.appointmentId}`,
 
-          storedQueueNumber:
-            null,
+            storedQueueNumber:
+              null,
 
-          appointmentId:
-            row.appointmentId,
+            appointmentId:
+              row.appointmentId,
 
-          queueStatus:
-            'PENDING',
+            queueStatus:
+              'PENDING',
 
-          storedQueueDate:
-            date,
+            storedQueueDate:
+              row.appointmentDate,
 
-          arrivalRequestAt:
-            null,
-          arrivalResponseAt:
-            null,
-          arrivingAt:
-            null,
-          arrivedAt:
-            null,
-          workingAt:
-            null,
-          queueUpdatedAt:
-            row.updatedAt,
+            arrivalRequestAt:
+              null,
 
-          appointmentDate:
-            row.appointmentDate,
-          appointmentTime:
-            row.appointmentTime,
-          createdAt:
-            row.createdAt,
-          updatedAt:
-            row.updatedAt,
-          status:
-            row.status,
-          trackingNumber:
-            row.trackingNumber,
-          services:
-            row.services,
-          customer:
-            row.customer,
-          vehicle:
-            row.vehicle,
-        }));
+            arrivalResponseAt:
+              null,
+
+            arrivingAt:
+              null,
+
+            arrivedAt:
+              null,
+
+            workingAt:
+              null,
+
+            queueUpdatedAt:
+              row.updatedAt,
+
+            appointmentDate:
+              row.appointmentDate,
+
+            appointmentTime:
+              row.appointmentTime,
+
+            createdAt:
+              row.createdAt,
+
+            updatedAt:
+              row.updatedAt,
+
+            status:
+              row.status,
+
+            trackingNumber:
+              row.trackingNumber,
+
+            services:
+              row.services,
+
+            customer:
+              row.customer,
+
+            vehicle:
+              row.vehicle,
+          }),
+        );
 
     const allRows = [
       ...rows,
@@ -714,22 +817,26 @@ export async function GET(
     ============================================================= */
 
     const normalizedRows =
-      allRows.map(row => {
-        const effectiveQueueStatus =
-          normalizeEffectiveQueueStatus(
-            row,
-          );
+      allRows.map(
+        row => {
+          const effectiveQueueStatus =
+            normalizeEffectiveQueueStatus(
+              row,
+            );
 
-        return {
-          ...row,
-          queueStatus:
-            effectiveQueueStatus,
-          phase:
-            getPhase(
-              row.status,
-            ),
-        };
-      });
+          return {
+            ...row,
+
+            queueStatus:
+              effectiveQueueStatus,
+
+            phase:
+              getPhase(
+                row.status,
+              ),
+          };
+        },
+      );
 
     /* ============================================================
        ACTIVE LINES
@@ -785,81 +892,88 @@ export async function GET(
 
     const data =
       normalizedRows
-        .map(row => {
-          const confirmedInLine =
-            isConfirmedInLine(
-              row,
-            );
+        .map(
+          row => {
+            const confirmedInLine =
+              isConfirmedInLine(
+                row,
+              );
 
-          const workInLine =
-            isWorkInLine(
-              row,
-            );
+            const workInLine =
+              isWorkInLine(
+                row,
+              );
 
-          const inLine =
-            confirmedInLine ||
-            workInLine;
+            const inLine =
+              confirmedInLine ||
+              workInLine;
 
-          let queueNumber:
-            | number
-            | null = null;
+            let queueNumber:
+              | number
+              | null = null;
 
-          let queueType:
-            | 'CONFIRMED'
-            | 'IN_PROGRESS'
-            | null = null;
+            let queueType:
+              | 'CONFIRMED'
+              | 'IN_PROGRESS'
+              | null = null;
 
-          if (
-            confirmedInLine
-          ) {
-            queueNumber =
-              confirmedPositions.get(
-                row.queueId,
-              ) ?? null;
+            if (
+              confirmedInLine
+            ) {
+              queueNumber =
+                confirmedPositions.get(
+                  row.queueId,
+                ) ?? null;
 
-            queueType =
-              'CONFIRMED';
-          } else if (
-            workInLine
-          ) {
-            queueNumber =
-              workPositions.get(
-                row.queueId,
-              ) ?? null;
+              queueType =
+                'CONFIRMED';
+            } else if (
+              workInLine
+            ) {
+              queueNumber =
+                workPositions.get(
+                  row.queueId,
+                ) ?? null;
 
-            queueType =
-              'IN_PROGRESS';
-          } else if (
-            row.status ===
-            'CONFIRMED'
-          ) {
-            queueType =
-              'CONFIRMED';
-          } else if (
-            row.status ===
-            'IN_PROGRESS'
-          ) {
-            queueType =
-              'IN_PROGRESS';
-          }
-
-          return {
-            ...row,
-            queueNumber,
-            queueType,
-            inLine,
-            linePosition:
-              queueNumber,
-            lineTotal:
-              queueType ===
+              queueType =
+                'IN_PROGRESS';
+            } else if (
+              row.status ===
               'CONFIRMED'
-                ? confirmedLine.length
-                : queueType ===
-                    'IN_PROGRESS'
-                  ? workLine.length
-                  : null,
-          };
-        })
+            ) {
+              queueType =
+                'CONFIRMED';
+            } else if (
+              row.status ===
+              'IN_PROGRESS'
+            ) {
+              queueType =
+                'IN_PROGRESS';
+            }
+
+            return {
+              ...row,
+
+              queueNumber,
+
+              queueType,
+
+              inLine,
+
+              linePosition:
+                queueNumber,
+
+              lineTotal:
+                queueType ===
+                'CONFIRMED'
+                  ? confirmedLine.length
+                  : queueType ===
+                      'IN_PROGRESS'
+                    ? workLine.length
+                    : null,
+            };
+          },
+        )
         .sort(
           (
             left,
@@ -923,24 +1037,6 @@ export async function GET(
               right.queueType ===
                 'IN_PROGRESS'
             ) {
-              if (
-                left.queueStatus ===
-                  'WORKING' &&
-                right.queueStatus !==
-                  'WORKING'
-              ) {
-                return 1;
-              }
-
-              if (
-                left.queueStatus !==
-                  'WORKING' &&
-                right.queueStatus ===
-                  'WORKING'
-              ) {
-                return -1;
-              }
-
               return compareWork(
                 left,
                 right,
@@ -959,21 +1055,34 @@ export async function GET(
 
     return NextResponse.json(
       {
-        error: false,
+        error:
+          false,
+
         message:
-          'Queue retrieved.',
+          mode ===
+          'IN_PROGRESS'
+            ? 'All in-progress appointments retrieved.'
+            : 'Queue retrieved.',
+
         data,
+
         ordering: {
           source:
-            'Appointments.appointmentDate',
+            mode ===
+            'IN_PROGRESS'
+              ? 'Appointments.status = IN_PROGRESS; appointmentDate is intentionally not used as a filter.'
+              : 'Appointments.appointmentDate',
+
           inProgressDate:
-            'Appointments.appointmentDate',
+            'All appointment dates',
+
           confirmed: [
             'ARRIVED by arrivedAt ASC',
             'ARRIVING by arrivingAt ASC',
             'PENDING by appointmentTime ASC then createdAt ASC',
             'NOT_ARRIVED by appointmentTime ASC then createdAt ASC',
           ],
+
           inProgress: [
             'PENDING before WORKING',
             'same queue state by ServiceQueue.updatedAt ASC',
@@ -983,7 +1092,8 @@ export async function GET(
         },
       },
       {
-        status: 200,
+        status:
+          200,
       },
     );
   } catch (error) {
@@ -994,18 +1104,27 @@ export async function GET(
 
     return NextResponse.json(
       {
-        error: true,
-        errorType: 'dbe',
+        error:
+          true,
+
+        errorType:
+          'dbe',
+
         errorTitle:
           'Database error',
+
         errorMessage:
           'Unable to fetch queue.',
+
         errorLog:
           error instanceof Error
             ? error.message
             : String(error),
       },
-      { status: 500 },
+      {
+        status:
+          500,
+      },
     );
   }
 }

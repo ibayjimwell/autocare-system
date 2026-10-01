@@ -19,12 +19,21 @@ import {
 } from '@/connections/useRealtimeServiceQueue';
 
 /* ================================================================
+   TYPES
+================================================================ */
+
+type ServiceQueueMode =
+  | 'CONFIRMED'
+  | 'IN_PROGRESS';
+
+/* ================================================================
    HOOK
 ================================================================ */
 
 export function useServiceQueue(
   date: string,
   enabled: boolean = true,
+  mode: ServiceQueueMode = 'CONFIRMED',
 ) {
   const [
     queue,
@@ -42,13 +51,40 @@ export function useServiceQueue(
 
   /* =============================================================
      LOAD QUEUE
+
+     CONFIRMED:
+       - date is required
+       - only today's confirmed queue is loaded
+
+     IN_PROGRESS:
+       - date is intentionally NOT used as a filter
+       - every IN_PROGRESS appointment is loaded regardless of its
+         appointment date
+
+     The server is the single source of truth for queue ordering and
+     queue status.
   ============================================================= */
 
   const loadQueue =
     useCallback(
       async () => {
         if (
-          !enabled ||
+          !enabled
+        ) {
+          setQueue(
+            [],
+          );
+
+          setLoading(
+            false,
+          );
+
+          return;
+        }
+
+        if (
+          mode ===
+            'CONFIRMED' &&
           !date
         ) {
           setQueue(
@@ -66,6 +102,7 @@ export function useServiceQueue(
           const res =
             await serviceQueueApi.list(
               date,
+              mode,
             );
 
           if (
@@ -115,17 +152,22 @@ export function useServiceQueue(
       [
         date,
         enabled,
+        mode,
       ],
     );
 
   /* =============================================================
-     INITIAL LOAD / DATE CHANGE
-  ============================================================= */
+     INITIAL LOAD / DATE / MODE CHANGE
+  ============================================================== */
 
   useEffect(() => {
     if (
       !enabled ||
-      !date
+      (
+        mode ===
+          'CONFIRMED' &&
+        !date
+      )
     ) {
       setQueue(
         [],
@@ -146,34 +188,45 @@ export function useServiceQueue(
   }, [
     date,
     enabled,
+    mode,
     loadQueue,
   ]);
 
   /* =============================================================
      REALTIME REFRESH
 
-     The server remains the single source of truth.
-     Both service_queue and appointments changes are observed
-     by useRealtimeServiceQueue so an appointment entering
-     IN_PROGRESS appears in the work queue immediately.
-  ============================================================= */
+     For IN_PROGRESS the realtime connection listens to both:
+       - service_queue changes
+       - appointment changes
+
+     This is important because an older appointment can enter
+     IN_PROGRESS without having a service_queue row yet. An
+     appointment-status change must therefore refresh the all-dates
+     work queue as well.
+  ============================================================== */
 
   useRealtimeServiceQueue({
     onDataChanged:
       enabled &&
-      date
+      (
+        mode ===
+          'IN_PROGRESS' ||
+        Boolean(date)
+      )
         ? loadQueue
         : () => {},
 
     date,
+
+    mode,
   });
 
   /* =============================================================
      RETURN
 
-     Queue order is determined by the server.
-     There is intentionally no manual move/reorder behavior.
-  ============================================================= */
+     The server remains responsible for canonical ordering.
+     No client-side date filtering is applied here.
+  ============================================================== */
 
   return {
     queue,

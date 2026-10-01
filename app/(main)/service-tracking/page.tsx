@@ -337,6 +337,7 @@ export default function ServiceTrackingPage() {
     useServiceQueue(
       todayDate,
       queueMode !== null,
+      queueMode ?? 'CONFIRMED',
     );
 
   /* ==============================================================
@@ -1334,7 +1335,7 @@ export default function ServiceTrackingPage() {
                     : activeFilter ===
                         'UNDER_INSPECTION'
                       ? 'Only appointments whose current status is UNDER_INSPECTION are shown.'
-                      : 'IN_PROGRESS appointments are queued by the latest queue UpdatedAt. Work This is available for the first two pending jobs.'}
+                      : 'All IN_PROGRESS appointments are shown regardless of appointment date. Work This is available for the first two pending jobs.'}
                 </p>
               </div>
             </div>
@@ -1475,3 +1476,4 @@ export default function ServiceTrackingPage() {
     </PageContainer>
   );
 }
+
