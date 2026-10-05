@@ -66,3 +66,6 @@ export * from "./queue/service-queue.model";
 export * from "./configurations/configurations.model";
 export * from "./configurations/configurations-logs.model";
 
+
+// Dashboard Analytics (derived read-model types)
+export * from './dashboard/dashboard.model';
