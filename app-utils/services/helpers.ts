@@ -12,4 +12,16 @@ export const typeBadgeConfig: Record<string, string> = {
   MODIFICATION: "bg-purple-100 text-purple-800",
 };
 
-export const SERVICE_TYPES = ["PMS", "REPAIR", "CHECKUP", "MODIFICATION"] as const;
+export const SERVICE_TYPES = [
+  "PMS",
+  "REPAIR",
+  "CHECKUP",
+  "MODIFICATION",
+] as const;
+
+export const SERVICE_TYPE_LABELS: Record<string, string> = {
+  PMS: "Preventive Maintenance Service (PMS)",
+  REPAIR: "Repair",
+  CHECKUP: "Checkup / Inspection",
+  MODIFICATION: "Modification",
+};

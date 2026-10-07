@@ -5,8 +5,19 @@ import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 
 export default function LogoutButton() {
-  const handleLogout = () => {
-    signOut({ callbackUrl: "/login" });
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/staffs/online-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOnline: false, currentModule: "" }),
+        keepalive: true,
+      });
+    } catch {
+      // Presence cleanup must not block logout.
+    }
+
+    await signOut({ callbackUrl: "/login" });
   };
 
   return (

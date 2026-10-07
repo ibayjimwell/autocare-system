@@ -17,6 +17,7 @@ import { InspectionFindingParts } from '@/database/models/service-tracking/inspe
 import { Receipts } from '@/database/models/payments/receipts.model';
 import { eq, inArray } from 'drizzle-orm';
 import { paymentsTriggers } from '@/triggers/payments';
+import { recordPaymentTransaction } from '@/utils/payments/payment-transactions';
 
 function generateReferenceNumber(): string {
   const date = new Date();
@@ -160,6 +161,12 @@ export async function generatePaymentReceipt(billId: string): Promise<{
       data: receiptData,
     });
     await tx.update(FinalBill).set({ status: 'PAID', updatedAt: new Date() }).where(eq(FinalBill.id, billId));
+  });
+
+  await recordPaymentTransaction({
+    entityType: 'FINAL_BILL', entityId: bill.id, appointmentId: bill.appointmentId,
+    eventType: 'PAYMENT_COMPLETED', fromStatus: bill.status, toStatus: 'PAID', amount: bill.grandTotal,
+    paymentMethod: 'CASH_OR_CONFIRMED_PAYMENT', referenceNumber,
   });
 
   // 4. Send push notification (staff)

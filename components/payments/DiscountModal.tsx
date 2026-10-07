@@ -30,9 +30,8 @@ import {
   Percent,
 } from 'lucide-react';
 
-import {
-  DEFAULT_DISCOUNT_PRESETS,
-} from '@/app-utils/payments/payment-defaults';
+import { DEFAULT_DISCOUNT_PRESETS } from '@/app-utils/payments/payment-defaults';
+import { paymentsConfigurationApi, type PaymentDefaultDiscount } from '@/lib/payments/configuration';
 
 interface DiscountModalProps {
   open: boolean;
@@ -71,16 +70,15 @@ export default function DiscountModal({
   onSave,
   saving,
 }: DiscountModalProps) {
-  const [
-    preset,
-    setPreset,
-  ] = useState(
-    'custom'
-  );
+  const [preset, setPreset] = useState('custom');
+  const [configuredDiscounts, setConfiguredDiscounts] = useState<PaymentDefaultDiscount[]>([]);
 
   useEffect(() => {
     if (open) {
       setPreset('custom');
+      void paymentsConfigurationApi.get().then((res) => {
+        setConfiguredDiscounts(res.error ? [] : (res.data?.defaultDiscounts || []));
+      });
     }
   }, [open]);
 
@@ -93,11 +91,7 @@ export default function DiscountModal({
       return;
     }
 
-    const selected =
-      DEFAULT_DISCOUNT_PRESETS.find(
-        (item) =>
-          item.id === value
-      );
+    const selected = configuredDiscounts.find((item) => `config:${item.id}` === value) || DEFAULT_DISCOUNT_PRESETS.find((item) => item.id === value);
 
     if (!selected) {
       return;
@@ -173,6 +167,12 @@ export default function DiscountModal({
                 <SelectItem value="custom">
                   Custom Discount
                 </SelectItem>
+
+                {configuredDiscounts.map((discount) => (
+                  <SelectItem key={`config:${discount.id}`} value={`config:${discount.id}`}>
+                    {discount.title} — {discount.type === 'percentage' ? `${discount.value}%` : `₱${Number(discount.value).toFixed(2)}`}
+                  </SelectItem>
+                ))}
 
                 {DEFAULT_DISCOUNT_PRESETS.map(
                   (

@@ -37,6 +37,11 @@ export const staffApi = {
     return res.json();
   },
 
+  resetPassword: async (id: string) => {
+    const res = await fetch(`${API_BASE}/api/staffs/${id}/reset-password`, { method: 'POST' });
+    return res.json();
+  },
+
   updateOnlineStatus: async (data: { isOnline?: boolean; currentModule?: string }) => {
     const res = await fetch('/api/staffs/online-status', {
       method: 'PATCH',

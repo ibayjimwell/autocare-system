@@ -49,6 +49,7 @@ import {
 import {
   AlertCircle,
   FileText,
+  Loader2,
   Package,
   Pencil,
   Plus,
@@ -130,6 +131,8 @@ export default function FindingsList({
   ] = useState<string | null>(
     null
   );
+
+  const [deleting, setDeleting] = useState(false);
 
   const [
     saving,
@@ -441,6 +444,8 @@ export default function FindingsList({
         return;
       }
 
+      setDeleting(true);
+
       try {
         const res =
           await findingsApi.delete(
@@ -473,6 +478,7 @@ export default function FindingsList({
             'Error deleting finding.'
         );
       } finally {
+        setDeleting(false);
         setDeletingId(
           null
         );
@@ -1047,6 +1053,7 @@ export default function FindingsList({
                     false
                   )
                 }
+                disabled={deleting}
                 className="h-11 rounded-md md:h-9"
               >
                 Cancel
@@ -1058,10 +1065,11 @@ export default function FindingsList({
                 onClick={
                   handleDelete
                 }
+                disabled={deleting}
                 className="h-11 rounded-md md:h-9"
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+                {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                {deleting ? 'Deleting...' : 'Delete'}
               </Button>
             </DialogFooter>
           </DialogContent>

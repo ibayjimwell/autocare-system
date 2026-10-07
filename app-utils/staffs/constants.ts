@@ -21,12 +21,11 @@ export const MODULE_LABELS: Record<string, string> = {
 };
 
 export const PREDEFINED_ROLES = [
-  'Admin', 
-  'Mechanic', 
-  'Assistant Mechanic', 
-  'Cashier',
+  'Admin',
+  'Mechanic',
+  'Assistant',
+  'Asisstant Mechanic',
   'Tester',
-  'Developer'
-];
+] as const;
 
 export type SortField = 'fullname' | 'username' | 'role' | 'status' | 'accessCount' | 'currentModule' | 'createdAt';

@@ -119,12 +119,6 @@ export async function PUT(
       updateData.title = title;
     }
 
-    if (body?.isActive !== undefined) {
-      updateData.isActive = Boolean(
-        body.isActive,
-      );
-    }
-
     await Database.update(DefaultFindings)
       .set(updateData)
       .where(eq(DefaultFindings.id, id));
@@ -153,6 +147,7 @@ export async function PUT(
       const parts = body.parts
         .map((part: any) => ({
           findingId: id,
+          inventoryItemId: typeof part?.inventoryItemId === 'string' && part.inventoryItemId.trim() ? part.inventoryItemId.trim() : null,
           partName: String(
             part?.partName || '',
           ).trim(),
@@ -198,7 +193,7 @@ export async function PUT(
       error: false,
       message: 'Default finding updated.',
       data: {
-        ...updated,
+        ...(() => { const { isActive: _legacyIsActive, ...publicFinding } = updated; return publicFinding; })(),
         parts,
       },
     });

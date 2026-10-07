@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFormDataEntries, hashPassword } from "@/utils/shared";
 import { validateStaffData } from "@/utils/staffs";
 import { generateTempPassword } from "@/utils/staffs";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { staffsTriggers } from "@/triggers/staffs";
+import { PREDEFINED_ROLES } from "@/app-utils/staffs/constants";
 
 // ------------------------------------------------------------------
 // POST /api/staffs – Create a new staff member
@@ -38,18 +39,34 @@ export async function POST(req: NextRequest) {
     }, { status: 422 });
   }
 
+  const normalizedUsername = String(rawData.username || '').trim().replace(/@/g, '');
+  if (!normalizedUsername) {
+    return NextResponse.json({
+      error: true, errorType: 'fve', errorTitle: 'Invalid username',
+      errorMessage: 'Staff username is required and cannot contain only @ characters.',
+    }, { status: 422 });
+  }
+
+  const normalizedRole = String(rawData.role || '').trim();
+  if (!PREDEFINED_ROLES.includes(normalizedRole as (typeof PREDEFINED_ROLES)[number])) {
+    return NextResponse.json({
+      error: true, errorType: "fve", errorTitle: "Invalid organizational role",
+      errorMessage: `Role must be one of: ${PREDEFINED_ROLES.join(', ')}.`,
+    }, { status: 422 });
+  }
+
   // 3. Check username uniqueness
   try {
     const existing = await Database.select()
       .from(Staffs)
-      .where(eq(Staffs.username, rawData.username.trim()))
+      .where(eq(Staffs.username, normalizedUsername))
       .limit(1);
     if (existing.length > 0) {
       return NextResponse.json({
         error: true,
         errorType: "fve",
         errorTitle: "Duplicate username",
-        errorMessage: `Username "${rawData.username}" is already taken.`,
+        errorMessage: `Username "${normalizedUsername}" is already taken.`,
         errorLog: null,
       }, { status: 409 });
     }
@@ -82,9 +99,9 @@ export async function POST(req: NextRequest) {
   try {
     const inserted = await Database.insert(Staffs).values({
       fullname: rawData.fullname.trim(),
-      username: rawData.username.trim(),
+      username: normalizedUsername,
       password: hashedPassword,
-      role: rawData.role?.trim() || null,
+      role: normalizedRole,
       tempPassword: true,
     }).returning();
 
@@ -122,6 +139,17 @@ export async function POST(req: NextRequest) {
 // ------------------------------------------------------------------
 export async function GET() {
   try {
+    // Presence is heartbeat-based. Clear stale flags so staff who closed the
+    // browser or lost connectivity do not remain permanently "Online".
+    const staleBefore = new Date(Date.now() - 90_000);
+    await Database.update(Staffs)
+      .set({ isOnline: false, currentModule: null })
+      .where(
+        and(
+          eq(Staffs.isOnline, true),
+          or(isNull(Staffs.lastActiveAt), lt(Staffs.lastActiveAt, staleBefore)),
+        ),
+      );
     const staffs = await Database.select({
       id: Staffs.id,
       fullname: Staffs.fullname,
@@ -130,6 +158,7 @@ export async function GET() {
       inBoarding: Staffs.inBoarding,
       isOnline: Staffs.isOnline,
       currentModule: Staffs.currentModule,
+      lastActiveAt: Staffs.lastActiveAt,
       createdAt: Staffs.createdAt,
       updatedAt: Staffs.updatedAt,
     })
@@ -140,7 +169,11 @@ export async function GET() {
       {
         error: false,
         message: "Staffs retrieved successfully",
-        data: staffs as StaffWithoutPasswordType[],
+        data: staffs.map((staff) => {
+          const lastSeen = staff.lastActiveAt ? new Date(staff.lastActiveAt).getTime() : 0;
+          const recentlyActive = lastSeen > 0 && Date.now() - lastSeen <= 90_000;
+          return { ...staff, isOnline: staff.inBoarding !== false && staff.isOnline === true && recentlyActive };
+        }) as StaffWithoutPasswordType[],
       },
       { status: 200 }
     );

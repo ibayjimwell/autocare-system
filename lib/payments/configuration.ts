@@ -2,7 +2,6 @@ export interface PaymentDefaultFee {
   id: string;
   title: string;
   amount: number;
-  isActive: boolean;
 }
 
 export interface PaymentDefaultDiscount {
@@ -10,7 +9,6 @@ export interface PaymentDefaultDiscount {
   title: string;
   type: 'fixed' | 'percentage';
   value: number;
-  isActive: boolean;
 }
 
 export interface PaymentConfiguration {
@@ -35,7 +33,6 @@ function normalizeFee(item: any, index: number): PaymentDefaultFee {
     id: String(item?.id || `${Date.now()}-fee-${index}`),
     title: String(item?.title || '').trim(),
     amount: Math.max(0, normalizeNumber(item?.amount)),
-    isActive: item?.isActive !== false,
   };
 }
 
@@ -47,7 +44,6 @@ function normalizeDiscount(item: any, index: number): PaymentDefaultDiscount {
     title: String(item?.title || '').trim(),
     type,
     value: Math.max(0, normalizeNumber(item?.value)),
-    isActive: item?.isActive !== false,
   };
 }
 

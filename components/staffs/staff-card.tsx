@@ -79,7 +79,7 @@ export default function StaffCard({
             </p>
 
             <p className="truncate text-xs text-muted-foreground">
-              @{staff.username}
+              {staff.username}
             </p>
           </div>
         </div>

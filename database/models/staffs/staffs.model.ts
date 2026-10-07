@@ -11,6 +11,7 @@ export const Staffs = pgTable('staffs', {
   inBoarding: boolean('in_boarding').default(true).notNull(),
   isOnline: boolean('is_online').default(false).notNull(),
   currentModule: varchar('current_module', { length: 50 }),
+  lastActiveAt: timestamp('last_active_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({

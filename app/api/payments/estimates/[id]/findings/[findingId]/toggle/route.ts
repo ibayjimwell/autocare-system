@@ -1,3 +1,4 @@
+import { recordPaymentTransaction } from '@/utils/payments/payment-transactions';
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
@@ -436,7 +437,17 @@ export async function PATCH(
         included,
         findingsSubtotal,
         grandTotal,
+        appointmentId: estimate.appointmentId,
       };
+    });
+
+    await recordPaymentTransaction({
+      entityType: 'ESTIMATE',
+      entityId: estimateId,
+      appointmentId: result.appointmentId,
+      eventType: result.included ? 'FINDING_INCLUDED' : 'FINDING_EXCLUDED',
+      amount: result.grandTotal,
+      details: { findingId: estimateFindingId, included: result.included, findingsSubtotal: result.findingsSubtotal },
     });
 
     return NextResponse.json(

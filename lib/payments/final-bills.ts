@@ -282,6 +282,57 @@ export const finalBillsApi = {
     return parseResponse(res);
   },
 
+
+  /* ================================================================
+     ONLINE PAYMENT / QRPH
+  ================================================================ */
+
+  createOnlinePayment: async (
+    billId: string,
+    paymentMethod: 'qrph' = 'qrph',
+  ) => {
+    const res = await fetch(
+      `/api/payments/final-bills/${encodeURIComponent(
+        billId,
+      )}/pay-online`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          paymentMethod,
+        }),
+      },
+    );
+
+    return parseResponse(res);
+  },
+
+  verifyOnlinePayment: async (
+    billId: string,
+    paymentIntentId: string,
+  ) => {
+    const res = await fetch(
+      `/api/payments/final-bills/${encodeURIComponent(
+        billId,
+      )}/verify-payment`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          paymentIntentId,
+        }),
+      },
+    );
+
+    return parseResponse(res);
+  },
+
   /* ================================================================
      STATUS
   ================================================================ */

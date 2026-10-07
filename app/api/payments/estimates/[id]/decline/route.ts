@@ -1,3 +1,4 @@
+import { recordPaymentTransaction } from '@/utils/payments/payment-transactions';
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
@@ -132,6 +133,8 @@ export async function PATCH(
         })
         .catch(console.error);
     }
+
+    await recordPaymentTransaction({ entityType: 'ESTIMATE', entityId: id, appointmentId: estimate.appointmentId, eventType: 'STATUS_CHANGED', fromStatus: estimate.status, toStatus: 'DECLINED', amount: estimate.grandTotal, details: { reason: reason.trim() } });
 
     const info = await getAppointmentInfo(estimate.appointmentId);
     mobilePaymentsTriggers.onEstimateDeclined({

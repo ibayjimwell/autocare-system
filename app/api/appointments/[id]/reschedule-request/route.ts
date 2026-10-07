@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { AppointmentRescheduleRequests } from '@/database/models/appointments/appointment-reschedule-requests.model';
 import { Appointments } from '@/database/models/appointments/appointments.model';
+import { Customers } from '@/database/models/customers/customers.model';
+import { Staffs } from '@/database/models/staffs/staffs.model';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/staffs/auth';
 import { isValidUUID } from '@/utils/shared';
@@ -39,15 +41,26 @@ export async function GET(
   }
 
   try {
-    const requests = await Database.select()
+    const requests = await Database.select({
+      request: AppointmentRescheduleRequests,
+      customerName: Customers.fullname,
+      staffName: Staffs.fullname,
+    })
       .from(AppointmentRescheduleRequests)
+      .leftJoin(Customers, eq(AppointmentRescheduleRequests.requestedByCustomerId, Customers.id))
+      .leftJoin(Staffs, eq(AppointmentRescheduleRequests.requestedByStaffId, Staffs.id))
       .where(eq(AppointmentRescheduleRequests.appointmentId, appointmentId))
       .orderBy(desc(AppointmentRescheduleRequests.createdAt));
+
+    const data = requests.map(({ request, customerName, staffName }) => ({
+      ...request,
+      requestedByName: request.requestedBy === 'customer' ? customerName : staffName,
+    }));
 
     return NextResponse.json(
       {
         error: false,
-        data: requests,
+        data,
       },
       { status: 200 }
     );
@@ -325,7 +338,7 @@ export async function POST(
 
       // Notify customer that request was submitted.
       mobileAppointmentsTriggers
-        .onRescheduleRequestedByCustomer({
+        .onRescheduleRequested({
           customerId: appointment.customerId,
           trackingNumber,
           newDate: newAppointmentDate,

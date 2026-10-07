@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,11 +47,9 @@ import {
 import InventoryCard from './inventory-card';
 import InventoryForm from './inventory-form';
 import RestockModal from './restock-modal';
-import POSModal from './pos-modal';
 import BarcodeScannerModal from './barcode-scanner-modal';
 import BarcodeNotFoundModal from './barcode-not-found-modal';
 import LowStockAlertModal from './low-stock-alert-modal';
-import PosHistoryModal from './pos-history-modal';
 
 import { useInventory } from '@/hooks/inventory/use-inventory';
 import { inventoryApi } from '@/lib/inventory/inventory';
@@ -120,8 +119,6 @@ export default function InventoryList() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [restockTarget, setRestockTarget] = useState<any>(null);
-  const [posOpen, setPosOpen] = useState(false);
-  const [posHistoryOpen, setPosHistoryOpen] = useState(false);
 
   const [addBarcodeScannerOpen, setAddBarcodeScannerOpen] = useState(false);
   const [restockBarcodeScannerOpen, setRestockBarcodeScannerOpen] = useState(false);
@@ -609,25 +606,6 @@ export default function InventoryList() {
           </div>
 
           <div className="hidden flex-wrap items-center gap-2 lg:flex">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPosHistoryOpen(true)}
-              className={`h-9 rounded-md px-3 text-xs font-medium ${focusClass}`}
-            >
-              <History className="mr-1.5 h-4 w-4" />
-              Transaction History
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPosOpen(true)}
-              className={`h-9 rounded-md px-3 text-xs font-medium ${focusClass}`}
-            >
-              <ShoppingCart className="mr-1.5 h-4 w-4" />
-              POS
-            </Button>
 
             <Button
               variant="outline"
@@ -1514,16 +1492,7 @@ export default function InventoryList() {
 
       {/* Mobile action bar */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/50 bg-background/80 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl lg:hidden">
-        <div className="mx-auto grid max-w-3xl grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPosOpen(true)}
-            className="h-11 rounded-md bg-card text-sm font-medium shadow-sm"
-          >
-            <ShoppingCart className="mr-2 h-4 w-4" />
-            POS
-          </Button>
+        <div className="mx-auto grid max-w-3xl grid-cols-1 gap-2">
 
           <Button
             type="button"
@@ -1539,7 +1508,7 @@ export default function InventoryList() {
           </Button>
         </div>
 
-        <div className="mx-auto mt-2 grid max-w-3xl grid-cols-3 gap-2">
+        <div className="mx-auto mt-2 grid max-w-3xl grid-cols-2 gap-2">
           <Button
             type="button"
             variant="outline"
@@ -1557,15 +1526,6 @@ export default function InventoryList() {
           >
             <ScanLine className="mr-1.5 h-3.5 w-3.5" />
             Restock Scan
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPosHistoryOpen(true)}
-            className="h-10 rounded-md bg-card px-2 text-xs"
-          >
-            <History className="mr-1.5 h-3.5 w-3.5" />
-            History
           </Button>
         </div>
       </div>
@@ -1585,17 +1545,6 @@ export default function InventoryList() {
         item={restockTarget}
         onClose={() => setRestockTarget(null)}
         onSuccess={() => void loadItems()}
-      />
-
-      <POSModal
-        open={posOpen}
-        onClose={() => setPosOpen(false)}
-        onCompleted={() => void loadItems()}
-      />
-
-      <PosHistoryModal
-        open={posHistoryOpen}
-        onClose={() => setPosHistoryOpen(false)}
       />
 
       <BarcodeScannerModal

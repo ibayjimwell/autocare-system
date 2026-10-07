@@ -150,29 +150,20 @@ export default function DefaultTaskPickerModal({
   }, [open]);
 
   /* ==============================================================
-     ACTIVE GROUPS
-  ============================================================== */
-
-  const activeGroups = useMemo(
-    () =>
-      groups.filter(
-        (group) => group?.isActive !== false,
-      ),
-    [groups],
-  );
-
-  /* ==============================================================
      FILTER GROUPS
+
+     Default task groups no longer have an Active/Inactive concept.
+     Every saved group is available to the picker.
   ============================================================== */
 
   const filteredGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     if (!query) {
-      return activeGroups;
+      return groups;
     }
 
-    return activeGroups.filter((group) => {
+    return groups.filter((group) => {
       const groupText = [
         group?.title,
         group?.description,
@@ -186,7 +177,7 @@ export default function DefaultTaskPickerModal({
 
       return groupText.includes(query);
     });
-  }, [activeGroups, search]);
+  }, [groups, search]);
 
   /* ==============================================================
      SELECT DEFAULT GROUP WHEN AVAILABLE
@@ -451,7 +442,7 @@ export default function DefaultTaskPickerModal({
                 variant="secondary"
                 className="rounded-full text-[10px]"
               >
-                {filteredGroups.length} active group
+                {filteredGroups.length} group
                 {filteredGroups.length === 1 ? '' : 's'}
               </Badge>
 
@@ -539,10 +530,10 @@ export default function DefaultTaskPickerModal({
                 <div className="rounded-lg border border-dashed border-border bg-muted/20 p-5 text-center">
                   <ClipboardList className="mx-auto h-5 w-5 text-muted-foreground" />
                   <p className="mt-2 text-xs font-medium text-foreground">
-                    No active groups found
+                    No task groups found
                   </p>
                   <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-                    Create or activate a task group in Default Tasks.
+                    Create a task group in Default Tasks.
                   </p>
                 </div>
               ) : (

@@ -24,9 +24,7 @@ import {
 } from '@/lib/paymongo';
 
 const ALLOWED_PAYMENT_METHODS = new Set([
-  'gcash',
-  'paymaya',
-  'card',
+  'qrph',
 ]);
 
 function normalizePaymentMethod(
@@ -102,7 +100,7 @@ export async function POST(
       {
         error: true,
         errorMessage:
-          'Unsupported payment method. Choose GCash, Maya, or card.',
+          'Unsupported payment method. QRPh is currently the only enabled online payment method.',
       },
       {
         status: 400,

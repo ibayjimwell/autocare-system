@@ -18,6 +18,8 @@ import {
   ReceiptText,
   WalletCards,
   Settings2,
+  ShoppingCart,
+  History,
 } from 'lucide-react';
 
 import PageContainer from '@/components/shared/page-container';
@@ -92,6 +94,9 @@ import QRScannerModal from '@/components/payments/QRScannerModal';
 import ReceiptModal from '@/components/payments/receipt-modal';
 
 import PaymentsConfigurationModal from '@/components/payments/PaymentsConfigurationModal';
+import POSModal from '@/components/payments/pos-modal';
+import PosHistoryModal from '@/components/payments/pos-history-modal';
+import PaymentTransactionHistoryModal from '@/components/payments/PaymentTransactionHistoryModal';
 
 import { useReceipt } from '@/hooks/receipt/useReceipt';
 
@@ -293,6 +298,10 @@ export default function PaymentsPage() {
     paymentsConfigurationOpen,
     setPaymentsConfigurationOpen,
   ] = useState(false);
+
+  const [posOpen, setPosOpen] = useState(false);
+  const [posHistoryOpen, setPosHistoryOpen] = useState(false);
+  const [paymentHistoryOpen, setPaymentHistoryOpen] = useState(false);
 
   /* ==============================================================
      ESTIMATE CONFIRMATION STATE
@@ -1213,6 +1222,18 @@ export default function PaymentsPage() {
               />
             </div>
 
+            <div className="flex w-full flex-wrap gap-2 lg:w-auto">
+              <Button type="button" variant="outline" onClick={() => setPosOpen(true)} className="h-11 flex-1 rounded-md lg:h-9 lg:flex-none">
+                <ShoppingCart className="mr-2 h-4 w-4" /> POS
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setPosHistoryOpen(true)} className="h-11 flex-1 rounded-md lg:h-9 lg:flex-none">
+                <History className="mr-2 h-4 w-4" /> POS History
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setPaymentHistoryOpen(true)} className="h-11 flex-1 rounded-md lg:h-9 lg:flex-none">
+                <ReceiptText className="mr-2 h-4 w-4" /> Payment History
+              </Button>
+            </div>
+
             <Button
               type="button"
               variant="outline"
@@ -1845,6 +1866,10 @@ export default function PaymentsPage() {
           confirmationLoading
         }
       />
+
+      <POSModal open={posOpen} onClose={() => setPosOpen(false)} onCompleted={() => void reload()} />
+      <PosHistoryModal open={posHistoryOpen} onClose={() => setPosHistoryOpen(false)} />
+      <PaymentTransactionHistoryModal open={paymentHistoryOpen} onOpenChange={setPaymentHistoryOpen} />
 
       {/* ==========================================================
           PAYMENTS CONFIGURATION

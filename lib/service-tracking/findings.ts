@@ -12,7 +12,7 @@ export const findingsApi = {
   create: async (data: { appointmentId: string; findings: Array<{
     description: string;
     parts?: Array<{
-      inventoryItemId?: string;
+      inventoryItemId?: string | null;
       partName?: string;
       quantity?: number;
       priceAtTime?: number;
@@ -30,7 +30,7 @@ export const findingsApi = {
   // UPDATE a single finding
   update: async (findingId: string, data: { description: string; parts?: Array<{
     id?: string;
-    inventoryItemId?: string;
+    inventoryItemId?: string | null;
     partName?: string;
     quantity?: number;
     priceAtTime?: number;
@@ -59,6 +59,7 @@ export const findingsApi = {
 
 export interface DefaultFindingPartInput {
   id?: string;
+  inventoryItemId?: string | null;
   partName: string;
   quantity: number;
   priceAtTime: number;
@@ -67,7 +68,6 @@ export interface DefaultFindingPartInput {
 
 export interface DefaultFindingInput {
   title: string;
-  isActive?: boolean;
   parts?: DefaultFindingPartInput[];
 }
 

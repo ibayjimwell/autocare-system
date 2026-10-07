@@ -18,12 +18,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertCircle,
-  CheckCircle2,
   ClipboardList,
   Clock3,
   Edit2,
@@ -67,14 +65,12 @@ interface TaskForm {
 interface GroupForm {
   title: string;
   description: string;
-  isActive: boolean;
   tasks: TaskForm[];
 }
 
 const EMPTY_FORM: GroupForm = {
   title: '',
   description: '',
-  isActive: true,
   tasks: [],
 };
 
@@ -91,7 +87,6 @@ export default function DefaultGroupManagerModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [showInactive, setShowInactive] = useState(true);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [formData, setFormData] = useState<GroupForm>(EMPTY_FORM);
 
@@ -150,10 +145,6 @@ export default function DefaultGroupManagerModal({
     const query = search.trim().toLowerCase();
 
     return groups.filter((group: any) => {
-      if (!showInactive && group?.isActive === false) {
-        return false;
-      }
-
       if (!query) {
         return true;
       }
@@ -171,7 +162,7 @@ export default function DefaultGroupManagerModal({
 
       return text.includes(query);
     });
-  }, [groups, search, showInactive]);
+  }, [groups, search]);
 
   /* ==============================================================
      FORM
@@ -192,8 +183,7 @@ export default function DefaultGroupManagerModal({
     setFormData({
       title: String(group?.title || ''),
       description: String(group?.description || ''),
-      isActive: group?.isActive !== false,
-      tasks: (Array.isArray(group?.tasks) ? group.tasks : [])
+          tasks: (Array.isArray(group?.tasks) ? group.tasks : [])
         .sort(
           (left: any, right: any) =>
             Number(left?.order ?? 0) -
@@ -295,8 +285,7 @@ export default function DefaultGroupManagerModal({
         title,
         description:
           formData.description.trim() || undefined,
-        isActive: formData.isActive,
-        tasks: validTasks,
+              tasks: validTasks,
       };
 
       const res = editingGroupId
@@ -392,17 +381,6 @@ export default function DefaultGroupManagerModal({
   };
 
   /* ==============================================================
-     COUNTS
-  ============================================================== */
-
-  const activeCount = groups.filter(
-    (group) => group?.isActive !== false,
-  ).length;
-
-  const inactiveCount =
-    groups.length - activeCount;
-
-  /* ==============================================================
      RENDER
   ============================================================== */
 
@@ -477,32 +455,6 @@ export default function DefaultGroupManagerModal({
               />
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Badge
-                variant="secondary"
-                className="rounded-full text-[10px]"
-              >
-                {activeCount} active
-              </Badge>
-
-              <Badge
-                variant="outline"
-                className="rounded-full text-[10px]"
-              >
-                {inactiveCount} inactive
-              </Badge>
-
-              <label className="flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-xs">
-                <Checkbox
-                  checked={showInactive}
-                  onCheckedChange={(checked) =>
-                    setShowInactive(Boolean(checked))
-                  }
-                />
-
-                Show inactive
-              </label>
-            </div>
           </div>
         </div>
 
@@ -587,19 +539,6 @@ export default function DefaultGroupManagerModal({
                                 <p className="truncate text-sm font-semibold text-foreground">
                                   {group.title}
                                 </p>
-
-                                <Badge
-                                  variant={
-                                    group.isActive
-                                      ? 'default'
-                                      : 'secondary'
-                                  }
-                                  className="rounded-full text-[9px]"
-                                >
-                                  {group.isActive
-                                    ? 'Active'
-                                    : 'Inactive'}
-                                </Badge>
                               </div>
 
                               {group.description && (
@@ -767,35 +706,6 @@ export default function DefaultGroupManagerModal({
                     }
                     placeholder="Optional explanation of when this group should be used."
                     className="min-h-[74px] resize-none rounded-md text-base md:text-sm"
-                  />
-                </div>
-
-                {/* Active */}
-                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-background text-muted-foreground">
-                      <CheckCircle2 className="h-4 w-4" />
-                    </div>
-
-                    <div>
-                      <Label className="text-sm font-medium">
-                        Active
-                      </Label>
-
-                      <p className="text-[10px] leading-4 text-muted-foreground">
-                        Active groups appear in task pickers.
-                      </p>
-                    </div>
-                  </div>
-
-                  <Switch
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) =>
-                      setFormData((previous) => ({
-                        ...previous,
-                        isActive: checked,
-                      }))
-                    }
                   />
                 </div>
 

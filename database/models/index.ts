@@ -51,7 +51,7 @@ export * from "./payments/receipts.model";
 
 // Inventory
 export * from "./inventory/inventory.model";
-export * from "./inventory/pos-transaction.model";
+export * from "./payments/pos-transaction.model";
 export * from "./inventory/inventory-allocation.model";
 export * from "./inventory/enum/inventory-allocation-status.enum";
 
@@ -69,3 +69,5 @@ export * from "./configurations/configurations-logs.model";
 
 // Dashboard Analytics (derived read-model types)
 export * from './dashboard/dashboard.model';
+
+export * from "./payments/payment-transactions.model";

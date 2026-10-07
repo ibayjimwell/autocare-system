@@ -4,6 +4,7 @@
 
 export interface DefaultFindingPartInput {
   id?: string;
+  inventoryItemId?: string | null;
   partName: string;
   quantity: number;
   priceAtTime: number;
@@ -12,7 +13,6 @@ export interface DefaultFindingPartInput {
 
 export interface DefaultFindingInput {
   title: string;
-  isActive?: boolean;
   parts?: DefaultFindingPartInput[];
 }
 

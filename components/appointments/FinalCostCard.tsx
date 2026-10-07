@@ -117,24 +117,23 @@ export default function FinalCostCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-border bg-background p-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Bill ID
+                Payment Status
               </p>
 
-              <p className="mt-2 break-all font-mono text-xs font-semibold text-foreground">
-                {finalBill.id ||
-                  'N/A'}
+              <p className="mt-2 text-xs font-semibold text-foreground">
+                {String(finalBill.status || 'PENDING').replace(/_/g, ' ')}
               </p>
             </div>
 
             <div className="rounded-lg border border-border bg-background p-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Estimate ID
+                Generated
               </p>
 
-              <p className="mt-2 break-all font-mono text-xs font-semibold text-foreground">
-                {finalBill.estimateId ||
-                  finalBill.estimate?.id ||
-                  'N/A'}
+              <p className="mt-2 text-xs font-semibold text-foreground">
+                {finalBill.createdAt
+                  ? new Date(finalBill.createdAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+                  : 'Not available'}
               </p>
             </div>
           </div>

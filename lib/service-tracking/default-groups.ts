@@ -13,7 +13,6 @@ export interface DefaultTaskInput {
 export interface DefaultGroupInput {
   title: string;
   description?: string;
-  isActive?: boolean;
   tasks?: DefaultTaskInput[];
 }
 

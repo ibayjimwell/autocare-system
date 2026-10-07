@@ -713,8 +713,6 @@ export async function POST(
   const supportedPaymentEvents =
     new Set([
       'payment.paid',
-
-      'payment_intent.succeeded',
     ]);
 
   if (
@@ -727,6 +725,26 @@ export async function POST(
      * We acknowledge failed and unrelated events so PayMongo does
      * not retry an event that AutoCare intentionally does not process.
      */
+    if (
+      eventType ===
+      'qrph.expired'
+    ) {
+      console.warn(
+        '[PayMongo Webhook] QRPh payment expired event received.',
+      );
+
+      return NextResponse.json(
+        {
+          received: true,
+          processed: false,
+          event: eventType,
+        },
+        {
+          status: 200,
+        },
+      );
+    }
+
     if (
       eventType ===
       'payment.failed'

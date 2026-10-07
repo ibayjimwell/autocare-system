@@ -1719,10 +1719,7 @@ export default function RescheduleRequestModal({
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs font-semibold text-foreground">
-                                  {request.requestedBy ===
-                                  'customer'
-                                    ? 'Customer'
-                                    : 'Staff'}
+                                  {request.requestedByName || (request.requestedBy === 'customer' ? 'Customer' : 'Staff')}
                                 </span>
 
                                 {getStatusBadge(

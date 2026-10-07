@@ -103,12 +103,24 @@ function getAdditionalMetadata(
       'cancelReason',
     ]);
 
-  return Object.entries(
-    metadata
-  ).filter(
-    ([key]) =>
-      !ignored.has(key)
-  );
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  return Object.entries(metadata).filter(([key, value]) => {
+    if (ignored.has(key)) return false;
+
+    // Internal database identifiers are implementation details and should
+    // never be shown in the customer-facing appointment details modal.
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKey === 'id' || normalizedKey.endsWith('id') || normalizedKey.includes('uuid')) {
+      return false;
+    }
+
+    if (typeof value === 'string' && uuidPattern.test(value.trim())) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 export default function AppointmentHistoryCard({
@@ -260,23 +272,10 @@ export default function AppointmentHistoryCard({
                             {log.staff
                               .username && (
                               <span>
-                                @
-                                {
-                                  log
-                                    .staff
-                                    .username
-                                }
+                                {log.staff.username}
                               </span>
                             )}
                           </div>
-                        )}
-
-                        {log?.changedBy && (
-                          <p className="mt-2 break-all font-mono text-[9px] text-muted-foreground">
-                            Staff ID: {
-                              log.changedBy
-                            }
-                          </p>
                         )}
 
                         {metadataEntries.length >

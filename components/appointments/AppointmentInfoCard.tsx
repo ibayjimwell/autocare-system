@@ -217,34 +217,28 @@ export default function AppointmentInfoCard({
         <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-2">
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Appointment ID
+              Tracking Number
             </p>
-
-            <p className="break-all font-mono text-xs text-foreground">
-              {appointment?.id ||
-                'N/A'}
+            <p className="text-sm font-medium text-foreground">
+              {appointment?.trackingNumber || 'Not assigned'}
             </p>
           </div>
 
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Customer ID
+              Customer
             </p>
-
-            <p className="break-all font-mono text-xs text-foreground">
-              {appointment?.customerId ||
-                'N/A'}
+            <p className="text-sm font-medium text-foreground">
+              {appointment?.customer?.fullname || appointment?.customerName || 'Customer'}
             </p>
           </div>
 
           <div>
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Vehicle ID
+              Vehicle
             </p>
-
-            <p className="break-all font-mono text-xs text-foreground">
-              {appointment?.vehicleId ||
-                'N/A'}
+            <p className="text-sm font-medium text-foreground">
+              {[appointment?.vehicle?.year, appointment?.vehicle?.make, appointment?.vehicle?.model].filter(Boolean).join(' ') || appointment?.vehicle?.plateNumber || 'Vehicle'}
             </p>
           </div>
 

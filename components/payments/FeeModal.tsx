@@ -30,9 +30,8 @@ import {
   PlusCircle,
 } from 'lucide-react';
 
-import {
-  DEFAULT_LABOR_PRESETS,
-} from '@/app-utils/payments/payment-defaults';
+import { DEFAULT_LABOR_PRESETS } from '@/app-utils/payments/payment-defaults';
+import { paymentsConfigurationApi, type PaymentDefaultFee } from '@/lib/payments/configuration';
 
 interface FeeModalProps {
   open: boolean;
@@ -69,16 +68,15 @@ export default function FeeModal({
   onSave,
   saving,
 }: FeeModalProps) {
-  const [
-    preset,
-    setPreset,
-  ] = useState(
-    'custom'
-  );
+  const [preset, setPreset] = useState('custom');
+  const [configuredFees, setConfiguredFees] = useState<PaymentDefaultFee[]>([]);
 
   useEffect(() => {
     if (open) {
       setPreset('custom');
+      void paymentsConfigurationApi.get().then((res) => {
+        setConfiguredFees(res.error ? [] : (res.data?.defaultFees || []));
+      });
     }
   }, [open]);
 
@@ -91,11 +89,7 @@ export default function FeeModal({
       return;
     }
 
-    const selected =
-      DEFAULT_LABOR_PRESETS.find(
-        (item) =>
-          item.id === value
-      );
+    const selected = configuredFees.find((item) => `config:${item.id}` === value) || DEFAULT_LABOR_PRESETS.find((item) => item.id === value);
 
     if (!selected) {
       return;
@@ -103,7 +97,7 @@ export default function FeeModal({
 
     setForm({
       title: selected.title,
-      amount: selected.amount.toFixed(2),
+      amount: Number(selected.amount).toFixed(2),
     });
   };
 
@@ -163,6 +157,12 @@ export default function FeeModal({
                 <SelectItem value="custom">
                   Custom Labor Amount
                 </SelectItem>
+
+                {configuredFees.map((fee) => (
+                  <SelectItem key={`config:${fee.id}`} value={`config:${fee.id}`}>
+                    {fee.title} — ₱{Number(fee.amount).toFixed(2)}
+                  </SelectItem>
+                ))}
 
                 {DEFAULT_LABOR_PRESETS.map(
                   (

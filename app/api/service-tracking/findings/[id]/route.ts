@@ -115,11 +115,22 @@ export async function PUT(
           priceAtTime: part.priceAtTime || 0,
           isPms: part.isPms || false,
         };
-        if (part.inventoryItemId && isValidUUID(part.inventoryItemId)) {
+        const hasInventoryItem = part.inventoryItemId && isValidUUID(part.inventoryItemId);
+        const partName = typeof part.partName === 'string' ? part.partName.trim() : '';
+
+        if (hasInventoryItem) {
           partData.inventoryItemId = part.inventoryItemId;
-        } else if (part.partName && typeof part.partName === 'string') {
-          partData.partName = part.partName.trim();
-        } else {
+        }
+
+        // Keep the human-readable snapshot even for inventory-linked parts.
+        // The finding list does not need a second inventory query just to show
+        // the name, and historical records remain understandable if an item is
+        // later renamed or removed.
+        if (partName) {
+          partData.partName = partName;
+        }
+
+        if (!hasInventoryItem && !partName) {
           // Skip if no valid identifier
           continue;
         }

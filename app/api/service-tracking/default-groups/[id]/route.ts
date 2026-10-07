@@ -164,12 +164,6 @@ export async function PUT(
         null;
     }
 
-    if (body?.isActive !== undefined) {
-      updateData.isActive = Boolean(
-        body.isActive,
-      );
-    }
-
     await Database.update(DefaultTaskGroups)
       .set(updateData)
       .where(eq(DefaultTaskGroups.id, id));
@@ -222,7 +216,7 @@ export async function PUT(
       error: false,
       message: 'Default task group updated.',
       data: {
-        ...updatedGroup,
+        ...(() => { const { isActive: _legacyIsActive, ...publicGroup } = updatedGroup; return publicGroup; })(),
         tasks,
       },
     });

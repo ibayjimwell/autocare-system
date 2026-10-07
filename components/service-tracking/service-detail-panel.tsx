@@ -27,6 +27,8 @@ import {
   Separator,
 } from "@/components/ui/separator";
 
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 import StatusBadge from "@/components/shared/status-badge";
 
 import LoadingSpinner from "@/components/shared/loading-spinner";
@@ -100,6 +102,8 @@ import {
 import {
   finalBillsApi,
 } from "@/lib/payments/final-bills";
+
+import { estimatesApi as paymentEstimatesApi } from "@/lib/payments/estimates";
 
 import {
   taskHistoryApi,
@@ -407,6 +411,11 @@ export default function ServiceDetailPanel({
     false
   );
 
+  const [
+    isAddingDefaultFindings,
+    setIsAddingDefaultFindings,
+  ] = useState(false);
+
   /* ==============================================================
      SOURCE REFRESH VERSIONS
   ============================================================== */
@@ -561,6 +570,10 @@ export default function ServiceDetailPanel({
               appointment.id
             );
 
+          const estimatePromise = paymentEstimatesApi.list({
+            appointmentId: appointment.id,
+          });
+
           /* --------------------------------------------------------
              CURRENT TASKS
           --------------------------------------------------------- */
@@ -618,6 +631,20 @@ export default function ServiceDetailPanel({
                 : findingsRes?.data ||
                     []
             );
+          }
+
+          try {
+            const estimateListRes = await estimatePromise;
+            const estimateRows = estimateListRes?.error ? [] : (Array.isArray(estimateListRes?.data) ? estimateListRes.data : []);
+            const latestEstimate = estimateRows.length > 0 ? estimateRows[estimateRows.length - 1] : null;
+            if (latestEstimate?.id) {
+              const detailRes = await paymentEstimatesApi.get(latestEstimate.id);
+              setEstimate(detailRes?.error ? latestEstimate : (detailRes?.data || latestEstimate));
+            } else {
+              setEstimate(null);
+            }
+          } catch {
+            setEstimate(null);
           }
 
           /* --------------------------------------------------------
@@ -1475,6 +1502,7 @@ export default function ServiceDetailPanel({
       selectedFindings: Array<{
         description: string;
         parts: Array<{
+          inventoryItemId?: string | null;
           partName: string;
           quantity: number;
           priceAtTime: number;
@@ -1526,6 +1554,16 @@ export default function ServiceDetailPanel({
         );
       }
     };
+
+  const handleAddDefaultFindings = async (selectedFindings: Parameters<typeof handleAddFindings>[0]) => {
+    setIsAddingDefaultFindings(true);
+    try {
+      await handleAddFindings(selectedFindings);
+      setDefaultFindingPickerOpen(false);
+    } finally {
+      setIsAddingDefaultFindings(false);
+    }
+  };
 
   /* ==============================================================
      ADD HISTORY FINDINGS
@@ -1660,12 +1698,23 @@ export default function ServiceDetailPanel({
       0
     ) || 0;
 
+  const includedFindingIds = new Set(
+    Array.isArray(estimate?.findings)
+      ? estimate.findings.filter((finding: any) => finding?.included !== false).map((finding: any) => String(finding?.findingId || finding?.inspectionFindingId || ''))
+      : []
+  );
+
+  const displayedFindings =
+    isInProgress && Array.isArray(estimate?.findings)
+      ? findings.filter((finding: any) => includedFindingIds.has(String(finding?.id || '')))
+      : findings;
+
   /* ==============================================================
      FINDINGS TOTAL
   ============================================================== */
 
   const findingsTotal =
-    findings.reduce(
+    displayedFindings.reduce(
       (
         sum: number,
         finding: any
@@ -2386,8 +2435,8 @@ export default function ServiceDetailPanel({
                   </div>
                 </div>
 
-                <ScrollArea className="max-h-[520px]">
-                  <div className="space-y-3 p-3 sm:p-4">
+                <div className="max-h-[520px] overflow-auto">
+                  <div className="min-w-[560px] space-y-3 p-3 sm:p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">
@@ -2421,7 +2470,7 @@ export default function ServiceDetailPanel({
 
                     <Separator />
 
-                    {findings.map(
+                    {displayedFindings.map(
                       (
                         finding: any
                       ) => (
@@ -2502,7 +2551,7 @@ export default function ServiceDetailPanel({
                       </div>
                     </div>
                   </div>
-                </ScrollArea>
+                </div>
 
                 <div className="border-t border-border p-3 sm:p-4">
                   <Button
@@ -2631,7 +2680,7 @@ export default function ServiceDetailPanel({
             <div className="p-3 sm:p-4">
               <FindingsList
                 findings={
-                  findings
+                  displayedFindings
                 }
                 appointmentId={
                   appointment.id
@@ -3061,10 +3110,10 @@ export default function ServiceDetailPanel({
             setDefaultFindingPickerOpen
           }
           onAddFindings={
-            handleAddFindings
+            handleAddDefaultFindings
           }
           isAdding={
-            false
+            isAddingDefaultFindings
           }
         />
 
@@ -3087,20 +3136,27 @@ export default function ServiceDetailPanel({
           }
         />
 
-        <ConfirmationDialog
-          open={
-            sendConfirmOpen
-          }
-          onOpenChange={
-            setSendConfirmOpen
-          }
-          title="Submit to Billing"
-          description="This will send the estimated cost to billing for customer approval. Continue?"
-          onConfirm={
-            handleSubmitToBilling
-          }
-          confirmText="Confirm & Submit"
-        />
+        <Dialog open={sendConfirmOpen} onOpenChange={(open) => !isSubmitting && setSendConfirmOpen(open)}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Submit Cost Summary to Billing</DialogTitle>
+              <DialogDescription>Review the complete estimate before sending it for customer approval. Once submitted, the appointment moves to the billing approval stage.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[52vh] space-y-4 overflow-auto rounded-lg border p-4">
+              <div className="flex justify-between gap-4 text-sm"><span className="text-muted-foreground">Customer</span><span className="text-right font-medium">{appointment.customer?.fullname || 'Customer'}</span></div>
+              <div className="flex justify-between gap-4 text-sm"><span className="text-muted-foreground">Vehicle</span><span className="text-right font-medium">{[appointment.vehicle?.year, appointment.vehicle?.make, appointment.vehicle?.model].filter(Boolean).join(' ') || appointment.vehicle?.plateNumber || 'Vehicle'}</span></div>
+              <Separator />
+              <div className="flex justify-between gap-4 text-sm"><span>Services ({appointment.services?.length || 0})</span><span className="font-mono">₱{servicePrice.toFixed(2)}</span></div>
+              <div className="space-y-2"><p className="text-sm font-medium">Findings ({displayedFindings.length})</p>{displayedFindings.length === 0 ? <p className="text-xs text-muted-foreground">No additional findings.</p> : displayedFindings.map((finding:any)=><div key={finding.id} className="rounded-md bg-muted/40 px-3 py-2 text-xs"><p className="font-medium">{finding.description}</p><p className="mt-1 text-muted-foreground">{(finding.parts || []).length} attached part(s)</p></div>)}</div>
+              <Separator />
+              <div className="flex items-end justify-between"><span className="font-semibold">Estimated subtotal</span><span className="font-mono text-xl font-bold text-primary">₱{subtotal.toFixed(2)}</span></div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" disabled={isSubmitting} onClick={()=>setSendConfirmOpen(false)}>Cancel</Button>
+              <Button disabled={isSubmitting} onClick={()=>void handleSubmitToBilling()}>{isSubmitting && processingAction === 'SUBMIT_TO_BILLING' ? 'Submitting...' : 'Confirm & Submit'}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <ConfirmationDialog
           open={

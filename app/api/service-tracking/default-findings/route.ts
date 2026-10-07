@@ -78,7 +78,7 @@ export async function GET() {
     return NextResponse.json({
       error: false,
       message: 'Default findings retrieved.',
-      data: findings.map((finding) => ({
+      data: findings.map(({ isActive: _legacyIsActive, ...finding }) => ({
         ...finding,
         parts: partsMap[finding.id] || [],
       })),
@@ -133,10 +133,6 @@ export async function POST(req: NextRequest) {
   }
 
   const title = String(body?.title || '').trim();
-  const isActive =
-    body?.isActive === undefined
-      ? true
-      : Boolean(body.isActive);
   const inputParts = Array.isArray(body?.parts)
     ? body.parts
     : [];
@@ -155,6 +151,7 @@ export async function POST(req: NextRequest) {
 
   const parts = inputParts
     .map((part: any) => ({
+      inventoryItemId: typeof part?.inventoryItemId === 'string' && part.inventoryItemId.trim() ? part.inventoryItemId.trim() : null,
       partName: String(
         part?.partName || '',
       ).trim(),
@@ -179,7 +176,9 @@ export async function POST(req: NextRequest) {
     )
       .values({
         title,
-        isActive,
+        // Kept true for backward-compatible schemas; the UI no longer
+        // exposes Active/Inactive state for default findings.
+        isActive: true,
       })
       .returning();
 
@@ -211,7 +210,7 @@ export async function POST(req: NextRequest) {
         error: false,
         message: 'Default finding created.',
         data: {
-          ...finding,
+          ...(() => { const { isActive: _legacyIsActive, ...publicFinding } = finding; return publicFinding; })(),
           parts: storedParts,
         },
       },

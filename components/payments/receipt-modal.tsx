@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 
 import { Button } from '@/components/ui/button';
+import PrintReceiptButton from '@/components/payments/PrintReceiptButton';
 
 interface ReceiptModalProps {
   open: boolean;
@@ -464,6 +465,10 @@ export default function ReceiptModal({
                   : 'Payment receipt'}
               </p>
             </div>
+          </div>
+
+          <div className="ml-auto mr-2 hidden sm:block">
+            <PrintReceiptButton receipt={receipt} />
           </div>
 
           <Button

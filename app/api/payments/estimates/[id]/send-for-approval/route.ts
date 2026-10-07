@@ -1,3 +1,4 @@
+import { recordPaymentTransaction } from '@/utils/payments/payment-transactions';
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
@@ -68,6 +69,8 @@ export async function PATCH(
     await Database.update(Appointments)
       .set({ status: "WAITING_FOR_APPROVAL", updatedAt: new Date() })
       .where(eq(Appointments.id, estimate.appointmentId));
+
+    await recordPaymentTransaction({ entityType: 'ESTIMATE', entityId: id, appointmentId: estimate.appointmentId, eventType: 'STATUS_CHANGED', fromStatus: estimate.status, toStatus: 'WAITING_FOR_APPROVAL', amount: estimate.grandTotal });
 
     const info = await getAppointmentInfo(estimate.appointmentId);
     mobilePaymentsTriggers.onEstimateSentForApproval({

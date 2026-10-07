@@ -20,6 +20,8 @@ export const appointmentsApi = {
       page?: number;
 
       limit?: number;
+
+      all?: boolean;
     },
   ) => {
     let url =

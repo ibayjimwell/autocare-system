@@ -342,14 +342,15 @@ function buildPrintHtml({
   );
 
   const feesTotal = toNumber(item?.feesTotal);
-  const discountTotal = toNumber(item?.discountTotal);
+  const discountTotal = Math.abs(toNumber(item?.discountTotal));
+  const printableDiscountTotal = discountTotal > 0.004 ? discountTotal : 0;
 
   const storedGrandTotal = toNumber(item?.grandTotal);
   const calculatedGrandTotal =
     serviceSubtotal +
     findingsSubtotal +
     feesTotal -
-    discountTotal;
+    printableDiscountTotal;
 
   const grandTotal =
     Number.isFinite(storedGrandTotal) && storedGrandTotal > 0
@@ -591,12 +592,15 @@ body { font-size: 11px; line-height: 1.45; }
 .subtext { margin-top: 2px; font-size: 9px; color: #777; }
 .section { margin-top: 15px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
 .section-title { padding: 9px 11px; background: #f7f7f7; border-bottom: 1px solid #ddd; font-size: 10px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 8px 10px; border-bottom: 1px solid #ececec; vertical-align: top; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+th, td { padding: 8px 10px; border-bottom: 1px solid #ececec; vertical-align: top; overflow-wrap: anywhere; line-height: 1.35; }
 th { background: #fbfbfb; font-size: 8px; letter-spacing: 0.6px; text-transform: uppercase; color: #777; text-align: left; }
 tbody tr:last-child td { border-bottom: 0; }
 td:first-child { width: 36px; color: #777; }
-.money { text-align: right; white-space: nowrap; font-weight: 700; }
+.money { text-align: right; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+th:last-child, td:last-child.money, th.right, td.right { text-align: right; }
+th:first-child, td:first-child { width: 36px; }
+table th:last-child { width: 125px; }
 .right { text-align: right; }
 .negative { color: #C1272D; }
 .item-name { font-weight: 700; }
@@ -786,7 +790,7 @@ td:first-child { width: 36px; color: #777; }
     </table>
     <div class="summary-row">
       <strong>Discounts Subtotal</strong>
-      <strong class="negative">- ₱${currency(discountTotal)}</strong>
+      <strong class="negative">${printableDiscountTotal > 0 ? `- ₱${currency(printableDiscountTotal)}` : `₱${currency(0)}`}</strong>
     </div>
   </section>
 
@@ -813,7 +817,7 @@ td:first-child { width: 36px; color: #777; }
     </div>
     <div class="summary-row">
       <span>Discounts Subtotal</span>
-      <strong class="negative">- ₱${currency(discountTotal)}</strong>
+      <strong class="negative">${printableDiscountTotal > 0 ? `- ₱${currency(printableDiscountTotal)}` : `₱${currency(0)}`}</strong>
     </div>
     <div class="summary-row total">
       <span>GRAND TOTAL</span>

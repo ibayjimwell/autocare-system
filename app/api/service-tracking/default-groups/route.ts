@@ -75,8 +75,8 @@ function normalizeTask(
 /* ================================================================
    GET DEFAULT TASK GROUPS
 
-   Returns active and inactive groups so the manager can administer
-   the full library. Pickers filter inactive groups themselves.
+   Returns the complete reusable task-group library. The UI no longer
+   uses Active/Inactive state for default tasks.
 
    Uses one task query rather than one query per group.
 ================================================================ */
@@ -127,10 +127,9 @@ export async function GET() {
     return NextResponse.json({
       error: false,
       message: 'Default task groups retrieved.',
-      data: groups.map((group) => ({
+      data: groups.map(({ isActive: _legacyIsActive, ...group }) => ({
         ...group,
-        tasks:
-          tasksByGroup[group.id] || [],
+        tasks: tasksByGroup[group.id] || [],
       })),
     });
   } catch (error) {
@@ -221,10 +220,9 @@ export async function POST(req: NextRequest) {
           String(
             body?.description || '',
           ).trim() || null,
-        isActive:
-          body?.isActive === undefined
-            ? true
-            : Boolean(body.isActive),
+        // Retained in the schema only for backward compatibility.
+        // Default task groups no longer have an Active/Inactive state in the product.
+        isActive: true,
       })
       .returning();
 
@@ -261,7 +259,7 @@ export async function POST(req: NextRequest) {
         error: false,
         message: 'Default task group created.',
         data: {
-          ...storedGroup,
+          ...(() => { const { isActive: _legacyIsActive, ...publicGroup } = storedGroup; return publicGroup; })(),
           tasks: storedTasks,
         },
       },

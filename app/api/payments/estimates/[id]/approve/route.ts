@@ -1,3 +1,4 @@
+import { recordPaymentTransaction } from '@/utils/payments/payment-transactions';
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
@@ -236,6 +237,8 @@ export async function PATCH(
         grandTotal,
       };
     });
+
+    await recordPaymentTransaction({ entityType: 'ESTIMATE', entityId: id, appointmentId: result.appointmentId, eventType: 'STATUS_CHANGED', fromStatus: 'WAITING_FOR_APPROVAL', toStatus: 'APPROVED', amount: result.grandTotal });
 
     const info = await getAppointmentInfo(result.appointmentId);
 

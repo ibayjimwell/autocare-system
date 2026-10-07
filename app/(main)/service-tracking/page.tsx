@@ -374,6 +374,41 @@ export default function ServiceTrackingPage() {
         'IN_PROGRESS',
     );
 
+  const normalizedQueueSearch = search.trim().toLowerCase();
+
+  const matchesQueueSearch = (item: any) => {
+    if (!normalizedQueueSearch) return true;
+
+    const services = Array.isArray(item?.services)
+      ? item.services.map((service: any) =>
+          typeof service === 'string'
+            ? service
+            : service?.name || service?.title || '',
+        )
+      : [];
+
+    return [
+      item?.trackingNumber,
+      item?.customer?.fullname,
+      item?.customer?.email,
+      item?.customer?.phone,
+      item?.customerName,
+      item?.vehicle?.make,
+      item?.vehicle?.model,
+      item?.vehicle?.year,
+      item?.vehicle?.plateNumber,
+      item?.vehicleMake,
+      item?.vehicleModel,
+      item?.vehicleYear,
+      item?.plateNumber,
+      ...services,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedQueueSearch);
+  };
+
   /* ==============================================================
      REFRESH
   ============================================================== */
@@ -519,6 +554,16 @@ export default function ServiceTrackingPage() {
          * Confirmed queue immediately and appears in Under Inspection.
          */
         await refreshQueueAndAppointments();
+
+        const detail = await loadCompleteAppointmentForDetail(
+          appointmentId,
+          currentQueueItem,
+          'UNDER_INSPECTION',
+        );
+
+        if (detail) {
+          setQueueDetailAppointment(detail);
+        }
       } catch (
         err: any
       ) {
@@ -1399,7 +1444,8 @@ export default function ServiceTrackingPage() {
                             '',
                         ).trim().toUpperCase() ===
                           'WORKING'
-                      )
+                      ) &&
+                      matchesQueueSearch(item)
                   )
                 }
                 loading={

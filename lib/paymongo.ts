@@ -25,9 +25,10 @@ const RETRY_DELAY_MS =
   1_000;
 
 export type PayMongoPaymentMethodType =
-  'card' |
-  'gcash' |
-  'paymaya';
+  | 'card'
+  | 'gcash'
+  | 'paymaya'
+  | 'qrph';
 
 interface CreatePaymentLinkPayload {
   amount: number;

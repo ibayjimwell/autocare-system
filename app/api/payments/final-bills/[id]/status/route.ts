@@ -40,6 +40,8 @@ import {
   mobilePaymentsTriggers,
 } from '@/app-triggers/payments';
 
+import { recordPaymentTransaction } from '@/utils/payments/payment-transactions';
+
 const DAY_MS =
   24 * 60 * 60 * 1000;
 
@@ -567,6 +569,11 @@ export async function PATCH(
         updated[0],
         'PARKED',
       );
+      await recordPaymentTransaction({
+        entityType: 'FINAL_BILL', entityId: id, appointmentId: bill.appointmentId,
+        eventType: 'STATUS_CHANGED', fromStatus: currentStatus, toStatus: 'PARKED', amount: updated[0].grandTotal,
+        details: { parkingFeeEnabled: addParkingFee },
+      });
 
       return NextResponse.json(
         {
@@ -836,6 +843,11 @@ export async function PATCH(
         parkingResult.bill,
         'PENDING',
       );
+      await recordPaymentTransaction({
+        entityType: 'FINAL_BILL', entityId: id, appointmentId: bill.appointmentId,
+        eventType: 'STATUS_CHANGED', fromStatus: currentStatus, toStatus: 'PENDING', amount: parkingResult.bill.grandTotal,
+        details: { parkingStopped: true },
+      });
 
       return NextResponse.json(
         {
@@ -917,6 +929,10 @@ export async function PATCH(
       updated[0],
       requestedStatus,
     );
+    await recordPaymentTransaction({
+      entityType: 'FINAL_BILL', entityId: id, appointmentId: bill.appointmentId,
+      eventType: 'STATUS_CHANGED', fromStatus: currentStatus, toStatus: requestedStatus, amount: updated[0].grandTotal,
+    });
 
     return NextResponse.json(
       {

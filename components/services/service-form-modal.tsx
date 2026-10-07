@@ -32,6 +32,7 @@ import {
   useServiceForm,
 } from '@/hooks/services/useServiceForm';
 
+import { SERVICE_TYPES, SERVICE_TYPE_LABELS } from '@/app-utils/services/helpers';
 interface ServiceFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -208,17 +209,11 @@ export default function ServiceFormModal({
             </SelectTrigger>
 
             <SelectContent className="rounded-lg">
-              <SelectItem value="REPAIR">
-                Repair
-              </SelectItem>
-
-              <SelectItem value="PMS">
-                PMS
-              </SelectItem>
-
-              <SelectItem value="CHECKUP">
-                Checkup
-              </SelectItem>
+              {SERVICE_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {SERVICE_TYPE_LABELS[type]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

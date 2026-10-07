@@ -11,7 +11,6 @@ export function useStaffForm(onSuccess: () => void, onHighlight: (id: string) =>
     fullname: '',
     username: '',
     role: 'Mechanic',
-    customRole: '',
   });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<any>(null);
@@ -23,7 +22,7 @@ export function useStaffForm(onSuccess: () => void, onHighlight: (id: string) =>
 
   const generateUsername = (fullName: string) => {
     const first = fullName.trim().split(' ')[0]?.toLowerCase() || '';
-    return `autocare@${first}`;
+    return `autocare${first}`;
   };
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,7 +36,7 @@ export function useStaffForm(onSuccess: () => void, onHighlight: (id: string) =>
 
   const openCreate = () => {
     setEditingStaff(null);
-    setForm({ fullname: '', username: '', role: 'Mechanic', customRole: '' });
+    setForm({ fullname: '', username: '', role: 'Mechanic' });
     setFormError(null);
     setModalOpen(true);
   };
@@ -48,8 +47,7 @@ export function useStaffForm(onSuccess: () => void, onHighlight: (id: string) =>
       fullname: staff.fullname || '',
       username: staff.username || '',
       role: staff.role || 'Mechanic',
-      customRole: '',
-    });
+      });
     setFormError(null);
     setModalOpen(true);
   };
@@ -59,7 +57,7 @@ export function useStaffForm(onSuccess: () => void, onHighlight: (id: string) =>
     setSaving(true);
     setFormError(null);
 
-    const finalRole = form.role === 'custom' ? form.customRole.trim() : form.role;
+    const finalRole = form.role;
     if (!form.fullname.trim() || !form.username.trim() || !finalRole) {
       setFormError({
         type: 'fve',

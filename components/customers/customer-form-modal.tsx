@@ -101,7 +101,7 @@ export default function CustomerFormModal({
   const [
     showTempPassword,
     setShowTempPassword,
-  ] = useState(true);
+  ] = useState(false);
 
   /*
    * Used to give the user feedback after
@@ -141,11 +141,11 @@ export default function CustomerFormModal({
   useEffect(() => {
     if (showTempDialog) {
       /*
-       * Preserve the current behavior:
-       * show the generated password by default.
+       * Security default: keep the generated temporary password hidden
+       * until the staff member explicitly taps the eye button.
        */
       setShowTempPassword(
-        true
+        false
       );
 
       setPasswordCopied(

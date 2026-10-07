@@ -18,7 +18,7 @@ export function useAppointmentData() {
   const loadAppointments = useCallback(async () => {
     setApiError(null);
     try {
-      const res = await appointmentsApi.list();
+      const res = await appointmentsApi.list({ all: true });
       if (res.error) {
         setApiError({
           type: res.errorType || "fe",

@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -87,15 +86,6 @@ export default function PaymentsConfigurationModal({
     }
   }, [open, load]);
 
-  const activeFees = useMemo(
-    () => config.defaultFees.filter((fee) => fee.isActive),
-    [config.defaultFees],
-  );
-
-  const activeDiscounts = useMemo(
-    () => config.defaultDiscounts.filter((discount) => discount.isActive),
-    [config.defaultDiscounts],
-  );
 
   const setFee = (id: string, patch: Partial<PaymentDefaultFee>) => {
     setConfig((current) => ({
@@ -137,7 +127,6 @@ export default function PaymentsConfigurationModal({
           id: createId('fee'),
           title,
           amount,
-          isActive: true,
         },
       ],
     }));
@@ -174,7 +163,6 @@ export default function PaymentsConfigurationModal({
           title,
           type: newDiscountType,
           value,
-          isActive: true,
         },
       ],
     }));
@@ -354,9 +342,6 @@ export default function PaymentsConfigurationModal({
                         Maintain reusable fees for billing workflows.
                       </p>
                     </div>
-                    <Badge variant="outline" className="rounded-full text-[10px]">
-                      {activeFees.length} active
-                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -422,13 +407,6 @@ export default function PaymentsConfigurationModal({
                             />
                           </div>
                           <div className="flex items-center justify-between gap-2 sm:justify-end">
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Checkbox
-                                checked={fee.isActive}
-                                onCheckedChange={(checked) => setFee(fee.id, { isActive: checked === true })}
-                              />
-                              Active
-                            </label>
                             <Button
                               type="button"
                               variant="ghost"
@@ -459,9 +437,6 @@ export default function PaymentsConfigurationModal({
                         Maintain reusable fixed or percentage discounts for billing workflows.
                       </p>
                     </div>
-                    <Badge variant="outline" className="rounded-full text-[10px]">
-                      {activeDiscounts.length} active
-                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -553,13 +528,6 @@ export default function PaymentsConfigurationModal({
                             />
                           </div>
                           <div className="flex items-center justify-between gap-2 lg:justify-end">
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Checkbox
-                                checked={discount.isActive}
-                                onCheckedChange={(checked) => setDiscount(discount.id, { isActive: checked === true })}
-                              />
-                              Active
-                            </label>
                             <Button
                               type="button"
                               variant="ghost"
@@ -580,7 +548,7 @@ export default function PaymentsConfigurationModal({
 
               <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
                 <WalletCards className="h-4 w-4" />
-                {activeFees.length} active fees · {activeDiscounts.length} active discounts
+                {config.defaultFees.length} default fees · {config.defaultDiscounts.length} default discounts
               </div>
             </div>
           )}

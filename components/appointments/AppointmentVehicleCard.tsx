@@ -78,14 +78,6 @@ export default function AppointmentVehicleCard({
                   </Badge>
                 )}
               </div>
-
-              {vehicle.id && (
-                <p className="mt-3 break-all font-mono text-[10px] text-muted-foreground">
-                  Vehicle ID: {
-                    vehicle.id
-                  }
-                </p>
-              )}
             </div>
           </div>
         </div>

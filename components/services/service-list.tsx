@@ -49,9 +49,6 @@ import {
   ArrowDown,
   X,
   PackageCheck,
-  SlidersHorizontal,
-  Download,
-  MoreHorizontal,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -741,66 +738,6 @@ export default function ServiceList({
             </PopoverContent>
           </Popover>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="
-              hidden h-9
-              shrink-0
-              rounded-md
-              px-3
-              text-sm
-              font-medium
-              lg:inline-flex
-              focus-visible:outline-none
-              focus-visible:ring-2
-              focus-visible:ring-ring
-              focus-visible:ring-offset-2
-            "
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Customize
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="
-              hidden h-9
-              shrink-0
-              rounded-md
-              px-3
-              text-sm
-              font-medium
-              lg:inline-flex
-              focus-visible:outline-none
-              focus-visible:ring-2
-              focus-visible:ring-ring
-              focus-visible:ring-offset-2
-            "
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="More service actions"
-            className="
-              hidden h-9 w-9
-              shrink-0
-              rounded-md
-              lg:inline-flex
-              focus-visible:outline-none
-              focus-visible:ring-2
-              focus-visible:ring-ring
-              focus-visible:ring-offset-2
-            "
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 

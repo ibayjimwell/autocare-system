@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { FinalBill } from '@/hooks/payments/usePaymentsData';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/shared/empty-state';
 import { formatCurrency } from '@/app-utils/payments/payments';
-import { Clock3, CircleParking, DollarSign, Eye, MoreHorizontal, ReceiptText, Send, Trash2 } from 'lucide-react';
+import { Clock3, CircleParking, DollarSign, Eye, MoreHorizontal, QrCode, ReceiptText, Send, Trash2 } from 'lucide-react';
 import { finalBillsApi } from '@/lib/payments/final-bills';
 import { paymentsConfigurationApi } from '@/lib/payments/configuration';
 import ParkVehicleConfirmationModal from './ParkVehicleConfirmationModal';
@@ -135,6 +136,7 @@ export default function FinalBillsList({
   onStopParking,
   actionLoading,
 }: FinalBillsListProps) {
+  const router = useRouter();
   const [parkModalOpen, setParkModalOpen] = useState(false);
   const [stopParkingModalOpen, setStopParkingModalOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<any>(null);
@@ -256,15 +258,34 @@ export default function FinalBillsList({
         );
       case 'OFFICIAL':
         return (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => onPay(bill)}
-            className="h-8 rounded-md bg-blue-600 px-2.5 text-xs font-medium text-white hover:bg-blue-700"
-          >
-            <DollarSign className="mr-1.5 h-3.5 w-3.5" />
-            Pay
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                router.push(
+                  `/payments/qrph/${encodeURIComponent(String(bill.id))}`,
+                )
+              }
+              disabled={loading}
+              className="h-8 rounded-md border-primary/30 px-2.5 text-xs font-medium text-primary hover:bg-primary/5"
+            >
+              <QrCode className="mr-1.5 h-3.5 w-3.5" />
+              QRPh
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onPay(bill)}
+              disabled={loading}
+              className="h-8 rounded-md bg-blue-600 px-2.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              <DollarSign className="mr-1.5 h-3.5 w-3.5" />
+              Pay
+            </Button>
+          </div>
         );
       case 'PAID':
         return (

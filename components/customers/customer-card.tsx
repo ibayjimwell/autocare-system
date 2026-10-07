@@ -154,19 +154,19 @@ export default function CustomerCard({
         </h4>
 
         <div className="mt-1 flex flex-col gap-y-0.5 text-xs font-medium text-muted-foreground sm:flex-row sm:items-center sm:gap-x-3">
-          <span className="flex max-w-[180px] min-w-0 items-center gap-1 truncate">
-            <Mail className="h-3 w-3 shrink-0 text-primary/70" />
+          {customer.email ? (
+            <a href={`mailto:${customer.email}`} onClick={(e) => e.stopPropagation()} className="flex max-w-[180px] min-w-0 items-center gap-1 truncate hover:text-primary hover:underline">
+              <Mail className="h-3 w-3 shrink-0 text-primary/70" />
+              <span className="truncate">{customer.email}</span>
+            </a>
+          ) : null}
 
-            <span className="truncate">
-              {customer.email}
-            </span>
-          </span>
-
-          <span className="flex shrink-0 items-center gap-1">
-            <Phone className="h-3 w-3 shrink-0 text-muted-foreground" />
-
-            <span>{customer.phone}</span>
-          </span>
+          {customer.phone ? (
+            <a href={`tel:${customer.phone}`} onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-1 hover:text-primary hover:underline">
+              <Phone className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span>{customer.phone}</span>
+            </a>
+          ) : null}
         </div>
       </div>
     </div>

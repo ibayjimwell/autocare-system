@@ -39,6 +39,7 @@ import {
   Check,
   Eye,
   FileText,
+  Loader2,
   Pencil,
   Percent,
   Printer,
@@ -849,7 +850,7 @@ export default function DetailModal({
                                   aria-label={`${finding.included !== false ? 'Remove' : 'Include'} finding: ${finding.description || 'Finding'}`}
                                   disabled={
                                     !onToggleFinding ||
-                                    togglingFindingId === finding.id
+                                    Boolean(togglingFindingId)
                                   }
                                   onClick={() =>
                                     onToggleFinding?.(
@@ -865,9 +866,11 @@ export default function DetailModal({
                                       : 'border-border bg-background text-transparent',
                                   )}
                                 >
-                                  {finding.included !== false && (
+                                  {togglingFindingId === finding.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-current" />
+                                  ) : finding.included !== false ? (
                                     <Check className="h-4 w-4" />
-                                  )}
+                                  ) : null}
                                 </button>
                               )}
 
@@ -1364,15 +1367,13 @@ export default function DetailModal({
 
                           <div className="flex shrink-0 items-center gap-1">
                             <span className="text-sm font-semibold text-red-500">
-                              -₱
-                              {safeCurrency(
-                                Math.abs(
-                                  toSafeNumber(
-                                    discount?.amount ??
-                                      discount?.value,
-                                  ),
-                                ),
-                              )}
+                              {(() => {
+                                const amount = Math.abs(toSafeNumber(discount?.amount));
+                                if (amount > 0.004) return `-₱${safeCurrency(amount)}`;
+                                if (discount?.type === 'percentage') return `${Math.max(0, toSafeNumber(discount?.value))}%`;
+                                const value = Math.abs(toSafeNumber(discount?.value));
+                                return value > 0.004 ? `-₱${safeCurrency(value)}` : '₱0.00';
+                              })()}
                             </span>
 
                             {isFinalBillEditable && (
@@ -1430,14 +1431,9 @@ export default function DetailModal({
                   </span>
 
                   <span className="text-red-500">
-                    -₱
-                    {safeCurrency(
-                      Math.abs(
-                        toSafeNumber(
-                          selectedItem.discountTotal,
-                        ),
-                      ),
-                    )}
+                    {Math.abs(toSafeNumber(selectedItem.discountTotal)) > 0.004
+                      ? `-₱${safeCurrency(Math.abs(toSafeNumber(selectedItem.discountTotal)))}`
+                      : '₱0.00'}
                   </span>
                 </div>
               </DetailSection>

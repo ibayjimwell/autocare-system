@@ -138,11 +138,21 @@ export async function POST(req: NextRequest) {
             priceAtTime: part.priceAtTime || 0,
             isPms: part.isPms || false,
           };
-          if (part.inventoryItemId && isValidUUID(part.inventoryItemId)) {
+          const hasInventoryItem = part.inventoryItemId && isValidUUID(part.inventoryItemId);
+          const partName = typeof part.partName === 'string' ? part.partName.trim() : '';
+
+          if (hasInventoryItem) {
             partData.inventoryItemId = part.inventoryItemId;
-          } else if (part.partName && typeof part.partName === 'string') {
-            partData.partName = part.partName.trim();
-          } else {
+          }
+
+          // Preserve a readable name even for inventory-linked parts so
+          // default findings and saved findings render immediately without a
+          // separate inventory lookup.
+          if (partName) {
+            partData.partName = partName;
+          }
+
+          if (!hasInventoryItem && !partName) {
             return NextResponse.json({
               error: true,
               errorType: "fve",

@@ -1,6 +1,7 @@
 'use client';
 
 import React, {
+  useEffect,
   useState,
 } from 'react';
 
@@ -63,7 +64,7 @@ import HistoryFindingPickerModal from './history-finding-picker-modal';
 
 interface FindingPart {
   id: string;
-  inventoryItemId?: string;
+  inventoryItemId?: string | null;
   partName: string;
   quantity: number;
   priceAtTime: number;
@@ -77,7 +78,7 @@ interface Finding {
 }
 
 interface FindingPickerPart {
-  inventoryItemId?: string;
+  inventoryItemId?: string | null;
   partName: string;
   quantity: number;
   priceAtTime: number;
@@ -87,6 +88,23 @@ interface FindingPickerPart {
 interface FindingPickerData {
   description: string;
   parts: FindingPickerPart[];
+}
+
+
+function createLocalId(prefix = 'local') {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function emptyFinding(): Finding {
+  return {
+    id: createLocalId('finding'),
+    description: '',
+    parts: [],
+  };
 }
 
 interface FindingModalProps {
@@ -105,15 +123,7 @@ export default function FindingModal({
   const [
     findings,
     setFindings,
-  ] = useState<Finding[]>(
-    [
-      {
-        id: Date.now().toString(),
-        description: '',
-        parts: [],
-      },
-    ],
-  );
+  ] = useState<Finding[]>([emptyFinding()]);
 
   const [
     saving,
@@ -135,11 +145,21 @@ export default function FindingModal({
     setIsAddingFromPicker,
   ] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+
+    setFindings([emptyFinding()]);
+    setSaving(false);
+    setDefaultPickerOpen(false);
+    setHistoryPickerOpen(false);
+    setIsAddingFromPicker(false);
+  }, [open, appointmentId]);
+
   const addFinding = () => {
     setFindings([
       ...findings,
       {
-        id: Date.now().toString(),
+        id: createLocalId('finding'),
         description: '',
         parts: [],
       },
@@ -204,7 +224,7 @@ export default function FindingModal({
               parts: [
                 ...f.parts,
                 {
-                  id: Date.now().toString(),
+                  id: createLocalId('part'),
                   inventoryItemId:
                     undefined,
                   partName: '',
@@ -335,8 +355,8 @@ export default function FindingModal({
       name: string;
       price: number;
       quantity: number;
-      unit?: string;
-      reorderLevel?: number;
+      unit?: string | null;
+      reorderLevel?: number | string | null;
       lowStock?: boolean;
       outOfStock?: boolean;
     },
@@ -430,136 +450,66 @@ export default function FindingModal({
     }
   };
 
-  const handleAddFindingFromPicker = (
-    findingData: FindingPickerData,
-  ) => {
-    const newFinding: Finding =
-      {
-        id: Date.now().toString(),
-        description:
-          findingData.description,
-        parts:
-          findingData.parts.map(
-            (
-              p,
-              index,
-            ) => ({
-              id:
-                `${Date.now()}-${index}`,
-              inventoryItemId:
-                p.inventoryItemId,
-              partName:
-                p.partName ||
-                '',
-              quantity:
-                Math.max(
-                  1,
-                  Number(
-                    p.quantity,
-                  ) ||
-                    1,
-                ),
-              priceAtTime:
-                Number(
-                  p.priceAtTime,
-                ) ||
-                0,
-              isPms:
-                Boolean(
-                  p.isPms,
-                ),
-            }),
-          ),
-      };
+  const mapPickerFinding = (findingData: FindingPickerData): Finding => ({
+    id: createLocalId('finding'),
+    description: findingData.description,
+    parts: findingData.parts.map((part) => ({
+      id: createLocalId('part'),
+      inventoryItemId: part.inventoryItemId,
+      partName: part.partName || '',
+      quantity: Math.max(1, Number(part.quantity) || 1),
+      priceAtTime: Number(part.priceAtTime) || 0,
+      isPms: Boolean(part.isPms),
+    })),
+  });
 
-    setFindings([
-      ...findings,
-      newFinding,
-    ]);
+  const addPickerFindings = (selectedFindings: FindingPickerData[]) => {
+    const additions = selectedFindings.map(mapPickerFinding);
+
+    setFindings((current) => {
+      const hasOnlyBlankRow =
+        current.length === 1 &&
+        !current[0]?.description?.trim() &&
+        current[0]?.parts?.length === 0;
+
+      // Replace the initial blank row so a valid default/history finding is
+      // immediately visible and is not blocked from saving by an empty row.
+      return hasOnlyBlankRow ? additions : [...current, ...additions];
+    });
   };
 
-  const handleDefaultFindingSelect = (
-    finding: any,
+  const handleDefaultFindingSelect = async (
+    selectedFindings: FindingPickerData[],
   ) => {
-    handleAddFindingFromPicker(
-      {
-        description:
-          finding.title,
-        parts:
-          Array.isArray(
-            finding.parts,
-          )
-            ? finding.parts.map(
-                (
-                  p: any,
-                  index: number,
-                ) => ({
-                  /*
-                   * Preserve the inventory reference when a default
-                   * finding contains one.
-                   */
-                  inventoryItemId:
-                    p.inventoryItemId,
-                  partName:
-                    p.partName,
-                  quantity:
-                    p.quantity,
-                  priceAtTime:
-                    parseFloat(
-                      p.priceAtTime,
-                    ) ||
-                    0,
-                  isPms:
-                    p.isPms,
-                }),
-              )
-            : [],
-      },
-    );
+    if (selectedFindings.length === 0) return;
 
-    setDefaultPickerOpen(
-      false,
-    );
+    setIsAddingFromPicker(true);
+    try {
+      addPickerFindings(selectedFindings);
+      setDefaultPickerOpen(false);
+      toast.success(`${selectedFindings.length} default finding(s) added to the form.`);
+    } finally {
+      setIsAddingFromPicker(false);
+    }
   };
 
-  const handleHistoryFindingsSelect =
-    async (
-      selectedFindings: Array<{
-        description: string;
-        parts: FindingPickerPart[];
-      }>,
-    ) => {
-      setIsAddingFromPicker(
-        true,
-      );
+  const handleHistoryFindingsSelect = async (
+    selectedFindings: FindingPickerData[],
+  ) => {
+    if (selectedFindings.length === 0) return;
 
-      try {
-        for (
-          const f of
-            selectedFindings
-        ) {
-          handleAddFindingFromPicker(
-            f,
-          );
-        }
-
-        toast.success(
-          `${selectedFindings.length} finding(s) added from history.`,
-        );
-
-        setHistoryPickerOpen(
-          false,
-        );
-      } catch (err) {
-        toast.error(
-          'Error adding findings from history.',
-        );
-      } finally {
-        setIsAddingFromPicker(
-          false,
-        );
-      }
-    };
+    setIsAddingFromPicker(true);
+    try {
+      addPickerFindings(selectedFindings);
+      setHistoryPickerOpen(false);
+      toast.success(`${selectedFindings.length} finding(s) added from history.`);
+    } catch (error) {
+      console.error('[FindingModal] Unable to add history findings:', error);
+      toast.error('Error adding findings from history.');
+    } finally {
+      setIsAddingFromPicker(false);
+    }
+  };
 
   const handleSave = async () => {
     const invalid =
@@ -1275,8 +1225,11 @@ export default function FindingModal({
         onOpenChange={
           setDefaultPickerOpen
         }
-        onSelect={
+        onAddFindings={
           handleDefaultFindingSelect
+        }
+        isAdding={
+          isAddingFromPicker
         }
       />
 

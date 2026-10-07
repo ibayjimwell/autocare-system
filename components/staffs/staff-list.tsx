@@ -53,6 +53,7 @@ import {
   SlidersHorizontal,
   MoreHorizontal,
   Users,
+  RotateCcw,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -73,6 +74,7 @@ import ErrorHandler from '@/components/shared/error-handler';
 import TempPasswordDialog from './temp-password-dialog';
 import AccessModals from './access-modals';
 import StaffStatusConfirmationModal from './staff-status-confirmation-modal';
+import ResetPasswordModal from './reset-password-modal';
 import EmptyState from '@/components/shared/empty-state';
 import LoadingSpinner from '@/components/shared/loading-spinner';
 
@@ -157,6 +159,28 @@ export default function StaffList() {
   // Temp password dialog state
   const [tempDialogOpen, setTempDialogOpen] =
     useState(false);
+
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
+  const [resetPasswordStaff, setResetPasswordStaff] = useState<any | null>(null);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetTempPassword, setResetTempPassword] = useState<string | null>(null);
+  const [resetTempDialogOpen, setResetTempDialogOpen] = useState(false);
+
+  const requestPasswordReset = (staff: any) => { setResetPasswordStaff(staff); setResetPasswordOpen(true); };
+  const executePasswordReset = async () => {
+    if (!resetPasswordStaff?.id) return;
+    try {
+      setResetPasswordLoading(true);
+      const res = await staffApi.resetPassword(resetPasswordStaff.id);
+      if (res?.error) { toast.error(res.errorMessage || 'Failed to reset staff password.'); return; }
+      setResetPasswordOpen(false);
+      setResetTempPassword(res.data?.tempPasswordPlain || null);
+      setResetTempDialogOpen(true);
+      toast.success(`Password reset for ${resetPasswordStaff.fullname}.`);
+      await loadStaff();
+    } catch { toast.error('Failed to reset staff password.'); }
+    finally { setResetPasswordLoading(false); }
+  };
 
   // Onboard / outboard confirmation modal state
   const [statusConfirmationOpen, setStatusConfirmationOpen] =
@@ -508,34 +532,29 @@ export default function StaffList() {
     statusTab !== 'ALL';
 
   const getStatusCount = (value: string) => {
-    if (value === 'ALL') {
-      return currentStaffId
-        ? staffList.filter(
-            (s) => s.id !== currentStaffId
-          ).length
-        : staffList.length;
-    }
+    // The signed-in account is intentionally omitted from the staff directory.
+    // Use the exact same population for the status counters so the current
+    // user's own heartbeat does not make the Online tab permanently show 1.
+    const directoryStaff = currentStaffId
+      ? staffList.filter((staff) => staff.id !== currentStaffId)
+      : staffList;
+
+    if (value === 'ALL') return directoryStaff.length;
 
     if (value === 'online') {
-      return staffList.filter(
-        (s) =>
-          s.isOnline === true &&
-          s.inBoarding !== false
+      return directoryStaff.filter(
+        (staff) => staff.isOnline === true && staff.inBoarding !== false,
       ).length;
     }
 
     if (value === 'offline') {
-      return staffList.filter(
-        (s) =>
-          s.isOnline !== true &&
-          s.inBoarding !== false
+      return directoryStaff.filter(
+        (staff) => staff.isOnline !== true && staff.inBoarding !== false,
       ).length;
     }
 
     if (value === 'offboarded') {
-      return staffList.filter(
-        (s) => s.inBoarding === false
-      ).length;
+      return directoryStaff.filter((staff) => staff.inBoarding === false).length;
     }
 
     return 0;
@@ -1054,7 +1073,7 @@ export default function StaffList() {
                                 </p>
 
                                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                  @{staff.username}
+                                  {staff.username}
                                 </p>
                               </div>
 
@@ -1183,6 +1202,10 @@ export default function StaffList() {
                           >
                             <Key className="h-4 w-4" />
                             Access
+                          </Button>
+
+                          <Button type="button" variant="ghost" size="icon" onClick={() => requestPasswordReset(staff)} aria-label={`Reset password for ${staff.fullname}`} title="Reset password" className="h-11 w-11 rounded-md text-muted-foreground hover:text-foreground">
+                            <RotateCcw className="h-4 w-4" />
                           </Button>
 
                           {staff.inBoarding ===
@@ -1575,7 +1598,7 @@ export default function StaffList() {
                                   text-muted-foreground
                                 "
                               >
-                                @{staff.username}
+                                {staff.username}
                               </code>
                             </TableCell>
 
@@ -1718,6 +1741,10 @@ export default function StaffList() {
                                   "
                                 >
                                   <Key className="h-4 w-4" />
+                                </Button>
+
+                                <Button type="button" variant="ghost" size="icon" onClick={() => requestPasswordReset(staff)} aria-label={`Reset password for ${staff.fullname}`} title="Reset password" className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground">
+                                  <RotateCcw className="h-4 w-4" />
                                 </Button>
 
                                 {staff.inBoarding ===
@@ -1994,10 +2021,10 @@ export default function StaffList() {
                   setForm({
                     ...form,
                     username:
-                      e.target.value,
+                      e.target.value.replace(/@/g, ''),
                   })
                 }
-                placeholder="autocare@john"
+                placeholder="autocarejohn"
                 className="
                   h-11 rounded-md
                   border-input
@@ -2056,29 +2083,6 @@ export default function StaffList() {
                 )}
               </SelectContent>
             </Select>
-
-            {form.role === 'custom' && (
-              <Input
-                value={form.customRole}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    customRole:
-                      e.target.value,
-                  })
-                }
-                placeholder="Enter custom role"
-                className="
-                  mt-2 h-11 rounded-md
-                  border-input
-                  text-base
-                  focus-visible:ring-2
-                  focus-visible:ring-ring
-                  focus-visible:ring-offset-1
-                  md:h-9 md:text-sm
-                "
-              />
-            )}
           </div>
         </div>
       </DataModal>
@@ -2097,6 +2101,12 @@ export default function StaffList() {
           }
         />
       )}
+
+      <ResetPasswordModal open={resetPasswordOpen} onOpenChange={setResetPasswordOpen} staffName={resetPasswordStaff?.fullname || 'this staff member'} isLoading={resetPasswordLoading} onConfirm={executePasswordReset} />
+
+      {resetTempPassword && resetPasswordStaff ? (
+        <TempPasswordDialog open={resetTempDialogOpen} onOpenChange={setResetTempDialogOpen} tempPassword={resetTempPassword} staffName={resetPasswordStaff.fullname} onComplete={() => { setResetTempDialogOpen(false); setResetTempPassword(null); setResetPasswordStaff(null); }} />
+      ) : null}
 
       {/* ============================================================
           ONBOARD / OUTBOARD CONFIRMATION MODAL

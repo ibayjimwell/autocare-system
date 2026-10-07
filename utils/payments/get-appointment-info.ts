@@ -7,6 +7,7 @@ export async function getAppointmentInfo(appointmentId: string) {
   const [row] = await Database
     .select({
       trackingNumber: Appointments.trackingNumber,
+      customerId: Appointments.customerId,
       customerName: Customers.fullname,
     })
     .from(Appointments)
@@ -16,6 +17,7 @@ export async function getAppointmentInfo(appointmentId: string) {
 
   return {
     trackingNumber: row?.trackingNumber || 'N/A',
+    customerId: row?.customerId || '',
     customerName: row?.customerName || undefined,
   };
 }

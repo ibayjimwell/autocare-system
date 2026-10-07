@@ -9,6 +9,7 @@ import {
 } from "@/utils/staffs";
 import { staffsTriggers } from "@/triggers/staffs";
 
+import { PREDEFINED_ROLES } from '@/app-utils/staffs/constants';
 // Helper to remove password from a staff object
 function stripPassword(staff: any) {
   const { password, ...rest } = staff;
@@ -135,7 +136,15 @@ export async function PUT(
             { status: 422 },
           );
         }
-        const trimmed = body[field].trim();
+        const trimmed = field === 'username'
+          ? body[field].trim().replace(/@/g, '')
+          : body[field].trim();
+        if (field === "role" && !PREDEFINED_ROLES.includes(trimmed as (typeof PREDEFINED_ROLES)[number])) {
+          return NextResponse.json(
+            { error: true, errorType: "fve", errorTitle: "Invalid organizational role", errorMessage: `Role must be one of: ${PREDEFINED_ROLES.join(', ')}.` },
+            { status: 422 },
+          );
+        }
         if (field !== "role" && trimmed.length === 0) {
           return NextResponse.json(
             {

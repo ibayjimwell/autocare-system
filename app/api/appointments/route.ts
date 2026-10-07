@@ -10,7 +10,7 @@ import {
   generateTrackingNumber,
   serviceExists,
 } from "@/utils/appointments";
-import { and, asc, eq, inArray, sql, desc, not } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, desc, not, gte, lte } from "drizzle-orm";
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from "@/app-triggers/appointments";
 import { getAppointmentConfig, getEffectiveConfigForDate } from '@/utils/configurations';
@@ -24,12 +24,43 @@ export async function GET(req: NextRequest) {
   const customerId = searchParams.get('customerId');
   const from = searchParams.get('from');
   const to = searchParams.get('to');
-  const page = parseInt(searchParams.get('page') || '1');
-  const limit = Math.min(50, parseInt(searchParams.get('limit') || '20'));
-  const offset = (page - 1) * limit;
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20));
+  const all = searchParams.get('all') === 'true' || searchParams.get('all') === '1';
+  const offset = all ? 0 : (page - 1) * limit;
 
   try {
-    let query = Database.select({
+    const conditions: any[] = [];
+
+    if (status) {
+      conditions.push(eq(Appointments.status, status.toUpperCase()));
+    }
+
+    if (customerId && isValidUUID(customerId)) {
+      conditions.push(eq(Appointments.customerId, customerId));
+    }
+
+    if (from) {
+      conditions.push(gte(Appointments.appointmentDate, from));
+    }
+
+    if (to) {
+      conditions.push(lte(Appointments.appointmentDate, to));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    let countQuery: any = Database.select({ count: sql<number>`count(*)` })
+      .from(Appointments);
+
+    if (whereClause) {
+      countQuery = countQuery.where(whereClause);
+    }
+
+    const [countResult] = await countQuery;
+    const total = Number(countResult?.count || 0);
+
+    let query: any = Database.select({
       id: Appointments.id,
       customerId: Appointments.customerId,
       vehicleId: Appointments.vehicleId,
@@ -59,38 +90,34 @@ export async function GET(req: NextRequest) {
       .leftJoin(Customers, eq(Appointments.customerId, Customers.id))
       .leftJoin(Vehicles, eq(Appointments.vehicleId, Vehicles.id));
 
-    if (status) {
-      query = query.where(eq(Appointments.status, status.toUpperCase()));
-    }
-    if (customerId && isValidUUID(customerId)) {
-      query = query.where(eq(Appointments.customerId, customerId));
-    }
-    if (from && to) {
-      query = query.where(
-        sql`${Appointments.appointmentDate} BETWEEN ${from} AND ${to}`
-      );
+    if (whereClause) {
+      query = query.where(whereClause);
     }
 
-    const [countResult] = await Database.select({ count: sql`count(*)` })
-      .from(Appointments)
-      .where(query._where);
-    const total = Number(countResult?.count || 0);
+    query = query.orderBy(
+      desc(Appointments.appointmentDate),
+      desc(Appointments.appointmentTime),
+    );
 
-    const appointments = await query
-      .orderBy(desc(Appointments.appointmentDate), desc(Appointments.appointmentTime))
-      .limit(limit)
-      .offset(offset);
+    if (!all) {
+      query = query.limit(limit).offset(offset);
+    }
 
-    // Fetch service details
-    let serviceMap: Record<string, any[]> = {};
+    const appointments = await query;
+
+    // Fetch service details for every returned appointment so searching by
+    // service name works across the full database result set.
+    const serviceMap: Record<string, any[]> = {};
     const allServiceIds = new Set<string>();
+
     for (const appt of appointments) {
       if (appt.services && Array.isArray(appt.services)) {
         for (const sid of appt.services) {
-          allServiceIds.add(sid);
+          if (typeof sid === 'string' && sid) allServiceIds.add(sid);
         }
       }
     }
+
     if (allServiceIds.size > 0) {
       const serviceList = await Database.select({
         id: Services.id,
@@ -98,46 +125,54 @@ export async function GET(req: NextRequest) {
         description: Services.description,
         basePrice: Services.basePrice,
         estimatedDuration: Services.estimatedDuration,
+        type: Services.type,
       })
         .from(Services)
         .where(inArray(Services.id, Array.from(allServiceIds)));
 
-      const serviceObjMap = serviceList.reduce((acc, s) => {
-        acc[s.id] = s;
+      const serviceObjMap = serviceList.reduce((acc, service) => {
+        acc[service.id] = service;
         return acc;
       }, {} as Record<string, any>);
 
       for (const appt of appointments) {
-        if (appt.services && Array.isArray(appt.services)) {
-          serviceMap[appt.id] = appt.services
-            .map(sid => serviceObjMap[sid])
-            .filter(Boolean);
-        } else {
-          serviceMap[appt.id] = [];
-        }
+        serviceMap[appt.id] = Array.isArray(appt.services)
+          ? appt.services.map((sid: string) => serviceObjMap[sid]).filter(Boolean)
+          : [];
       }
     }
 
-    const data = appointments.map(a => ({
-      ...a,
-      services: serviceMap[a.id] || [],
+    const data = appointments.map((appointment: any) => ({
+      ...appointment,
+      services: serviceMap[appointment.id] || [],
     }));
 
-    return NextResponse.json({
-      error: false,
-      message: "Appointments retrieved successfully.",
-      data,
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
-    }, { status: 200 });
+    return NextResponse.json(
+      {
+        error: false,
+        message: 'Appointments retrieved successfully.',
+        data,
+        pagination: {
+          page: all ? 1 : page,
+          limit: all ? total : limit,
+          total,
+          pages: all ? (total > 0 ? 1 : 0) : Math.ceil(total / limit),
+        },
+      },
+      { status: 200 },
+    );
   } catch (e) {
-    console.error("[GET /api/appointments] Error:", e);
-    return NextResponse.json({
-      error: true,
-      errorType: "dbe",
-      errorTitle: "Database query error",
-      errorMessage: "Unable to fetch appointments.",
-      errorLog: e instanceof Error ? e.message : String(e),
-    }, { status: 500 });
+    console.error('[GET /api/appointments] Error:', e);
+    return NextResponse.json(
+      {
+        error: true,
+        errorType: 'dbe',
+        errorTitle: 'Database query error',
+        errorMessage: 'Unable to fetch appointments.',
+        errorLog: e instanceof Error ? e.message : String(e),
+      },
+      { status: 500 },
+    );
   }
 }
 

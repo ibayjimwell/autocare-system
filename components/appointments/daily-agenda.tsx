@@ -80,7 +80,7 @@ interface DailyAgendaProps {
 
   onConfirm: (
     appt: any,
-  ) => void;
+  ) => Promise<boolean>;
 
   onDecline: (
     appt: any,
@@ -168,6 +168,20 @@ export default function DailyAgenda({
   /* ==============================================================
      FILTER STATE
   ============================================================== */
+
+  const [confirmAppointment, setConfirmAppointment] = useState<any | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  const handleConfirmAppointment = async () => {
+    if (!confirmAppointment || confirmLoading) return;
+    try {
+      setConfirmLoading(true);
+      const successful = await onConfirm(confirmAppointment);
+      if (successful) setConfirmAppointment(null);
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
 
   const [
     sidebarFilter,
@@ -684,17 +698,25 @@ export default function DailyAgenda({
                     <div className="mt-2 flex flex-wrap gap-2">
                       {item.services?.map(
                         (
-                          serviceId: string,
-                        ) => (
-                          <ServiceCard
-                            key={
-                              serviceId
-                            }
-                            serviceId={
-                              serviceId
-                            }
-                          />
-                        ),
+                          service: any,
+                          serviceIndex: number,
+                        ) => {
+                          const serviceId =
+                            typeof service === 'string'
+                              ? service
+                              : service?.id;
+
+                          if (!serviceId) {
+                            return null;
+                          }
+
+                          return (
+                            <ServiceCard
+                              key={serviceId || serviceIndex}
+                              serviceId={serviceId}
+                            />
+                          );
+                        },
                       )}
                     </div>
                   </div>
@@ -917,11 +939,7 @@ export default function DailyAgenda({
                               <Button
                                 type="button"
                                 size="sm"
-                                onClick={() =>
-                                  onConfirm(
-                                    appointment,
-                                  )
-                                }
+                                onClick={() => setConfirmAppointment(appointment)}
                                 className="
                                   h-10
                                   rounded-md
@@ -1832,6 +1850,29 @@ export default function DailyAgenda({
                   Cancel Appointment
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(confirmAppointment)} onOpenChange={(open) => { if (!open && !confirmLoading) setConfirmAppointment(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm appointment?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to confirm this appointment? Once confirmed, it enters the service queue workflow and this action cannot be undone from the confirmation step.
+            </DialogDescription>
+          </DialogHeader>
+          {confirmAppointment ? (
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{confirmAppointment.customer?.fullname || 'Customer'}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{format(new Date(`${confirmAppointment.appointmentDate}T00:00:00`), 'MMM d, yyyy')} · {formatTime12h(confirmAppointment.appointmentTime)}</p>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={confirmLoading} onClick={() => setConfirmAppointment(null)}>Cancel</Button>
+            <Button type="button" disabled={confirmLoading} onClick={() => void handleConfirmAppointment()} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              {confirmLoading ? <><RefreshCw className="mr-2 h-4 w-4 animate-spin" />Confirming...</> : <><CheckCircle className="mr-2 h-4 w-4" />Confirm Appointment</>}
             </Button>
           </DialogFooter>
         </DialogContent>

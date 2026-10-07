@@ -9,9 +9,7 @@ export const FILTER_OPTIONS = [
 export const SORT_OPTIONS = [
   { value: "customerName", label: "Customer Name" },
   { value: "vehiclePlate", label: "Vehicle Plate" },
-  { value: "appointmentDate", label: "Appointment Date" },
-  { value: "appointmentTime", label: "Appointment Time" },
   { value: "trackingNumber", label: "Tracking Number" },
 ];
 
-export type SortField = "customerName" | "vehiclePlate" | "appointmentDate" | "appointmentTime" | "trackingNumber";
+export type SortField = "customerName" | "vehiclePlate" | "trackingNumber";

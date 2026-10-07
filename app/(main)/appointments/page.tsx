@@ -848,7 +848,7 @@ export default function AppointmentsPage() {
   const handleConfirm =
     async (
       appointment: any,
-    ) => {
+    ): Promise<boolean> => {
       try {
         const res =
           await appointmentsApi.updateStatus(
@@ -871,7 +871,10 @@ export default function AppointmentsPage() {
           await loadAppointments();
 
           await refreshPendingReschedules();
+          return true;
         }
+
+        return false;
       } catch (
         error: any
       ) {
@@ -879,6 +882,7 @@ export default function AppointmentsPage() {
           error?.message ||
             'Error confirming appointment.',
         );
+        return false;
       }
     };
 

@@ -33,7 +33,7 @@ export function useAppointmentList() {
   // Main list load – for statuses other than CONFIRMED, fetch all. For CONFIRMED, fetch today's only.
   const loadAppointments = useCallback(async () => {
     try {
-      let params: any = { status: activeFilter };
+      let params: any = { status: activeFilter, all: true };
       if (activeFilter === 'CONFIRMED') {
         params.from = todayDate;
         params.to = todayDate;
@@ -57,7 +57,7 @@ export function useAppointmentList() {
       const tomorrow = new Date();
       tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); // use UTC
       const from = tomorrow.toISOString().slice(0, 10);
-      const res = await appointmentsApi.list({ status: 'CONFIRMED', from });
+      const res = await appointmentsApi.list({ status: 'CONFIRMED', from, all: true });
       if (res.error) {
         toast.error(res.errorMessage || 'Failed to load future appointments.');
         setFutureAppointments([]);
@@ -144,7 +144,14 @@ export function useAppointmentList() {
           (appt.customer?.fullname || '').toLowerCase().includes(term) ||
           (appt.vehicle?.plateNumber || '').toLowerCase().includes(term) ||
           (appt.vehicle?.model || '').toLowerCase().includes(term) ||
-          (appt.trackingNumber || '').toLowerCase().includes(term)
+          (appt.trackingNumber || '').toLowerCase().includes(term) ||
+          (appt.customer?.email || '').toLowerCase().includes(term) ||
+          (appt.customer?.phone || '').toLowerCase().includes(term) ||
+          (appt.vehicle?.make || '').toLowerCase().includes(term) ||
+          (appt.status || '').toLowerCase().includes(term) ||
+          (Array.isArray(appt.services) ? appt.services : []).some((service: any) =>
+            String(service?.name || service?.title || service || '').toLowerCase().includes(term),
+          )
       );
     }
     data.sort((a, b) => {
@@ -157,14 +164,6 @@ export function useAppointmentList() {
         case 'vehiclePlate':
           valA = (a.vehicle?.plateNumber || '').toLowerCase();
           valB = (b.vehicle?.plateNumber || '').toLowerCase();
-          break;
-        case 'appointmentDate':
-          valA = a.appointmentDate || '';
-          valB = b.appointmentDate || '';
-          break;
-        case 'appointmentTime':
-          valA = a.appointmentTime || '';
-          valB = b.appointmentTime || '';
           break;
         case 'trackingNumber':
           valA = a.trackingNumber || '';
