@@ -1,3 +1,5 @@
+// app/api/payments/final-bills/[id]/verify-payment/route.ts
+
 import {
   NextRequest,
   NextResponse,
@@ -21,7 +23,6 @@ import {
 
 import {
   eq,
-  and,
 } from 'drizzle-orm';
 
 import {
@@ -40,18 +41,28 @@ import {
   mobilePaymentsTriggers,
 } from '@/app-triggers/payments';
 
+/* ============================================================================
+   HELPERS
+============================================================================ */
+
 function getPaymentIntentId(
   value: unknown,
 ) {
   if (
-    typeof value !== 'string'
+    typeof value !==
+    'string'
   ) {
     return null;
   }
 
-  const normalized = value.trim();
+  const normalized =
+    value.trim();
 
-  if (!normalized.startsWith('pi_')) {
+  if (
+    !normalized.startsWith(
+      'pi_',
+    )
+  ) {
     return null;
   }
 
@@ -62,7 +73,8 @@ function getIntentAttributes(
   response: any,
 ) {
   return (
-    response?.data?.attributes ??
+    response?.data
+      ?.attributes ??
     response?.attributes ??
     {}
   );
@@ -72,9 +84,15 @@ function getIntentMetadata(
   response: any,
 ) {
   const metadata =
-    getIntentAttributes(response)?.metadata;
+    getIntentAttributes(
+      response,
+    )?.metadata;
 
-  return metadata && typeof metadata === 'object'
+  return (
+    metadata &&
+    typeof metadata ===
+      'object'
+  )
     ? metadata
     : {};
 }
@@ -83,17 +101,33 @@ function getIntentPaymentMethod(
   response: any,
 ) {
   const attributes =
-    getIntentAttributes(response);
+    getIntentAttributes(
+      response,
+    );
 
-  return (
-    attributes?.payment_method_allowed?.[0] ??
-    null
-  );
+  const allowed =
+    attributes
+      ?.payment_method_allowed;
+
+  if (
+    Array.isArray(
+      allowed,
+    ) &&
+    typeof allowed[0] ===
+      'string'
+  ) {
+    return allowed[0]
+      .trim()
+      .toLowerCase();
+  }
+
+  return null;
 }
 
-// -----------------------------------------------------------------------------
-// POST /api/payments/final-bills/[id]/verify-payment
-// -----------------------------------------------------------------------------
+/* ============================================================================
+   POST /api/payments/final-bills/[id]/verify-payment
+============================================================================ */
+
 export async function POST(
   req: NextRequest,
   {
@@ -104,65 +138,122 @@ export async function POST(
     }>;
   },
 ) {
-  const { id: billId } = await params;
+  const {
+    id: billId,
+  } =
+    await params;
 
-  if (!isValidUUID(billId)) {
+  /* --------------------------------------------------------------------------
+     VALIDATE BILL ID
+  -------------------------------------------------------------------------- */
+
+  if (
+    !isValidUUID(
+      billId,
+    )
+  ) {
     return NextResponse.json(
       {
-        error: true,
-        errorMessage: 'Invalid bill ID',
+        error:
+          true,
+
+        errorMessage:
+          'Invalid bill ID',
       },
       {
-        status: 400,
+        status:
+          400,
       },
     );
   }
 
-  let body: unknown;
+  /* --------------------------------------------------------------------------
+     REQUEST BODY
+  -------------------------------------------------------------------------- */
+
+  let body:
+    unknown;
 
   try {
-    body = await req.json();
+    body =
+      await req.json();
   } catch {
     return NextResponse.json(
       {
-        error: true,
-        errorMessage: 'Invalid request body.',
+        error:
+          true,
+
+        errorMessage:
+          'Invalid request body.',
       },
       {
-        status: 400,
+        status:
+          400,
       },
     );
   }
 
-  const paymentIntentId = getPaymentIntentId(
-    (body as Record<string, unknown> | null)
-      ?.paymentIntentId,
-  );
+  const paymentIntentId =
+    getPaymentIntentId(
+      (
+        body as
+          | Record<
+              string,
+              unknown
+            >
+          | null
+      )
+        ?.paymentIntentId,
+    );
 
-  if (!paymentIntentId) {
+  if (
+    !paymentIntentId
+  ) {
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
+
         errorMessage:
           'Missing or invalid paymentIntentId.',
       },
       {
-        status: 400,
+        status:
+          400,
       },
     );
   }
 
-  let bill = null;
+  /* --------------------------------------------------------------------------
+     LOAD FINAL BILL
+  -------------------------------------------------------------------------- */
+
+  let bill:
+    typeof FinalBill.$inferSelect |
+    null =
+    null;
 
   try {
-    const [row] = await Database
-      .select()
-      .from(FinalBill)
-      .where(eq(FinalBill.id, billId))
-      .limit(1);
+    const [row] =
+      await Database
+        .select()
+        .from(
+          FinalBill,
+        )
+        .where(
+          eq(
+            FinalBill.id,
+            billId,
+          ),
+        )
+        .limit(1);
 
-    bill = row ?? null;
-  } catch (error) {
+    bill =
+      row ??
+      null;
+  } catch (
+    error
+  ) {
     console.error(
       '[VerifyPayment] Final Cost lookup failed:',
       error,
@@ -170,12 +261,15 @@ export async function POST(
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
+
         errorMessage:
           'Unable to retrieve the Final Cost for payment verification.',
       },
       {
-        status: 500,
+        status:
+          500,
       },
     );
   }
@@ -183,54 +277,68 @@ export async function POST(
   if (!bill) {
     return NextResponse.json(
       {
-        error: true,
-        errorMessage: 'Final Cost not found',
-      },
-      {
-        status: 404,
-      },
-    );
-  }
+        error:
+          true,
 
-  if (bill.status === 'PAID') {
-    return NextResponse.json(
-      {
-        error: false,
-        paid: true,
-        message: 'Bill already paid',
-        referenceNumber: null,
-      },
-      {
-        status: 200,
-      },
-    );
-  }
-
-  if (bill.status !== 'OFFICIAL') {
-    return NextResponse.json(
-      {
-        error: true,
         errorMessage:
-          `This bill is currently ${bill.status} and is not ready for payment.`,
+          'Final Cost not found',
       },
       {
-        status: 422,
+        status:
+          404,
       },
     );
   }
 
   /*
-   * Retrieve the Payment Intent with the server-side secret key.
-   * Never trust the payment result supplied by the mobile client.
+   * OFFICIAL = normal QRPh completion.
+   *
+   * PAID is also allowed here because:
+   *
+   * - webhook may have completed first
+   * - an older broken online-payment attempt may have PAID status but
+   *   no receipt
+   *
+   * We still verify the Payment Intent before returning success.
    */
-  let paymentIntent;
+  if (
+    bill.status !==
+      'OFFICIAL' &&
+    bill.status !==
+      'PAID'
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          true,
+
+        errorMessage:
+          `This bill is currently ${bill.status} and is not ready for payment.`,
+      },
+      {
+        status:
+          422,
+      },
+    );
+  }
+
+  /* --------------------------------------------------------------------------
+     RETRIEVE PAYMENT INTENT SERVER-SIDE
+
+     Never trust payment success supplied by the mobile client.
+  -------------------------------------------------------------------------- */
+
+  let paymentIntent:
+    any;
 
   try {
     paymentIntent =
       await getPaymongoPaymentIntent(
         paymentIntentId,
       );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       '[VerifyPayment] PayMongo Payment Intent retrieval failed:',
       error,
@@ -238,60 +346,94 @@ export async function POST(
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
+
         errorMessage:
           'Unable to verify the payment with PayMongo right now.',
       },
       {
-        status: 502,
+        status:
+          502,
       },
     );
   }
 
   const intentAttributes =
-    getIntentAttributes(paymentIntent);
+    getIntentAttributes(
+      paymentIntent,
+    );
 
   const metadata =
-    getIntentMetadata(paymentIntent);
+    getIntentMetadata(
+      paymentIntent,
+    );
 
-  /*
-   * Bind the remote Payment Intent to this exact Final Cost.
-   * This prevents a client from submitting another bill's Payment Intent.
-   */
-  if (metadata?.final_bill_id !== billId) {
+  /* --------------------------------------------------------------------------
+     VERIFY OWNERSHIP
+  -------------------------------------------------------------------------- */
+
+  if (
+    metadata
+      ?.final_bill_id !==
+    billId
+  ) {
     console.error(
       '[VerifyPayment] Payment Intent does not belong to Final Cost:',
       {
         billId,
         paymentIntentId,
+        metadataFinalBillId:
+          metadata
+            ?.final_bill_id,
       },
     );
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
+
         errorMessage:
           'Payment verification failed because the payment does not belong to this Final Cost.',
       },
       {
-        status: 403,
+        status:
+          403,
       },
     );
   }
 
-  const expectedAmount = Math.round(
-    (Number.parseFloat(
-      String(bill.grandTotal ?? 0),
-    ) || 0) * 100,
-  );
+  /* --------------------------------------------------------------------------
+     VERIFY AMOUNT
+  -------------------------------------------------------------------------- */
 
-  const remoteAmount = Number(
-    intentAttributes?.amount ?? 0,
-  );
+  const expectedAmount =
+    Math.round(
+      (
+        Number.parseFloat(
+          String(
+            bill.grandTotal ??
+              0,
+          ),
+        ) ||
+        0
+      ) *
+        100,
+    );
+
+  const remoteAmount =
+    Number(
+      intentAttributes
+        ?.amount ??
+        0,
+    );
 
   if (
-    expectedAmount <= 0 ||
-    remoteAmount !== expectedAmount
+    expectedAmount <=
+      0 ||
+    remoteAmount !==
+      expectedAmount
   ) {
     console.error(
       '[VerifyPayment] Payment amount mismatch:',
@@ -305,42 +447,66 @@ export async function POST(
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
+
         errorMessage:
           'Payment verification failed because the payment amount does not match the Final Cost.',
       },
       {
-        status: 409,
+        status:
+          409,
       },
     );
   }
 
-  const remoteCurrency = String(
-    intentAttributes?.currency ??
-      'PHP',
-  )
-    .trim()
-    .toUpperCase();
+  /* --------------------------------------------------------------------------
+     VERIFY CURRENCY
+  -------------------------------------------------------------------------- */
 
-  if (remoteCurrency !== 'PHP') {
+  const remoteCurrency =
+    String(
+      intentAttributes
+        ?.currency ??
+        'PHP',
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    remoteCurrency !==
+    'PHP'
+  ) {
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
+
         errorMessage:
           'Payment verification failed because the payment currency is not PHP.',
       },
       {
-        status: 409,
+        status:
+          409,
       },
     );
   }
 
+  /* --------------------------------------------------------------------------
+     VERIFY PAYMENT METHOD
+  -------------------------------------------------------------------------- */
+
   const paymentMethod =
-    getIntentPaymentMethod(paymentIntent);
+    getIntentPaymentMethod(
+      paymentIntent,
+    );
 
   const expectedPaymentMethod =
-    typeof metadata?.payment_method === 'string'
-      ? metadata.payment_method
+    typeof metadata
+      ?.payment_method ===
+      'string'
+      ? metadata
+          .payment_method
           .trim()
           .toLowerCase()
       : null;
@@ -349,228 +515,281 @@ export async function POST(
     expectedPaymentMethod &&
     paymentMethod &&
     expectedPaymentMethod !==
-      String(paymentMethod)
-        .trim()
-        .toLowerCase()
+      paymentMethod
   ) {
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
+
         errorMessage:
           'Payment verification failed because the payment method does not match the payment session.',
       },
       {
-        status: 409,
+        status:
+          409,
       },
     );
   }
 
-  const intentStatus = String(
-    intentAttributes?.status ?? '',
-  )
-    .trim()
-    .toLowerCase();
-
-  if (intentStatus !== 'succeeded') {
+  /*
+   * AutoCare currently allows QRPh only.
+   */
+  if (
+    paymentMethod &&
+    paymentMethod !==
+      'qrph'
+  ) {
     return NextResponse.json(
       {
-        error: false,
-        paid: false,
-        status: intentStatus || 'unknown',
+        error:
+          true,
+
+        errorMessage:
+          'Payment verification failed because this payment is not QRPh.',
+      },
+      {
+        status:
+          409,
+      },
+    );
+  }
+
+  /* --------------------------------------------------------------------------
+     VERIFY PAYMONGO STATUS
+  -------------------------------------------------------------------------- */
+
+  const intentStatus =
+    String(
+      intentAttributes
+        ?.status ??
+        '',
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    intentStatus !==
+    'succeeded'
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          false,
+
+        paid:
+          false,
+
+        status:
+          intentStatus ||
+          'unknown',
+
         message:
           'Payment has not completed yet.',
       },
       {
-        status: 200,
+        status:
+          200,
       },
     );
   }
 
-  /*
-   * PayMongo has confirmed that the Payment Intent succeeded.
-   * Transition ONLY OFFICIAL -> PAID. This prevents a stale or unrelated
-   * verification call from ever promoting PENDING/PARKED to PAID.
-   */
-  let updatedBill = null;
+  /* --------------------------------------------------------------------------
+     PAYMONGO CONFIRMED SUCCESS
+
+     IMPORTANT:
+
+     Do NOT manually update FinalBill to PAID here.
+
+     generatePaymentReceipt() owns BOTH:
+
+       receipt creation
+       +
+       OFFICIAL -> PAID
+
+     inside one database transaction.
+  -------------------------------------------------------------------------- */
+
+  let receiptResult:
+    Awaited<
+      ReturnType<
+        typeof generatePaymentReceipt
+      >
+    >;
 
   try {
-    const result = await Database
-      .update(FinalBill)
-      .set({
-        status: 'PAID',
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(FinalBill.id, billId),
-          eq(FinalBill.status, 'OFFICIAL'),
-        ),
-      )
-      .returning();
+    receiptResult =
+      await generatePaymentReceipt(
+        billId,
+        {
+          paymentMethod:
+            'QRPH',
 
-    updatedBill = result?.[0] ?? null;
-  } catch (error) {
-    console.error(
-      '[VerifyPayment] Failed to mark Final Cost as PAID:',
-      error,
-    );
-
-    return NextResponse.json(
-      {
-        error: true,
-        paid: false,
-        errorMessage:
-          'PayMongo confirmed the payment, but the Final Cost could not be marked as PAID.',
-      },
-      {
-        status: 500,
-      },
-    );
-  }
-
-  /*
-   * A PayMongo webhook may win the race and update the bill first.
-   * Treat that as a successful, idempotent verification instead of an
-   * error and do not generate a second receipt/notification here.
-   */
-  if (!updatedBill) {
-    try {
-      const [currentBill] = await Database
-        .select({
-          id: FinalBill.id,
-          status: FinalBill.status,
-        })
-        .from(FinalBill)
-        .where(eq(FinalBill.id, billId))
-        .limit(1);
-
-      if (currentBill?.status === 'PAID') {
-        return NextResponse.json(
-          {
-            error: false,
-            paid: true,
+          paymentReference:
             paymentIntentId,
-            message:
-              'Payment verified and Final Cost is already marked as paid.',
-            referenceNumber: null,
-            receiptData: null,
-            receiptWarning: null,
-          },
-          {
-            status: 200,
-          },
-        );
-      }
-    } catch (raceError) {
-      console.error(
-        '[VerifyPayment] Could not resolve concurrent PAID update:',
-        raceError,
+
+          idempotent:
+            true,
+
+          expectedStatus:
+            'OFFICIAL',
+        },
       );
-    }
-
-    return NextResponse.json(
-      {
-        error: true,
-        paid: false,
-        errorMessage:
-          'PayMongo confirmed the payment, but the Final Cost could not be updated.',
-      },
-      {
-        status: 500,
-      },
-    );
-  }
-
-  let referenceNumber = null;
-  let receiptData = null;
-  let receiptWarning = null;
-
-  try {
-    const receiptResult =
-      await generatePaymentReceipt(billId);
-
-    referenceNumber =
-      receiptResult?.referenceNumber ??
-      null;
-
-    receiptData =
-      receiptResult?.receiptData ??
-      null;
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
-      '[VerifyPayment] Receipt generation failed:',
+      '[VerifyPayment] Payment finalization failed:',
       error,
     );
 
-    receiptWarning =
-      error instanceof Error
-        ? error.message
-        : 'Payment succeeded but receipt generation failed.';
+    return NextResponse.json(
+      {
+        error:
+          true,
+
+        paid:
+          false,
+
+        errorMessage:
+          error instanceof
+          Error
+            ? error.message
+            : 'PayMongo confirmed the payment, but AutoCare could not finalize the payment and receipt.',
+      },
+      {
+        status:
+          500,
+      },
+    );
   }
 
-  /*
-   * Notify the customer after PAID has been persisted.
-   */
-  try {
-    const [appointment] =
-      await Database
-        .select()
-        .from(Appointments)
-        .where(
-          eq(
-            Appointments.id,
-            updatedBill.appointmentId,
-          ),
-        )
-        .limit(1);
+  /* --------------------------------------------------------------------------
+     MOBILE CUSTOMER NOTIFICATION
 
-    if (appointment) {
-      const [customer] =
+     Only the request that actually CREATED the receipt sends the notification.
+
+     If webhook already processed it:
+       created = false
+
+     so polling does not send another notification.
+  -------------------------------------------------------------------------- */
+
+  if (
+    receiptResult.created
+  ) {
+    try {
+      const [
+        appointment,
+      ] =
         await Database
           .select()
-          .from(Customers)
+          .from(
+            Appointments,
+          )
           .where(
             eq(
-              Customers.id,
-              appointment.customerId,
+              Appointments.id,
+              bill.appointmentId,
             ),
           )
           .limit(1);
 
-      if (customer) {
-        mobilePaymentsTriggers
-          .onFinalBillPaid({
-            customerId: customer.id,
-            trackingNumber:
-              appointment.trackingNumber,
-            appointmentId:
-              updatedBill.appointmentId,
-            billId,
-          })
-          .catch(console.error);
+      if (
+        appointment
+      ) {
+        const [
+          customer,
+        ] =
+          await Database
+            .select()
+            .from(
+              Customers,
+            )
+            .where(
+              eq(
+                Customers.id,
+                appointment.customerId,
+              ),
+            )
+            .limit(1);
+
+        if (
+          customer
+        ) {
+          mobilePaymentsTriggers
+            .onFinalBillPaid({
+              customerId:
+                customer.id,
+
+              trackingNumber:
+                appointment.trackingNumber,
+
+              appointmentId:
+                bill.appointmentId,
+
+              billId,
+            })
+            .catch(
+              error => {
+                console.error(
+                  '[VerifyPayment] Mobile payment trigger failed:',
+                  error,
+                );
+              },
+            );
+        }
       }
+    } catch (
+      notificationError
+    ) {
+      console.error(
+        '[VerifyPayment] Payment notification failed:',
+        notificationError,
+      );
     }
-  } catch (notificationError) {
-    console.error(
-      '[VerifyPayment] Payment notification failed:',
-      notificationError,
-    );
   }
+
+  /* --------------------------------------------------------------------------
+     SUCCESS
+  -------------------------------------------------------------------------- */
 
   return NextResponse.json(
     {
-      error: false,
-      paid: true,
+      error:
+        false,
+
+      paid:
+        true,
+
+      status:
+        'succeeded',
+
       paymentIntentId,
-      message: receiptWarning
-        ? 'Payment verified and Final Cost marked as paid. Receipt generation requires attention.'
-        : 'Payment verified and processed.',
-      referenceNumber,
-      receiptData,
-      receiptWarning,
+
+      paymentMethod:
+        'qrph',
+
+      referenceNumber:
+        receiptResult.referenceNumber,
+
+      receiptData:
+        receiptResult.receiptData,
+
+      receiptCreated:
+        receiptResult.created,
+
+      alreadyProcessed:
+        receiptResult.alreadyProcessed,
+
+      message:
+        receiptResult.created
+          ? 'Payment verified. Final Cost marked as paid and receipt generated.'
+          : 'Payment verified. Final Cost and receipt were already processed.',
     },
     {
-      status: 200,
+      status:
+        200,
     },
   );
 }

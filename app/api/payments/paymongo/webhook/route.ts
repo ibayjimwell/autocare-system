@@ -1,3 +1,5 @@
+// app/api/payments/paymongo/webhook/route.ts
+
 import {
   createHmac,
   timingSafeEqual,
@@ -25,7 +27,6 @@ import {
 } from '@/database/models/customers/customers.model';
 
 import {
-  and,
   eq,
 } from 'drizzle-orm';
 
@@ -41,26 +42,34 @@ import {
   mobilePaymentsTriggers,
 } from '@/app-triggers/payments';
 
-/*
- * Explicitly use the Node.js runtime because this route uses
- * node:crypto and server-side database access.
- */
-export const runtime = 'nodejs';
+import {
+  isValidUUID,
+} from '@/utils/shared';
 
-/*
- * The webhook must execute dynamically for every incoming event.
- */
-export const dynamic = 'force-dynamic';
+/* ============================================================================
+   NEXT.JS ROUTE CONFIG
+============================================================================ */
+
+export const runtime =
+  'nodejs';
+
+export const dynamic =
+  'force-dynamic';
+
+/* ============================================================================
+   CONFIG
+============================================================================ */
 
 const WEBHOOK_SECRET =
-  process.env.PAYMONGO_WEBHOOK_SECRET;
+  process.env
+    .PAYMONGO_WEBHOOK_SECRET;
 
 const MAX_WEBHOOK_AGE_SECONDS =
   5 * 60;
 
-/* ================================================================
+/* ============================================================================
    BASIC HELPERS
-================================================================ */
+============================================================================ */
 
 function normalizeString(
   value: unknown,
@@ -75,14 +84,19 @@ function normalizeString(
   const normalized =
     value.trim();
 
-  return normalized || null;
+  return (
+    normalized ||
+    null
+  );
 }
 
 function parseSignatureHeader(
   header: string,
 ) {
   const parts =
-    header.split(',');
+    header.split(
+      ',',
+    );
 
   const values: Record<
     string,
@@ -90,13 +104,17 @@ function parseSignatureHeader(
   > = {};
 
   for (
-    const part of parts
+    const part of
+    parts
   ) {
     const separatorIndex =
-      part.indexOf('=');
+      part.indexOf(
+        '=',
+      );
 
     if (
-      separatorIndex <= 0
+      separatorIndex <=
+      0
     ) {
       continue;
     }
@@ -112,7 +130,8 @@ function parseSignatureHeader(
     const value =
       part
         .slice(
-          separatorIndex + 1,
+          separatorIndex +
+            1,
         )
         .trim();
 
@@ -161,9 +180,9 @@ function safeEqual(
   );
 }
 
-/* ================================================================
+/* ============================================================================
    PAYMONGO SIGNATURE VERIFICATION
-================================================================ */
+============================================================================ */
 
 function verifyPayMongoSignature(
   rawBody: string,
@@ -186,14 +205,14 @@ function verifyPayMongoSignature(
       signatureHeader,
     );
 
-  if (
-    !timestamp
-  ) {
+  if (!timestamp) {
     return false;
   }
 
   const timestampNumber =
-    Number(timestamp);
+    Number(
+      timestamp,
+    );
 
   if (
     !Number.isFinite(
@@ -205,7 +224,8 @@ function verifyPayMongoSignature(
 
   const currentTimestamp =
     Math.floor(
-      Date.now() / 1000,
+      Date.now() /
+        1000,
     );
 
   const age =
@@ -222,6 +242,7 @@ function verifyPayMongoSignature(
       '[PayMongo Webhook] Webhook timestamp is too old.',
       {
         age,
+
         maximumAge:
           MAX_WEBHOOK_AGE_SECONDS,
       },
@@ -233,7 +254,7 @@ function verifyPayMongoSignature(
   /*
    * PayMongo signs:
    *
-   * timestamp + "." + raw request body
+   *   timestamp + "." + raw body
    */
   const signedPayload =
     `${timestamp}.${rawBody}`;
@@ -246,15 +267,16 @@ function verifyPayMongoSignature(
       .update(
         signedPayload,
       )
-      .digest('hex');
+      .digest(
+        'hex',
+      );
 
   /*
-   * Test mode uses `te`.
-   * Live mode uses `li`.
+   * Test mode:
+   *   te
    *
-   * We accept whichever valid signature PayMongo included.
-   * The endpoint itself should still be registered in the correct
-   * PayMongo mode.
+   * Live mode:
+   *   li
    */
   if (
     testSignature &&
@@ -279,65 +301,60 @@ function verifyPayMongoSignature(
   return false;
 }
 
-/* ================================================================
+/* ============================================================================
    EVENT HELPERS
-================================================================ */
+============================================================================ */
 
 function getEventType(
   event: any,
 ) {
   return normalizeString(
-    event?.data?.attributes
+    event
+      ?.data
+      ?.attributes
       ?.type,
   );
 }
 
 function getWebhookPaymentIntentId(
   event: any,
-  eventType: string | null,
 ) {
   const resource =
-    event?.data?.attributes
-      ?.data ?? {};
-
-  const resourceAttributes =
-    resource?.attributes ??
+    event
+      ?.data
+      ?.attributes
+      ?.data ??
     {};
 
-  const candidates: unknown[] = [
-    resourceAttributes
-      ?.payment_intent_id,
+  const attributes =
+    resource
+      ?.attributes ??
+    {};
 
-    resourceAttributes
-      ?.payment_intent?.id,
+  const candidates:
+    unknown[] = [
+      attributes
+        ?.payment_intent_id,
 
-    event?.data?.attributes
-      ?.payment_intent_id,
+      attributes
+        ?.payment_intent
+        ?.id,
 
-    event?.data?.attributes
-      ?.payment_intent?.id,
-  ];
+      event
+        ?.data
+        ?.attributes
+        ?.payment_intent_id,
 
-  /*
-   * payment_intent.succeeded directly identifies the Payment Intent
-   * resource as data.id.
-   */
-  if (
-    eventType ===
-    'payment_intent.succeeded'
-  ) {
-    candidates.unshift(
-      resource?.id,
-    );
-
-    candidates.unshift(
-      event?.data?.id,
-    );
-  }
+      event
+        ?.data
+        ?.attributes
+        ?.payment_intent
+        ?.id,
+    ];
 
   for (
     const candidate of
-      candidates
+    candidates
   ) {
     const value =
       normalizeString(
@@ -353,19 +370,59 @@ function getWebhookPaymentIntentId(
     }
   }
 
-  /*
-   * Extra fallback for a resource that itself is a Payment Intent.
-   */
-  if (
-    resource?.type ===
-      'payment_intent' &&
-    typeof resource?.id ===
-      'string' &&
-    resource.id.startsWith(
-      'pi_',
+  return null;
+}
+
+function getIntentAttributes(
+  paymentIntent: any,
+) {
+  return (
+    paymentIntent
+      ?.data
+      ?.attributes ??
+    paymentIntent
+      ?.attributes ??
+    {}
+  );
+}
+
+function getIntentMetadata(
+  paymentIntent: any,
+) {
+  const metadata =
+    getIntentAttributes(
+      paymentIntent,
     )
+      ?.metadata;
+
+  return (
+    metadata &&
+    typeof metadata ===
+      'object'
+  )
+    ? metadata
+    : {};
+}
+
+function getIntentPaymentMethod(
+  paymentIntent: any,
+) {
+  const allowed =
+    getIntentAttributes(
+      paymentIntent,
+    )
+      ?.payment_method_allowed;
+
+  if (
+    Array.isArray(
+      allowed,
+    ) &&
+    typeof allowed[0] ===
+      'string'
   ) {
-    return resource.id;
+    return allowed[0]
+      .trim()
+      .toLowerCase();
   }
 
   return null;
@@ -375,17 +432,14 @@ function getWebhookFinalBillId(
   event: any,
   paymentIntent: any,
 ) {
-  const paymentIntentMetadata =
-    paymentIntent?.data
-      ?.attributes
-      ?.metadata ??
-    paymentIntent
-      ?.attributes
-      ?.metadata ??
-    {};
+  const intentMetadata =
+    getIntentMetadata(
+      paymentIntent,
+    );
 
-  const paymentResourceMetadata =
-    event?.data
+  const paymentMetadata =
+    event
+      ?.data
       ?.attributes
       ?.data
       ?.attributes
@@ -393,34 +447,34 @@ function getWebhookFinalBillId(
     {};
 
   const eventMetadata =
-    event?.data
+    event
+      ?.data
       ?.attributes
       ?.metadata ??
     {};
 
-  const candidates: unknown[] = [
-    paymentIntentMetadata
-      ?.final_bill_id,
+  const candidates:
+    unknown[] = [
+      intentMetadata
+        ?.final_bill_id,
 
-    paymentResourceMetadata
-      ?.final_bill_id,
+      paymentMetadata
+        ?.final_bill_id,
 
-    eventMetadata
-      ?.final_bill_id,
-  ];
+      eventMetadata
+        ?.final_bill_id,
+    ];
 
   for (
     const candidate of
-      candidates
+    candidates
   ) {
     const value =
       normalizeString(
         candidate,
       );
 
-    if (
-      value
-    ) {
+    if (value) {
       return value;
     }
   }
@@ -432,24 +486,23 @@ function getWebhookAmount(
   event: any,
   paymentIntent: any,
 ) {
-  const paymentIntentAmount =
-    paymentIntent?.data
-      ?.attributes
-      ?.amount ??
-    paymentIntent
-      ?.attributes
+  const intentAmount =
+    getIntentAttributes(
+      paymentIntent,
+    )
       ?.amount;
 
-  const webhookPaymentAmount =
-    event?.data
+  const paymentAmount =
+    event
+      ?.data
       ?.attributes
       ?.data
       ?.attributes
       ?.amount;
 
   return Number(
-    paymentIntentAmount ??
-      webhookPaymentAmount ??
+    intentAmount ??
+      paymentAmount ??
       0,
   );
 }
@@ -459,13 +512,12 @@ function getWebhookCurrency(
   paymentIntent: any,
 ) {
   const currency =
-    paymentIntent?.data
-      ?.attributes
+    getIntentAttributes(
+      paymentIntent,
+    )
       ?.currency ??
-    paymentIntent
-      ?.attributes
-      ?.currency ??
-    event?.data
+    event
+      ?.data
       ?.attributes
       ?.data
       ?.attributes
@@ -479,14 +531,9 @@ function getWebhookCurrency(
     .toUpperCase();
 }
 
-/* ================================================================
+/* ============================================================================
    HEALTH CHECK
-
-   This GET endpoint is only for verifying that the exact deployed
-   Vercel route exists.
-
-   PayMongo itself sends POST requests.
-================================================================ */
+============================================================================ */
 
 export async function GET() {
   console.log(
@@ -495,7 +542,8 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      ok: true,
+      ok:
+        true,
 
       service:
         'AutoCare PayMongo Webhook',
@@ -507,7 +555,8 @@ export async function GET() {
         'PayMongo webhook endpoint is reachable.',
     },
     {
-      status: 200,
+      status:
+        200,
 
       headers: {
         'Cache-Control':
@@ -517,21 +566,13 @@ export async function GET() {
   );
 }
 
-/* ================================================================
-   PAYMONGO WEBHOOK
-================================================================ */
+/* ============================================================================
+   POST WEBHOOK
+============================================================================ */
 
 export async function POST(
   req: NextRequest,
 ) {
-  /*
-   * IMPORTANT:
-   * This log happens before signature validation, JSON parsing,
-   * database access, or PayMongo API calls.
-   *
-   * Therefore, if this does not appear in Vercel logs, the request
-   * never reached this route.
-   */
   console.log(
     '[PayMongo Webhook] POST request received.',
     {
@@ -539,7 +580,8 @@ export async function POST(
         req.url,
 
       receivedAt:
-        new Date().toISOString(),
+        new Date()
+          .toISOString(),
 
       userAgent:
         req.headers.get(
@@ -548,28 +590,36 @@ export async function POST(
     },
   );
 
+  /* --------------------------------------------------------------------------
+     RAW BODY
+  -------------------------------------------------------------------------- */
+
   const rawBody =
     await req.text();
 
-  if (
-    !rawBody
-  ) {
+  if (!rawBody) {
     console.error(
       '[PayMongo Webhook] Empty request body.',
     );
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
 
         errorMessage:
           'Empty webhook body.',
       },
       {
-        status: 400,
+        status:
+          400,
       },
     );
   }
+
+  /* --------------------------------------------------------------------------
+     SIGNATURE HEADER
+  -------------------------------------------------------------------------- */
 
   const signature =
     req.headers.get(
@@ -579,29 +629,29 @@ export async function POST(
       'Paymongo-Signature',
     );
 
-  if (
-    !signature
-  ) {
+  if (!signature) {
     console.error(
       '[PayMongo Webhook] Missing PayMongo signature header.',
     );
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
 
         errorMessage:
           'Missing PayMongo webhook signature.',
       },
       {
-        status: 401,
+        status:
+          401,
       },
     );
   }
 
-  /* ============================================================
+  /* --------------------------------------------------------------------------
      VERIFY SIGNATURE
-  ============================================================ */
+  -------------------------------------------------------------------------- */
 
   let signatureValid =
     false;
@@ -622,13 +672,15 @@ export async function POST(
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
 
         errorMessage:
           'Webhook verification is not configured.',
       },
       {
-        status: 500,
+        status:
+          500,
       },
     );
   }
@@ -642,13 +694,15 @@ export async function POST(
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
 
         errorMessage:
           'Invalid PayMongo webhook signature.',
       },
       {
-        status: 401,
+        status:
+          401,
       },
     );
   }
@@ -657,11 +711,12 @@ export async function POST(
     '[PayMongo Webhook] Signature verified.',
   );
 
-  /* ============================================================
+  /* --------------------------------------------------------------------------
      PARSE EVENT
-  ============================================================ */
+  -------------------------------------------------------------------------- */
 
-  let event: any;
+  let event:
+    any;
 
   try {
     event =
@@ -678,13 +733,15 @@ export async function POST(
 
     return NextResponse.json(
       {
-        error: true,
+        error:
+          true,
 
         errorMessage:
           'Invalid webhook JSON.',
       },
       {
-        status: 400,
+        status:
+          400,
       },
     );
   }
@@ -700,76 +757,81 @@ export async function POST(
       eventType,
 
       livemode:
-        event?.data
+        event
+          ?.data
           ?.attributes
           ?.livemode,
     },
   );
 
-  /* ============================================================
-     SUPPORTED PAYMENT EVENTS
-  ============================================================ */
-
-  const supportedPaymentEvents =
-    new Set([
-      'payment.paid',
-    ]);
+  /* --------------------------------------------------------------------------
+     QRPH EXPIRED
+  -------------------------------------------------------------------------- */
 
   if (
-    !eventType ||
-    !supportedPaymentEvents.has(
-      eventType,
-    )
+    eventType ===
+    'qrph.expired'
   ) {
-    /*
-     * We acknowledge failed and unrelated events so PayMongo does
-     * not retry an event that AutoCare intentionally does not process.
-     */
-    if (
-      eventType ===
-      'qrph.expired'
-    ) {
-      console.warn(
-        '[PayMongo Webhook] QRPh payment expired event received.',
-      );
+    console.warn(
+      '[PayMongo Webhook] QRPh payment expired.',
+    );
 
-      return NextResponse.json(
-        {
-          received: true,
-          processed: false,
-          event: eventType,
-        },
-        {
-          status: 200,
-        },
-      );
-    }
+    return NextResponse.json(
+      {
+        received:
+          true,
 
-    if (
-      eventType ===
-      'payment.failed'
-    ) {
-      console.warn(
-        '[PayMongo Webhook] Payment failed event received.',
-      );
+        processed:
+          false,
 
-      return NextResponse.json(
-        {
-          received:
-            true,
+        event:
+          eventType,
+      },
+      {
+        status:
+          200,
+      },
+    );
+  }
 
-          processed:
-            false,
+  /* --------------------------------------------------------------------------
+     PAYMENT FAILED
+  -------------------------------------------------------------------------- */
 
-          event:
-            eventType,
-        },
-        {
-          status: 200,
-        },
-      );
-    }
+  if (
+    eventType ===
+    'payment.failed'
+  ) {
+    console.warn(
+      '[PayMongo Webhook] Payment failed.',
+    );
 
+    return NextResponse.json(
+      {
+        received:
+          true,
+
+        processed:
+          false,
+
+        event:
+          eventType,
+      },
+      {
+        status:
+          200,
+      },
+    );
+  }
+
+  /* --------------------------------------------------------------------------
+     ONLY PAYMENT.PAID FINALIZES THE BILL
+  -------------------------------------------------------------------------- */
+
+  if (
+    eventType !==
+    'payment.paid'
+  ) {
     console.log(
       '[PayMongo Webhook] Ignoring unsupported event:',
       eventType,
@@ -787,29 +849,26 @@ export async function POST(
           eventType,
       },
       {
-        status: 200,
+        status:
+          200,
       },
     );
   }
 
-  /* ============================================================
-     FIND PAYMENT INTENT
-  ============================================================ */
+  /* --------------------------------------------------------------------------
+     FIND PAYMENT INTENT ID
+  -------------------------------------------------------------------------- */
 
   const paymentIntentId =
     getWebhookPaymentIntentId(
       event,
-      eventType,
     );
 
   if (
     !paymentIntentId
   ) {
     console.error(
-      '[PayMongo Webhook] Successful payment event did not contain a Payment Intent ID.',
-      {
-        eventType,
-      },
+      '[PayMongo Webhook] payment.paid did not contain a Payment Intent ID.',
     );
 
     return NextResponse.json(
@@ -821,10 +880,11 @@ export async function POST(
           true,
 
         reason:
-          'No Payment Intent ID in successful payment event.',
+          'No Payment Intent ID in payment.paid event.',
       },
       {
-        status: 200,
+        status:
+          200,
       },
     );
   }
@@ -833,506 +893,539 @@ export async function POST(
     '[PayMongo Webhook] Payment Intent identified:',
     {
       paymentIntentId,
-      eventType,
     },
   );
 
-  /* ============================================================
-     SERVER-SIDE PAYMONGO VERIFICATION
-  ============================================================ */
+  /* --------------------------------------------------------------------------
+     RETRIEVE PAYMENT INTENT FROM PAYMONGO
+
+     We do not trust webhook values alone for Final Bill settlement.
+  -------------------------------------------------------------------------- */
+
+  let paymentIntent:
+    any;
 
   try {
-    const paymentIntent =
+    paymentIntent =
       await getPaymongoPaymentIntent(
         paymentIntentId,
       );
+  } catch (
+    error
+  ) {
+    console.error(
+      '[PayMongo Webhook] Unable to retrieve Payment Intent:',
+      error,
+    );
 
-    const attributes =
-      paymentIntent?.data
-        ?.attributes ??
-      {};
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-    const intentStatus =
-      String(
-        attributes?.status ??
-          '',
-      )
-        .trim()
-        .toLowerCase();
+        errorMessage:
+          'Unable to verify Payment Intent with PayMongo.',
+      },
+      {
+        /*
+         * Return a failure so PayMongo can retry the webhook.
+         */
+        status:
+          500,
+      },
+    );
+  }
 
-    console.log(
-      '[PayMongo Webhook] Payment Intent status:',
+  const intentAttributes =
+    getIntentAttributes(
+      paymentIntent,
+    );
+
+  const intentStatus =
+    String(
+      intentAttributes
+        ?.status ??
+        '',
+    )
+      .trim()
+      .toLowerCase();
+
+  console.log(
+    '[PayMongo Webhook] Payment Intent status:',
+    {
+      paymentIntentId,
+      intentStatus,
+    },
+  );
+
+  if (
+    intentStatus !==
+    'succeeded'
+  ) {
+    console.warn(
+      '[PayMongo Webhook] Payment Intent is not succeeded yet.',
       {
         paymentIntentId,
-
         intentStatus,
       },
     );
 
-    if (
-      intentStatus !==
-      'succeeded'
-    ) {
-      console.warn(
-        '[PayMongo Webhook] Payment Intent is not succeeded yet.',
-        {
-          paymentIntentId,
+    return NextResponse.json(
+      {
+        received:
+          true,
 
-          intentStatus,
-        },
-      );
+        processed:
+          false,
 
-      return NextResponse.json(
-        {
-          received:
-            true,
+        message:
+          'payment.paid was received, but Payment Intent is not succeeded.',
+      },
+      {
+        status:
+          200,
+      },
+    );
+  }
 
-          processed:
-            false,
+  /* --------------------------------------------------------------------------
+     FINAL BILL ID
+  -------------------------------------------------------------------------- */
 
-          message:
-            'Payment event received, but Payment Intent is not succeeded.',
-        },
-        {
-          status: 200,
-        },
-      );
-    }
+  const finalBillId =
+    getWebhookFinalBillId(
+      event,
+      paymentIntent,
+    );
 
-    /* ============================================================
-       FIND FINAL BILL
-    ============================================================ */
-
-    const finalBillId =
-      getWebhookFinalBillId(
-        event,
-        paymentIntent,
-      );
-
-    if (
-      !finalBillId
-    ) {
-      console.error(
-        '[PayMongo Webhook] Payment Intent has no final_bill_id metadata.',
-        {
-          paymentIntentId,
-
-          eventType,
-        },
-      );
-
-      return NextResponse.json(
-        {
-          error:
-            true,
-
-          errorMessage:
-            'Payment Intent metadata is incomplete.',
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    console.log(
-      '[PayMongo Webhook] Final Cost identified:',
+  if (
+    !finalBillId ||
+    !isValidUUID(
+      finalBillId,
+    )
+  ) {
+    console.error(
+      '[PayMongo Webhook] Invalid or missing final_bill_id metadata.',
       {
         finalBillId,
-
         paymentIntentId,
       },
     );
 
-    /* ============================================================
-       LOAD FINAL BILL
-    ============================================================ */
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-    const [
-      bill,
-    ] =
-      await Database
-        .select()
-        .from(
-          FinalBill,
-        )
-        .where(
-          eq(
-            FinalBill.id,
-            finalBillId,
-          ),
-        )
-        .limit(1);
+        errorMessage:
+          'Payment Intent metadata is incomplete.',
+      },
+      {
+        status:
+          400,
+      },
+    );
+  }
 
-    if (
-      !bill
-    ) {
-      console.error(
-        '[PayMongo Webhook] Final Cost not found.',
-        {
+  /* --------------------------------------------------------------------------
+     LOAD FINAL BILL
+  -------------------------------------------------------------------------- */
+
+  const [bill] =
+    await Database
+      .select()
+      .from(
+        FinalBill,
+      )
+      .where(
+        eq(
+          FinalBill.id,
           finalBillId,
+        ),
+      )
+      .limit(1);
 
-          paymentIntentId,
+  if (!bill) {
+    console.error(
+      '[PayMongo Webhook] Final Cost not found.',
+      {
+        finalBillId,
+        paymentIntentId,
+      },
+    );
 
-          eventType,
-        },
-      );
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-      return NextResponse.json(
-        {
-          error:
-            true,
+        errorMessage:
+          'Final Cost not found.',
+      },
+      {
+        status:
+          404,
+      },
+    );
+  }
 
-          errorMessage:
-            'Final Cost not found.',
-        },
-        {
-          status: 404,
-        },
-      );
-    }
-
-    /* ============================================================
-       IDEMPOTENCY
-    ============================================================ */
-
-    if (
-      bill.status ===
+  /*
+   * PAID is accepted because another verify-payment request may have won
+   * the race.
+   *
+   * generatePaymentReceipt() will return the existing receipt.
+   */
+  if (
+    bill.status !==
+      'OFFICIAL' &&
+    bill.status !==
       'PAID'
-    ) {
-      console.log(
-        '[PayMongo Webhook] Final Cost is already PAID.',
-        {
-          finalBillId,
+  ) {
+    console.error(
+      '[PayMongo Webhook] Final Cost is not payable.',
+      {
+        finalBillId,
+        paymentIntentId,
+        status:
+          bill.status,
+      },
+    );
 
-          paymentIntentId,
-        },
-      );
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-      return NextResponse.json(
-        {
-          received:
-            true,
+        errorMessage:
+          `Final Cost is currently ${bill.status}; payment was not applied.`,
+      },
+      {
+        status:
+          409,
+      },
+    );
+  }
 
-          processed:
-            true,
+  /* --------------------------------------------------------------------------
+     VERIFY PAYMENT INTENT BELONGS TO FINAL BILL
+  -------------------------------------------------------------------------- */
 
-          alreadyPaid:
-            true,
-        },
-        {
-          status: 200,
-        },
-      );
-    }
+  const metadata =
+    getIntentMetadata(
+      paymentIntent,
+    );
 
-    /* ============================================================
-       ONLY OFFICIAL MAY BECOME PAID
-    ============================================================ */
+  if (
+    metadata
+      ?.final_bill_id !==
+    finalBillId
+  ) {
+    console.error(
+      '[PayMongo Webhook] Payment Intent Final Bill metadata mismatch.',
+      {
+        finalBillId,
+        paymentIntentId,
+        metadataFinalBillId:
+          metadata
+            ?.final_bill_id,
+      },
+    );
 
-    if (
-      bill.status !==
-      'OFFICIAL'
-    ) {
-      console.error(
-        '[PayMongo Webhook] Final Cost is not OFFICIAL.',
-        {
-          finalBillId,
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-          paymentIntentId,
+        errorMessage:
+          'Payment Intent does not belong to this Final Cost.',
+      },
+      {
+        status:
+          403,
+      },
+    );
+  }
 
-          currentStatus:
-            bill.status,
-        },
-      );
+  /* --------------------------------------------------------------------------
+     VERIFY AMOUNT
+  -------------------------------------------------------------------------- */
 
-      return NextResponse.json(
-        {
-          error:
-            true,
-
-          errorMessage:
-            `Final Cost is currently ${bill.status}; payment was not applied.`,
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ============================================================
-       VERIFY AMOUNT
-    ============================================================ */
-
-    const expectedAmount =
-      Math.round(
-        (Number.parseFloat(
+  const expectedAmount =
+    Math.round(
+      (
+        Number.parseFloat(
           String(
             bill.grandTotal ??
               0,
           ),
-        ) || 0) *
-          100,
-      );
+        ) ||
+        0
+      ) *
+        100,
+    );
 
-    const remoteAmount =
-      getWebhookAmount(
-        event,
-        paymentIntent,
-      );
+  const remoteAmount =
+    getWebhookAmount(
+      event,
+      paymentIntent,
+    );
 
-    console.log(
-      '[PayMongo Webhook] Payment amount verification:',
+  console.log(
+    '[PayMongo Webhook] Payment amount verification:',
+    {
+      finalBillId,
+      paymentIntentId,
+      expectedAmount,
+      remoteAmount,
+    },
+  );
+
+  if (
+    expectedAmount <=
+      0 ||
+    expectedAmount !==
+      remoteAmount
+  ) {
+    console.error(
+      '[PayMongo Webhook] Payment amount mismatch.',
       {
         finalBillId,
-
         paymentIntentId,
-
         expectedAmount,
-
         remoteAmount,
       },
     );
 
-    if (
-      expectedAmount <=
-        0 ||
-      expectedAmount !==
-        remoteAmount
-    ) {
-      console.error(
-        '[PayMongo Webhook] Payment amount mismatch.',
-        {
-          finalBillId,
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-          paymentIntentId,
+        errorMessage:
+          'Payment amount does not match Final Cost.',
+      },
+      {
+        status:
+          409,
+      },
+    );
+  }
 
-          expectedAmount,
+  /* --------------------------------------------------------------------------
+     VERIFY CURRENCY
+  -------------------------------------------------------------------------- */
 
-          remoteAmount,
-        },
-      );
+  const remoteCurrency =
+    getWebhookCurrency(
+      event,
+      paymentIntent,
+    );
 
-      return NextResponse.json(
-        {
-          error:
-            true,
-
-          errorMessage:
-            'Payment amount does not match Final Cost.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ============================================================
-       VERIFY CURRENCY
-    ============================================================ */
-
-    const remoteCurrency =
-      getWebhookCurrency(
-        event,
-        paymentIntent,
-      );
-
-    if (
-      remoteCurrency !==
-      'PHP'
-    ) {
-      console.error(
-        '[PayMongo Webhook] Currency mismatch.',
-        {
-          finalBillId,
-
-          paymentIntentId,
-
-          remoteCurrency,
-        },
-      );
-
-      return NextResponse.json(
-        {
-          error:
-            true,
-
-          errorMessage:
-            'Payment currency does not match the Final Cost currency.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ============================================================
-       OFFICIAL -> PAID
-    ============================================================ */
-
-    /*
-     * The WHERE clause is intentionally:
-     *
-     *   id = finalBillId
-     *   AND status = OFFICIAL
-     *
-     * This means the webhook cannot accidentally convert a different
-     * state into PAID.
-     */
-    const updated =
-      await Database
-        .update(
-          FinalBill,
-        )
-        .set({
-          status:
-            'PAID',
-
-          updatedAt:
-            new Date(),
-        })
-        .where(
-          and(
-            eq(
-              FinalBill.id,
-              finalBillId,
-            ),
-
-            eq(
-              FinalBill.status,
-              'OFFICIAL',
-            ),
-          ),
-        )
-        .returning();
-
-    if (
-      !updated.length
-    ) {
-      const [
-        currentBill,
-      ] =
-        await Database
-          .select({
-            status:
-              FinalBill.status,
-          })
-          .from(
-            FinalBill,
-          )
-          .where(
-            eq(
-              FinalBill.id,
-              finalBillId,
-            ),
-          )
-          .limit(1);
-
-      if (
-        currentBill?.status ===
-        'PAID'
-      ) {
-        return NextResponse.json(
-          {
-            received:
-              true,
-
-            processed:
-              true,
-
-            alreadyPaid:
-              true,
-          },
-          {
-            status: 200,
-          },
-        );
-      }
-
-      console.error(
-        '[PayMongo Webhook] Payment succeeded but Final Cost transition failed.',
-        {
-          finalBillId,
-
-          paymentIntentId,
-
-          currentStatus:
-            currentBill?.status ??
-            null,
-        },
-      );
-
-      return NextResponse.json(
-        {
-          error:
-            true,
-
-          errorMessage:
-            'Payment succeeded, but the Final Cost could not be transitioned to PAID.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    const paidBill =
-      updated[0];
-
-    console.log(
-      '[PayMongo Webhook] ✅ FINAL COST MARKED PAID.',
+  if (
+    remoteCurrency !==
+    'PHP'
+  ) {
+    console.error(
+      '[PayMongo Webhook] Currency mismatch.',
       {
         finalBillId,
-
         paymentIntentId,
-
-        previousStatus:
-          'OFFICIAL',
-
-        newStatus:
-          paidBill.status,
-
-        updatedAt:
-          paidBill.updatedAt,
+        remoteCurrency,
       },
     );
 
-    /* ============================================================
-       RECEIPT
-    ============================================================ */
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-    let receiptWarning =
-      null;
+        errorMessage:
+          'Payment currency does not match the Final Cost currency.',
+      },
+      {
+        status:
+          409,
+      },
+    );
+  }
 
-    try {
+  /* --------------------------------------------------------------------------
+     VERIFY QRPH
+  -------------------------------------------------------------------------- */
+
+  const paymentMethod =
+    getIntentPaymentMethod(
+      paymentIntent,
+    );
+
+  const metadataPaymentMethod =
+    typeof metadata
+      ?.payment_method ===
+      'string'
+      ? metadata
+          .payment_method
+          .trim()
+          .toLowerCase()
+      : null;
+
+  if (
+    metadataPaymentMethod &&
+    metadataPaymentMethod !==
+      'qrph'
+  ) {
+    console.error(
+      '[PayMongo Webhook] Metadata payment method is not QRPh.',
+      {
+        finalBillId,
+        paymentIntentId,
+        metadataPaymentMethod,
+      },
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          true,
+
+        errorMessage:
+          'Payment method does not match AutoCare QRPh payment session.',
+      },
+      {
+        status:
+          409,
+      },
+    );
+  }
+
+  if (
+    paymentMethod &&
+    paymentMethod !==
+      'qrph'
+  ) {
+    console.error(
+      '[PayMongo Webhook] Payment Intent is not QRPh.',
+      {
+        finalBillId,
+        paymentIntentId,
+        paymentMethod,
+      },
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          true,
+
+        errorMessage:
+          'Payment Intent is not a QRPh payment.',
+      },
+      {
+        status:
+          409,
+      },
+    );
+  }
+
+  /* --------------------------------------------------------------------------
+     FINALIZE PAYMENT + GENERATE RECEIPT
+
+     This is now ONE shared atomic operation.
+
+     DO NOT manually update FinalBill to PAID before this.
+  -------------------------------------------------------------------------- */
+
+  let receiptResult:
+    Awaited<
+      ReturnType<
+        typeof generatePaymentReceipt
+      >
+    >;
+
+  try {
+    receiptResult =
       await generatePaymentReceipt(
         finalBillId,
-      );
-
-      console.log(
-        '[PayMongo Webhook] Receipt generated.',
         {
-          finalBillId,
+          paymentMethod:
+            'QRPH',
+
+          paymentReference:
+            paymentIntentId,
+
+          idempotent:
+            true,
+
+          expectedStatus:
+            'OFFICIAL',
         },
       );
-    } catch (
-      error
-    ) {
-      console.error(
-        '[PayMongo Webhook] Receipt generation failed:',
-        error,
-      );
+  } catch (
+    error
+  ) {
+    console.error(
+      '[PayMongo Webhook] Payment finalization/receipt generation failed:',
+      error,
+    );
 
-      receiptWarning =
-        error instanceof Error
-          ? error.message
-          : 'Payment succeeded but receipt generation failed.';
-    }
+    /*
+     * Return 500 so PayMongo can retry.
+     *
+     * Because receipt + PAID transition are transactional, a failed receipt
+     * insertion will not leave a newly processed bill in a half-completed
+     * state.
+     */
+    return NextResponse.json(
+      {
+        error:
+          true,
 
-    /* ============================================================
-       MOBILE CUSTOMER NOTIFICATION
-    ============================================================ */
+        errorMessage:
+          error instanceof
+          Error
+            ? error.message
+            : 'Unable to finalize payment and generate receipt.',
+      },
+      {
+        status:
+          500,
+      },
+    );
+  }
 
+  console.log(
+    '[PayMongo Webhook] Payment finalized.',
+    {
+      finalBillId,
+
+      paymentIntentId,
+
+      referenceNumber:
+        receiptResult.referenceNumber,
+
+      receiptCreated:
+        receiptResult.created,
+
+      alreadyProcessed:
+        receiptResult.alreadyProcessed,
+    },
+  );
+
+  /* --------------------------------------------------------------------------
+     MOBILE CUSTOMER NOTIFICATION
+
+     Only send when THIS invocation actually created the receipt/payment.
+
+     This prevents:
+       webhook notification
+       +
+       polling notification
+       +
+       retry notification
+  -------------------------------------------------------------------------- */
+
+  if (
+    receiptResult.created
+  ) {
     try {
       const [
         appointment,
@@ -1404,60 +1497,62 @@ export async function POST(
         notificationError,
       );
     }
-
-    console.log(
-      '[PayMongo Webhook] ✅ PAYMENT WEBHOOK COMPLETED.',
-      {
-        finalBillId,
-
-        paymentIntentId,
-
-        eventType,
-
-        receiptWarning,
-      },
-    );
-
-    return NextResponse.json(
-      {
-        received:
-          true,
-
-        processed:
-          true,
-
-        finalBillId,
-
-        paymentIntentId,
-
-        status:
-          'PAID',
-
-        receiptWarning,
-      },
-      {
-        status: 200,
-      },
-    );
-  } catch (
-    error
-  ) {
-    console.error(
-      '[PayMongo Webhook] Processing failed:',
-      error,
-    );
-
-    return NextResponse.json(
-      {
-        error:
-          true,
-
-        errorMessage:
-          'Unable to process PayMongo payment event.',
-      },
-      {
-        status: 500,
-      },
-    );
   }
+
+  /* --------------------------------------------------------------------------
+     SUCCESS
+  -------------------------------------------------------------------------- */
+
+  console.log(
+    '[PayMongo Webhook] ✅ PAYMENT WEBHOOK COMPLETED.',
+    {
+      finalBillId,
+
+      paymentIntentId,
+
+      eventType,
+
+      referenceNumber:
+        receiptResult.referenceNumber,
+
+      receiptCreated:
+        receiptResult.created,
+
+      alreadyProcessed:
+        receiptResult.alreadyProcessed,
+    },
+  );
+
+  return NextResponse.json(
+    {
+      received:
+        true,
+
+      processed:
+        true,
+
+      finalBillId,
+
+      paymentIntentId,
+
+      paymentMethod:
+        'qrph',
+
+      status:
+        'PAID',
+
+      referenceNumber:
+        receiptResult.referenceNumber,
+
+      receiptCreated:
+        receiptResult.created,
+
+      alreadyProcessed:
+        receiptResult.alreadyProcessed,
+    },
+    {
+      status:
+        200,
+    },
+  );
 }
