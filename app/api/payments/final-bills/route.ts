@@ -1,130 +1,268 @@
-// app/api/payments/final-bills/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
+
 import { FinalBill } from "@/database/models/payments/final-bill.model";
 import { FinalBillFindings } from "@/database/models/payments/final-bill-findings.model";
 import { FinalBillFees } from "@/database/models/payments/final-bill-fees.model";
 import { FinalBillDiscounts } from "@/database/models/payments/final-bill-discounts.model";
 import { FinalBillWorkTasks } from "@/database/models/payments/final-bill-work-tasks.model";
+import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
 import { Appointments } from "@/database/models/appointments/appointments.model";
 import { Customers } from "@/database/models/customers/customers.model";
-import { eq, and, inArray } from "drizzle-orm";
+import { Vehicles } from "@/database/models/customers/vehicles.model";
+
+import {
+  eq,
+  and,
+  inArray,
+  asc,
+  type SQL,
+} from "drizzle-orm";
+
 import { isValidUUID } from "@/utils/shared";
 
-// --------------------------------------------------------------
-// GET /api/payments/final-bills – Get Final Costs with optional filters
-// --------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+
   const status = searchParams.get("status");
   const appointmentId = searchParams.get("appointmentId");
   const customerId = searchParams.get("customerId");
 
+  if (appointmentId && !isValidUUID(appointmentId)) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: "Invalid appointment ID.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (customerId && !isValidUUID(customerId)) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage: "Invalid customer ID.",
+      },
+      { status: 400 }
+    );
+  }
+
   try {
-    // Build filter conditions for FinalBill columns
-    const billConditions = [];
-    if (status) billConditions.push(eq(FinalBill.status, status));
-    if (appointmentId) billConditions.push(eq(FinalBill.appointmentId, appointmentId));
+    const conditions: SQL[] = [];
 
-    // Base query selecting all FinalBill columns explicitly
-    let query = Database.select({
-      id: FinalBill.id,
-      appointmentId: FinalBill.appointmentId,
-      estimateId: FinalBill.estimateId,
-      serviceSubtotal: FinalBill.serviceSubtotal,
-      findingsSubtotal: FinalBill.findingsSubtotal,
-      workTasksSubtotal: FinalBill.workTasksSubtotal,
-      feesTotal: FinalBill.feesTotal,
-      discountTotal: FinalBill.discountTotal,
-      grandTotal: FinalBill.grandTotal,
-      status: FinalBill.status,
-      createdAt: FinalBill.createdAt,
-      updatedAt: FinalBill.updatedAt,
-    }).from(FinalBill);
-
-    // If customerId is provided, join Appointments and Customers to filter
-    if (customerId && isValidUUID(customerId)) {
-      query = query
-        .leftJoin(Appointments, eq(FinalBill.appointmentId, Appointments.id))
-        .leftJoin(Customers, eq(Appointments.customerId, Customers.id))
-        .where(eq(Customers.id, customerId));
-
-      // Apply additional FinalBill filters if any
-      if (billConditions.length > 0) {
-        query = query.where(and(...billConditions));
-      }
-    } else if (billConditions.length > 0) {
-      query = query.where(and(...billConditions));
+    if (status) {
+      conditions.push(
+        eq(FinalBill.status, status.toUpperCase())
+      );
     }
 
-    const bills = await query.orderBy(FinalBill.createdAt);
+    if (appointmentId) {
+      conditions.push(
+        eq(FinalBill.appointmentId, appointmentId)
+      );
+    }
 
-    // Extract bill IDs for sub-entity queries
-    const billIds = bills.map((b) => b.id);
-    let findingsMap: Record<string, any[]> = {};
-    let feesMap: Record<string, any[]> = {};
-    let discountsMap: Record<string, any[]> = {};
-    let workTasksMap: Record<string, any[]> = {};
+    if (customerId) {
+      conditions.push(
+        eq(Customers.id, customerId)
+      );
+    }
+
+    const query = Database
+      .select({
+        id: FinalBill.id,
+        appointmentId: FinalBill.appointmentId,
+        estimateId: FinalBill.estimateId,
+
+        serviceSubtotal: FinalBill.serviceSubtotal,
+        findingsSubtotal: FinalBill.findingsSubtotal,
+        workTasksSubtotal: FinalBill.workTasksSubtotal,
+        feesTotal: FinalBill.feesTotal,
+        discountTotal: FinalBill.discountTotal,
+        grandTotal: FinalBill.grandTotal,
+
+        status: FinalBill.status,
+        createdAt: FinalBill.createdAt,
+        updatedAt: FinalBill.updatedAt,
+
+        // Estimate data required by FinalBillCard.
+        estimate: {
+          id: EstimatedCosts.id,
+          grandTotal: EstimatedCosts.grandTotal,
+          status: EstimatedCosts.status,
+          createdAt: EstimatedCosts.createdAt,
+          updatedAt: EstimatedCosts.updatedAt,
+        },
+
+        // Appointment data required by FinalBillCard.
+        appointment: {
+          id: Appointments.id,
+          trackingNumber: Appointments.trackingNumber,
+          appointmentDate: Appointments.appointmentDate,
+          appointmentTime: Appointments.appointmentTime,
+
+          customer: {
+            id: Customers.id,
+            fullname: Customers.fullname,
+            email: Customers.email,
+            phone: Customers.phone,
+          },
+
+          vehicle: {
+            id: Vehicles.id,
+            make: Vehicles.make,
+            model: Vehicles.model,
+            year: Vehicles.year,
+            plateNumber: Vehicles.plateNumber,
+          },
+        },
+      })
+      .from(FinalBill)
+      .leftJoin(
+        EstimatedCosts,
+        eq(FinalBill.estimateId, EstimatedCosts.id)
+      )
+      .leftJoin(
+        Appointments,
+        eq(FinalBill.appointmentId, Appointments.id)
+      )
+      .leftJoin(
+        Customers,
+        eq(Appointments.customerId, Customers.id)
+      )
+      .leftJoin(
+        Vehicles,
+        eq(Appointments.vehicleId, Vehicles.id)
+      )
+      .$dynamic();
+
+    if (conditions.length > 0) {
+      query.where(and(...conditions));
+    }
+
+    const bills = await query.orderBy(
+      asc(FinalBill.createdAt)
+    );
+
+    const billIds = bills.map((bill) => bill.id);
+
+    const findingsMap: Record<string, any[]> = {};
+    const feesMap: Record<string, any[]> = {};
+    const discountsMap: Record<string, any[]> = {};
+    const workTasksMap: Record<string, any[]> = {};
 
     if (billIds.length > 0) {
-      // Findings
-      const findings = await Database.select()
-        .from(FinalBillFindings)
-        .where(inArray(FinalBillFindings.finalBillId, billIds));
-      for (const f of findings) {
-        if (!findingsMap[f.finalBillId]) findingsMap[f.finalBillId] = [];
-        findingsMap[f.finalBillId].push(f);
+      const [
+        findings,
+        fees,
+        discounts,
+        workTasks,
+      ] = await Promise.all([
+        Database
+          .select()
+          .from(FinalBillFindings)
+          .where(
+            inArray(
+              FinalBillFindings.finalBillId,
+              billIds
+            )
+          ),
+
+        Database
+          .select()
+          .from(FinalBillFees)
+          .where(
+            inArray(
+              FinalBillFees.finalBillId,
+              billIds
+            )
+          ),
+
+        Database
+          .select()
+          .from(FinalBillDiscounts)
+          .where(
+            inArray(
+              FinalBillDiscounts.finalBillId,
+              billIds
+            )
+          ),
+
+        Database
+          .select()
+          .from(FinalBillWorkTasks)
+          .where(
+            inArray(
+              FinalBillWorkTasks.finalBillId,
+              billIds
+            )
+          ),
+      ]);
+
+      for (const finding of findings) {
+        if (!findingsMap[finding.finalBillId]) {
+          findingsMap[finding.finalBillId] = [];
+        }
+
+        findingsMap[finding.finalBillId].push(finding);
       }
 
-      // Fees
-      const fees = await Database.select()
-        .from(FinalBillFees)
-        .where(inArray(FinalBillFees.finalBillId, billIds));
-      for (const f of fees) {
-        if (!feesMap[f.finalBillId]) feesMap[f.finalBillId] = [];
-        feesMap[f.finalBillId].push(f);
+      for (const fee of fees) {
+        if (!feesMap[fee.finalBillId]) {
+          feesMap[fee.finalBillId] = [];
+        }
+
+        feesMap[fee.finalBillId].push(fee);
       }
 
-      // Discounts
-      const discounts = await Database.select()
-        .from(FinalBillDiscounts)
-        .where(inArray(FinalBillDiscounts.finalBillId, billIds));
-      for (const d of discounts) {
-        if (!discountsMap[d.finalBillId]) discountsMap[d.finalBillId] = [];
-        discountsMap[d.finalBillId].push(d);
+      for (const discount of discounts) {
+        if (!discountsMap[discount.finalBillId]) {
+          discountsMap[discount.finalBillId] = [];
+        }
+
+        discountsMap[discount.finalBillId].push(discount);
       }
 
-      // Work Tasks
-      const tasks = await Database.select()
-        .from(FinalBillWorkTasks)
-        .where(inArray(FinalBillWorkTasks.finalBillId, billIds));
-      for (const t of tasks) {
-        if (!workTasksMap[t.finalBillId]) workTasksMap[t.finalBillId] = [];
-        workTasksMap[t.finalBillId].push(t);
+      for (const task of workTasks) {
+        if (!workTasksMap[task.finalBillId]) {
+          workTasksMap[task.finalBillId] = [];
+        }
+
+        workTasksMap[task.finalBillId].push(task);
       }
     }
 
-    const data = bills.map((b) => ({
-      ...b,
-      findings: findingsMap[b.id] || [],
-      fees: feesMap[b.id] || [],
-      discounts: discountsMap[b.id] || [],
-      workTasks: workTasksMap[b.id] || [],
+    const data = bills.map((bill) => ({
+      ...bill,
+
+      findings: findingsMap[bill.id] || [],
+      fees: feesMap[bill.id] || [],
+      discounts: discountsMap[bill.id] || [],
+      workTasks: workTasksMap[bill.id] || [],
     }));
 
     return NextResponse.json(
-      { error: false, message: "Final Costs retrieved.", data },
+      {
+        error: false,
+        message: "Final Costs retrieved.",
+        data,
+      },
       { status: 200 }
     );
-  } catch (e) {
-    console.error("[GET /api/payments/final-bills] Error:", e);
+  } catch (error) {
+    console.error(
+      "[GET /api/payments/final-bills] Error:",
+      error
+    );
+
     return NextResponse.json(
       {
         error: true,
         errorType: "dbe",
         errorTitle: "Database error",
         errorMessage: "Unable to fetch Final Costs.",
-        errorLog: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }
     );
