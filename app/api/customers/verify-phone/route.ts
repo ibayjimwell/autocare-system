@@ -127,6 +127,19 @@ export async function POST(
     );
   }
 
+  // Staff-created accounts must replace their temporary password
+  // BEFORE phone OTP can finish onboarding or create a session.
+  if (customer.tempPassword === true) {
+    return NextResponse.json(
+      {
+        error: true,
+        errorMessage:
+          'Change your temporary password by signing in before verifying your phone.',
+      },
+      { status: 409 },
+    );
+  }
+
   // ---------------------------------------------------------------
   // Find valid OTP
   // ---------------------------------------------------------------

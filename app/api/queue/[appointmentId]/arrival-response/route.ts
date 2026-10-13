@@ -15,14 +15,12 @@ import {
   Appointments,
 } from '@/database/models/appointments/appointments.model';
 
-import {
-  eq,
-  and,
-} from 'drizzle-orm';
+import { eq, and, isNull, lt } from 'drizzle-orm';
 
-import {
-  isValidUUID,
-} from '@/utils/shared';
+import { isValidUUID } from '@/utils/shared';
+import { getArrivalCustomerId } from '@/lib/queue/arrival-auth';
+import { Customers } from '@/database/models/customers/customers.model';
+import { Vehicles } from '@/database/models/customers/vehicles.model';
 
 import {
   serviceQueueTriggers,
@@ -110,11 +108,11 @@ export async function POST(
           .toUpperCase()
       : '';
 
-  const customerId =
-    typeof body?.customerId ===
-    'string'
-      ? body.customerId.trim()
-      : '';
+  const customerId = await getArrivalCustomerId(req);
+  const requestAt = typeof body?.requestAt === 'string' ? body.requestAt : '';
+  if (!customerId) {
+    return NextResponse.json({ error: true, errorMessage: 'Customer login required.' }, { status: 401 });
+  }
 
   if (
     !['YES', 'NO'].includes(
@@ -128,19 +126,6 @@ export async function POST(
           'response must be YES or NO.',
       },
       { status: 422 },
-    );
-  }
-
-  if (
-    !isValidUUID(customerId)
-  ) {
-    return NextResponse.json(
-      {
-        error: true,
-        errorMessage:
-          'Valid customerId is required.',
-      },
-      { status: 400 },
     );
   }
 
@@ -188,6 +173,13 @@ export async function POST(
       );
     }
 
+    const manilaToday = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+    if (appointment.appointmentDate !== manilaToday) {
+      return NextResponse.json({ error: true, errorMessage: 'This arrival question has expired.' }, { status: 422 });
+    }
+
     const [entry] =
       await Database
         .select()
@@ -224,6 +216,11 @@ export async function POST(
       );
     }
 
+    if (!requestAt || !Number.isFinite(Date.parse(requestAt)) ||
+      new Date(requestAt).getTime() !== new Date(entry.arrivalRequestAt).getTime()) {
+      return NextResponse.json({ error: true, errorMessage: 'This arrival request is no longer current.' }, { status: 409 });
+    }
+
     if (
       entry.arrivalResponseAt &&
       new Date(
@@ -255,6 +252,7 @@ export async function POST(
     if (
       ![
         'PENDING',
+        'ARRIVING',
         'NOT_ARRIVED',
       ].includes(
         storedStatus,
@@ -305,10 +303,11 @@ export async function POST(
               ServiceQueue.id,
               entry.id,
             ),
-            eq(
-              ServiceQueue.status,
-              entry.status,
-            ),
+            eq(ServiceQueue.status, entry.status),
+            eq(ServiceQueue.arrivalRequestAt, entry.arrivalRequestAt),
+            ...(entry.arrivalResponseAt
+              ? [lt(ServiceQueue.arrivalResponseAt, entry.arrivalRequestAt)]
+              : [isNull(ServiceQueue.arrivalResponseAt)]),
           ),
         )
         .returning();
@@ -324,16 +323,30 @@ export async function POST(
       );
     }
 
-    serviceQueueTriggers
+    const [details] = await Database.select({
+      customerName: Customers.fullname,
+      vehicleMake: Vehicles.make,
+      vehicleModel: Vehicles.model,
+      vehicleYear: Vehicles.year,
+      plateNumber: Vehicles.plateNumber,
+    }).from(Appointments)
+      .leftJoin(Customers, eq(Appointments.customerId, Customers.id))
+      .leftJoin(Vehicles, eq(Appointments.vehicleId, Vehicles.id))
+      .where(eq(Appointments.id, appointmentId)).limit(1);
+
+    await serviceQueueTriggers
       .onCustomerArriving({
+        appointmentId,
+        customerName: details?.customerName || 'Customer',
+        vehicleMake: details?.vehicleMake || '',
+        vehicleModel: details?.vehicleModel || '',
+        vehicleYear: details?.vehicleYear ?? null,
+        plateNumber: details?.plateNumber || '', 
         trackingNumber:
           appointment.trackingNumber,
-        customerName:
-          'Customer',
         arrivalStatus:
           nextStatus,
-      })
-      .catch(console.error);
+      });
 
     return NextResponse.json(
       {

@@ -19,14 +19,11 @@ import {
   Customers,
 } from '@/database/models/customers/customers.model';
 
-import {
-  eq,
-  and,
-} from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 
-import {
-  isValidUUID,
-} from '@/utils/shared';
+import { isValidUUID } from '@/utils/shared';
+import { canManageArrival } from '@/lib/queue/arrival-auth';
+import { Vehicles } from '@/database/models/customers/vehicles.model';
 
 import {
   mobileServiceQueueTriggers,
@@ -85,6 +82,9 @@ export async function POST(
   }
 
   try {
+    if (!(await canManageArrival())) {
+      return NextResponse.json({ error: true, errorMessage: 'Service Tracking permission required.' }, { status: 403 });
+    }
     const [appointment] =
       await Database
         .select({
@@ -98,19 +98,17 @@ export async function POST(
             Appointments.status,
           appointmentDate:
             Appointments.appointmentDate,
-          trackingNumber:
-            Appointments.trackingNumber,
+          trackingNumber: Appointments.trackingNumber,
+          vehicleMake: Vehicles.make,
+          vehicleModel: Vehicles.model,
+          vehicleYear: Vehicles.year,
+          plateNumber: Vehicles.plateNumber,
         })
         .from(
           Appointments,
         )
-        .leftJoin(
-          Customers,
-          eq(
-            Appointments.customerId,
-            Customers.id,
-          ),
-        )
+        .leftJoin(Customers, eq(Appointments.customerId, Customers.id))
+        .leftJoin(Vehicles, eq(Appointments.vehicleId, Vehicles.id))
         .where(
           eq(
             Appointments.id,
@@ -183,17 +181,45 @@ export async function POST(
       );
     }
 
+    /*
+     * An arrival question is a queued database request, not an online
+     * presence check. Push can be delivered while the app is closed, and
+     * the pending request is retrieved whenever the customer comes back.
+     *
+     * The confirmed-queue GET endpoint normalizes stale legacy queue
+     * statuses (such as INSPECTING or WORKING) to PENDING. Normalize the
+     * persisted status here as well, rather than rejecting an Ask Arrival
+     * action that the staff UI legitimately offered.
+     *
+     * ARRIVING is also eligible: staff may ask again after a customer
+     * previously answered YES. ARRIVED remains a physical check-in and
+     * must not be overwritten by another question.
+     */
+    const storedStatus = String(entry.status ?? '').trim().toUpperCase();
+    if (storedStatus === 'ARRIVED') {
+      return NextResponse.json(
+        { error: true, errorMessage: 'This vehicle has already been marked arrived.' },
+        { status: 422 },
+      );
+    }
+
+    if (
+      entry.arrivalRequestAt &&
+      (!entry.arrivalResponseAt ||
+        new Date(entry.arrivalResponseAt).getTime() < new Date(entry.arrivalRequestAt).getTime())
+    ) {
+      return NextResponse.json(
+        { error: true, errorMessage: 'An arrival question is already awaiting a response.' },
+        { status: 409 },
+      );
+    }
+
     const effectiveQueueStatus = [
       'PENDING',
+      'ARRIVING',
       'NOT_ARRIVED',
-    ].includes(
-      String(
-        entry.status,
-      ).toUpperCase(),
-    )
-      ? String(
-          entry.status,
-        ).toUpperCase()
+    ].includes(storedStatus)
+      ? storedStatus
       : 'PENDING';
 
     const now =
@@ -222,10 +248,13 @@ export async function POST(
               ServiceQueue.id,
               entry.id,
             ),
-            eq(
-              ServiceQueue.status,
-              entry.status,
-            ),
+            eq(ServiceQueue.status, entry.status),
+            ...(entry.arrivalRequestAt
+              ? [eq(ServiceQueue.arrivalRequestAt, entry.arrivalRequestAt)]
+              : [isNull(ServiceQueue.arrivalRequestAt)]),
+            ...(entry.arrivalResponseAt
+              ? [eq(ServiceQueue.arrivalResponseAt, entry.arrivalResponseAt)]
+              : [isNull(ServiceQueue.arrivalResponseAt)]),
           ),
         )
         .returning();
@@ -241,9 +270,14 @@ export async function POST(
       );
     }
 
-    mobileServiceQueueTriggers
+    await mobileServiceQueueTriggers
       .onArrivalQuestion({
         appointmentId,
+        requestAt: now.toISOString(),
+        vehicleMake: appointment.vehicleMake || '',
+        vehicleModel: appointment.vehicleModel || '',
+        vehicleYear: appointment.vehicleYear ?? null,
+        plateNumber: appointment.plateNumber || '', 
         customerId:
           appointment.customerId,
         trackingNumber:
@@ -251,8 +285,7 @@ export async function POST(
         customerName:
           appointment.customerName ||
           'Customer',
-      })
-      .catch(console.error);
+      });
 
     return NextResponse.json(
       {

@@ -23,8 +23,12 @@ import {
 } from '@/utils/shared';
 
 import {
-  verifyJWT,
+  signJWT,
 } from '@/utils/jwt';
+
+import {
+  verifyCustomerTempPasswordToken,
+} from '@/lib/auth/customer-temp-token';
 
 export const runtime = 'nodejs';
 
@@ -94,12 +98,12 @@ export async function POST(
     );
   }
 
-  // Same password rule as mobile Sign-up.
+  // A permanent first-login password must contain at least 8 characters.
   if (
-    newPassword.length < 6
+    newPassword.length < 8
   ) {
     return fail(
-      'Password must be at least 6 characters.',
+      'Password must be at least 8 characters.',
       422,
     );
   }
@@ -122,16 +126,12 @@ export async function POST(
     );
   }
 
-  // Validate the JWT issued by the successful
-  // customer login.
-  const decoded =
-    await verifyJWT(loginToken);
+  // Verify a SHORT-LIVED, PASSWORD-CHANGE-ONLY token. This is NOT
+  // a regular customer session JWT and cannot authorize other APIs.
+  const grant =
+    await verifyCustomerTempPasswordToken(loginToken);
 
-  if (
-    !decoded ||
-    typeof decoded.id !== 'string' ||
-    decoded.purpose !== undefined
-  ) {
+  if (!grant) {
     return fail(
       'Temporary login expired or invalid. Please sign in again.',
       401,
@@ -146,7 +146,7 @@ export async function POST(
         .where(
           eq(
             Customers.id,
-            decoded.id,
+            grant.customerId,
           ),
         )
         .limit(1);
@@ -229,12 +229,39 @@ export async function POST(
       ...safeCustomer
     } = updated;
 
+    // Keep the customer signed OUT until BOTH onboarding requirements
+    // have been satisfied. Phone OTP will issue the session token later.
+    if (updated.isPhoneVerified !== true) {
+      return NextResponse.json({
+        error: false,
+        message: 'Password changed. Please verify your phone number.',
+        data: {
+          customer: safeCustomer,
+          requiresVerification: true,
+          customerId: updated.id,
+          phone: updated.phone,
+        },
+      });
+    }
+
+    // Already phone-verified customers can now establish a normal
+    // session. Issue a fresh JWT instead of recycling the temp token.
+    const token = await signJWT(
+      {
+        id: updated.id,
+        email: updated.email,
+        phone: updated.phone,
+      },
+      '7d',
+    );
+
     return NextResponse.json({
       error: false,
-      message:
-        'Temporary password changed successfully.',
+      message: 'Temporary password changed successfully.',
       data: {
         customer: safeCustomer,
+        token,
+        requiresVerification: false,
       },
     });
   } catch (error) {

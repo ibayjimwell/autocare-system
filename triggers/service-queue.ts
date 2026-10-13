@@ -13,6 +13,11 @@ interface QueuePositionPayload {
 }
 
 interface CustomerArrivalPayload {
+  appointmentId?: string;
+  vehicleMake?: string;
+  vehicleModel?: string;
+  vehicleYear?: number | null;
+  plateNumber?: string;
   trackingNumber: string;
   customerName?: string;
   arrivalStatus:
@@ -28,6 +33,11 @@ interface CustomerQueuePositionPayload {
 }
 
 interface CustomerArrivalRequestPayload {
+  requestAt: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleYear: number | null;
+  plateNumber: string;
   appointmentId: string;
   customerId: string;
   trackingNumber: string;
@@ -107,6 +117,16 @@ export const serviceQueueTriggers = {
         `${payload.customerName || 'Customer'} for appointment #${payload.trackingNumber} is marked Not Arrived.`;
     }
 
+    const vehicle = [payload.vehicleMake, payload.vehicleModel, payload.vehicleYear]
+      .filter(value => value !== undefined && value !== null && value !== '').join(' ');
+    const plate = payload.plateNumber ? ` (Plate ${payload.plateNumber})` : '';
+    const customer = payload.customerName || 'Customer';
+    if (payload.arrivalStatus === 'ARRIVING') {
+      body = `${customer} and their ${vehicle || 'vehicle'}${plate} will arrive today.`;
+    } else if (payload.arrivalStatus === 'NOT_ARRIVED') {
+      body = `${customer} and their ${vehicle || 'vehicle'}${plate} will not arrive today.`;
+    }
+
     await triggerPush(
       'service-tracking',
       'customer-arrival',
@@ -160,6 +180,7 @@ async function sendCustomerPush(
 
     const data = {
       type: 'ARRIVAL_REQUEST',
+      url: `/tracking?appointmentId=${encodeURIComponent(payload.appointmentId)}`,
       appointmentId:
         payload.appointmentId,
       trackingNumber:
@@ -170,49 +191,14 @@ async function sendCustomerPush(
       )}`,
     };
 
-    /*
-     * Compatibility forms:
-     *
-     *   sendPushToCustomer(customerId, title, body, data)
-     *   sendPushToCustomer(customerId, title, body)
-     *   sendPushToCustomer({ customerId, title, body, data })
-     *
-     * The function arity is used only to select the established
-     * project-compatible calling convention.
-     */
-    if (
-      sendPush.length >=
-      4
-    ) {
-      await sendPush(
-        payload.customerId,
-        title,
-        body,
-        data,
-      );
-
-      return;
-    }
-
-    if (
-      sendPush.length ===
-      3
-    ) {
-      await sendPush(
-        payload.customerId,
-        title,
-        body,
-      );
-
-      return;
-    }
-
-    await sendPush({
-      customerId:
-        payload.customerId,
-      title,
-      body,
-      data,
+    await sendPush(payload.customerId, title, body, {
+      ...data,
+      requestAt: payload.requestAt,
+      customerId: payload.customerId,
+      vehicleMake: payload.vehicleMake,
+      vehicleModel: payload.vehicleModel,
+      vehicleYear: payload.vehicleYear,
+      plateNumber: payload.plateNumber,
     });
   } catch (error) {
     /*

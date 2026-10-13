@@ -2,6 +2,8 @@
 
 import React, {
   useState,
+  useEffect,
+  useRef,
 } from 'react';
 
 import PageContainer from '@/components/shared/page-container';
@@ -67,6 +69,7 @@ import {
 } from '@/app-utils/service-tracking/constants';
 
 import ConfirmationDialog from '@/components/shared/confimation-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 import FutureAppointmentsDrawer from '@/components/service-tracking/FutureAppointmentsDrawer';
 
@@ -339,6 +342,30 @@ export default function ServiceTrackingPage() {
       queueMode !== null,
       queueMode ?? 'CONFIRMED',
     );
+
+  // Detect a *new* customer response during this staff session.
+  // The first loaded snapshot is only a baseline, not a new alert.
+  const responseSnapshot = useRef<Map<string, string>>(new Map());
+  const responseInitialized = useRef(false);
+  const [arrivalReply, setArrivalReply] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (queueMode !== 'CONFIRMED' || queueLoading) return;
+    const next = new Map<string, string>();
+    for (const item of queue) {
+      const id = String(item.appointmentId || item.id || '');
+      const request = item.arrivalRequestAt ? new Date(item.arrivalRequestAt).getTime() : 0;
+      const response = item.arrivalResponseAt ? new Date(item.arrivalResponseAt).getTime() : 0;
+      const signature = request && response >= request ? `${request}:${response}` : '';
+      next.set(id, signature);
+      if (responseInitialized.current && signature && responseSnapshot.current.get(id) !== signature &&
+          ['ARRIVING', 'NOT_ARRIVED'].includes(String(item.queueStatus).toUpperCase())) {
+        setArrivalReply(item);
+      }
+    }
+    responseSnapshot.current = next;
+    responseInitialized.current = true;
+  }, [queue, queueLoading, queueMode]);
 
   /* ==============================================================
      STRICT TAB FILTERS
@@ -1471,6 +1498,28 @@ export default function ServiceTrackingPage() {
           </div>
         </section>
       </div>
+
+      {/* Customer reply alert (queue data arrives via existing Supabase subscription). */}
+      <Dialog open={Boolean(arrivalReply)} onOpenChange={open => { if (!open) setArrivalReply(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Customer Arrival Response</DialogTitle>
+            <DialogDescription>
+              {arrivalReply?.queueStatus === 'ARRIVING'
+                ? 'The customer confirmed they will arrive today.'
+                : 'The customer reported they will not arrive today.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">
+            <p><strong>Customer:</strong> {arrivalReply?.customer?.fullname || arrivalReply?.customerName || 'Customer'}</p>
+            <p><strong>Vehicle:</strong> {[arrivalReply?.vehicle?.make, arrivalReply?.vehicle?.model, arrivalReply?.vehicle?.year].filter(Boolean).join(' ') || 'Vehicle unavailable'}</p>
+            <p><strong>Plate number:</strong> {arrivalReply?.vehicle?.plateNumber || 'N/A'}</p>
+            <p><strong>Tracking:</strong> {arrivalReply?.trackingNumber || 'N/A'}</p>
+            <p className="font-semibold">{arrivalReply?.queueStatus === 'ARRIVING' ? 'Will arrive today' : 'Will not arrive today'}</p>
+          </div>
+          <DialogFooter><Button type="button" onClick={() => setArrivalReply(null)}>Got it</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ==========================================================
           EXISTING START INSPECTION CONFIRMATION

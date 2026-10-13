@@ -35,6 +35,7 @@ export async function sendPushToCustomer(
       title,
       body,
       data: data || {},
+      ...(data?.type === 'ARRIVAL_REQUEST' ? { categoryId: 'autocare-arrival', channelId: 'autocare-arrival', priority: 'high' } : {}),
     });
   }
 

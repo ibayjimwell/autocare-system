@@ -656,13 +656,10 @@ export default function QueueList({
                 queueStatus,
               );
 
-            const canAskArriving =
-              [
-                'PENDING',
-                'NOT_ARRIVED',
-              ].includes(
-                queueStatus,
-              );
+            const waitingForReply = Boolean(item.arrivalRequestAt) &&
+              (!item.arrivalResponseAt || new Date(item.arrivalResponseAt).getTime() <
+                new Date(item.arrivalRequestAt).getTime());
+            const canAskArriving = ['PENDING', 'ARRIVING', 'NOT_ARRIVED'].includes(queueStatus) && !waitingForReply;
 
             /* ====================================================
                NORMALIZED APPOINTMENT
@@ -1306,8 +1303,14 @@ export default function QueueList({
                             >
                               <BellRing className="mr-2 h-4 w-4" />
 
-                              Ask Arriving
+                              Ask Arrival
                             </Button>
+                          )}
+
+                          {waitingForReply && (
+                            <div className="flex h-10 items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700">
+                              <BellRing className="h-4 w-4" /> Awaiting customer response
+                            </div>
                           )}
 
                           {/* =================================================

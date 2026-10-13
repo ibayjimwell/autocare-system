@@ -25,6 +25,10 @@ import {
 } from "@/utils/jwt";
 
 import {
+  createCustomerTempPasswordToken,
+} from '@/lib/auth/customer-temp-token';
+
+import {
   normalizePhilippinePhone,
   isValidPhilippinePhone,
 } from "@/utils/phone";
@@ -371,6 +375,39 @@ export async function POST(
       {
         status: 401,
       }
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // 11. TEMPORARY PASSWORD TAKES PRIORITY OVER PHONE VERIFICATION.
+  //
+  // Staff-created customers may have BOTH flags:
+  //   tempPassword=true and isPhoneVerified=false.
+  // Do not redirect to OTP before the password is replaced.
+  // Do not issue a normal session JWT during this step.
+  // ---------------------------------------------------------------
+  if (customer.tempPassword === true) {
+    const {
+      password: _password,
+      ...safeCustomer
+    } = customer;
+
+    const temporaryToken =
+      await createCustomerTempPasswordToken(customer.id);
+
+    return NextResponse.json(
+      {
+        error: false,
+        message: 'Please replace your temporary password.',
+        data: {
+          requiresPasswordChange: true,
+          customer: safeCustomer,
+          temporaryToken,
+          // The phone step comes AFTER the password step.
+          requiresVerification: false,
+        },
+      },
+      { status: 200 },
     );
   }
 
