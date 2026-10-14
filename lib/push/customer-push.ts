@@ -35,7 +35,18 @@ export async function sendPushToCustomer(
       title,
       body,
       data: data || {},
-      ...(data?.type === 'ARRIVAL_REQUEST' ? { categoryId: 'autocare-arrival', channelId: 'autocare-arrival', priority: 'high' } : {}),
+      priority: 'high',
+    
+      channelId:
+        data?.type === 'ARRIVAL_REQUEST'
+          ? 'autocare-arrival'
+          : 'autocare-general',
+    
+      ...(data?.type === 'ARRIVAL_REQUEST'
+        ? {
+            categoryId: 'autocare-arrival',
+          }
+        : {}),
     });
   }
 
@@ -45,7 +56,14 @@ export async function sendPushToCustomer(
   const chunks = expo.chunkPushNotifications(messages);
   for (const chunk of chunks) {
     try {
-      const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+      const ticketChunk =
+        await expo.sendPushNotificationsAsync(chunk);
+      
+      console.log(
+        '[AutoCare Push] Tickets:',
+        JSON.stringify(ticketChunk, null, 2)
+      );
+      
       // Handle tickets (e.g., remove invalid tokens)
       for (let i = 0; i < ticketChunk.length; i++) {
         const ticket = ticketChunk[i];
