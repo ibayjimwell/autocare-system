@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
+
 import React from 'react';
 
 import {
@@ -142,8 +144,7 @@ const SERVICE_TYPES = [
   'ALL',
   'PMS',
   'REPAIR',
-  'CHECKUP',
-  'MODIFICATION',
+  'DIAGNOSTIC',
 ] as const;
 
 type ServiceType =
@@ -173,14 +174,9 @@ const SERVICE_TYPE_CONFIG: Record<
     icon: Wrench,
   },
 
-  CHECKUP: {
-    label: 'Checkup',
+  DIAGNOSTIC: {
+    label: 'Diagnostic',
     icon: Gauge,
-  },
-
-  MODIFICATION: {
-    label: 'Modification',
-    icon: Settings2,
   },
 };
 
@@ -264,6 +260,8 @@ export default function BookingFormCard({
     React.useState<ServiceType>(
       'ALL',
     );
+
+  const [serviceSubcategory, setServiceSubcategory] = React.useState('ALL');
 
   /* ==============================================================
      FORM
@@ -392,13 +390,11 @@ export default function BookingFormCard({
             normalizedType ===
               serviceType;
 
+          const matchesSubcategory = serviceSubcategory === 'ALL' || service.type !== 'REPAIR' || service.subcategory === serviceSubcategory;
+
           const matchesSearch =
             !normalizedSearch ||
-            service.name
-              .toLowerCase()
-              .includes(
-                normalizedSearch,
-              );
+            (service.name.toLowerCase().includes(normalizedSearch) || (service.subcategory || '').toLowerCase().includes(normalizedSearch));
 
           /*
            * Inactive services are not available for a new booking.
@@ -409,6 +405,7 @@ export default function BookingFormCard({
 
           return (
             matchesType &&
+            matchesSubcategory &&
             matchesSearch &&
             matchesActive
           );
@@ -417,6 +414,7 @@ export default function BookingFormCard({
     }, [
       services,
       serviceType,
+      serviceSubcategory,
       serviceSearch,
     ]);
 
@@ -471,9 +469,8 @@ export default function BookingFormCard({
     (
       type: ServiceType,
     ) => {
-      setServiceType(
-        type,
-      );
+      setServiceType(type);
+      setServiceSubcategory('ALL');
     };
 
   /* ==============================================================
@@ -926,9 +923,8 @@ export default function BookingFormCard({
                     '',
                   );
 
-                  setServiceType(
-                    'ALL',
-                  );
+                  setServiceType('ALL');
+                  setServiceSubcategory('ALL');
                 }
               }}
             >
@@ -1153,6 +1149,18 @@ export default function BookingFormCard({
                       )}
                     </div>
                   </div>
+
+                  {serviceType === 'REPAIR' && (
+                    <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
+                      {['ALL', ...new Set(services.filter((service) => service.type === 'REPAIR').map((service) => service.subcategory).filter(Boolean))].map((subcategory) => (
+                        <button type="button" key={subcategory} onClick={() => setServiceSubcategory(String(subcategory))}
+                          className={cn('shrink-0 rounded-md px-3 py-1.5 text-xs font-medium',
+                            serviceSubcategory === subcategory ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted')}>
+                          {subcategory === 'ALL' ? 'All repairs' : subcategory}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* =================================================
                       SERVICE LIST
@@ -1388,26 +1396,17 @@ export default function BookingFormCard({
                                           text-primary
                                         `,
                                       type ===
-                                        'CHECKUP' &&
+                                        'DIAGNOSTIC' &&
                                         `
                                           bg-blue-100
                                           text-blue-800
                                           dark:bg-blue-500/20
                                           dark:text-blue-400
                                         `,
-                                      type ===
-                                        'MODIFICATION' &&
-                                        `
-                                          bg-purple-100
-                                          text-purple-800
-                                          dark:bg-purple-500/20
-                                          dark:text-purple-400
-                                        `,
                                       ![
                                         'PMS',
                                         'REPAIR',
-                                        'CHECKUP',
-                                        'MODIFICATION',
+                                        'DIAGNOSTIC',
                                       ].includes(
                                         type as any,
                                       ) &&
@@ -1429,10 +1428,9 @@ export default function BookingFormCard({
                                     text-muted-foreground
                                   "
                                 >
-                                  {
-                                    service.estimatedDuration
-                                  }{' '}
-                                  min
+                                  {formatDurationMinutes(service.estimatedDuration)}
+                                  {service.subcategory ? ` • ${service.subcategory}` : ''}
+                                  {service.isLaborInclude ? ' • Labor included' : ' • Labor extra'}
                                 </span>
                               </div>
                             </CommandItem>

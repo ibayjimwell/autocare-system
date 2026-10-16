@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
+
 import React from 'react';
 
 import {
@@ -335,10 +337,7 @@ export default function EstimateCostCard({
 
                       {task?.durationMinutes && (
                         <span className="text-[10px] text-muted-foreground">
-                          {
-                            task.durationMinutes
-                          }{' '}
-                          min
+                          {formatDurationMinutes(task.durationMinutes)}
                         </span>
                       )}
                     </div>

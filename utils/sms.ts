@@ -1,5 +1,3 @@
-// utils/sms.ts
-
 import HttpSms from 'httpsms';
 
 import {
@@ -7,112 +5,56 @@ import {
   isValidPhilippinePhone,
 } from '@/utils/phone';
 
-// ------------------------------------------------------------------
-// httpSMS configuration
-// ------------------------------------------------------------------
+/**
+ * Send SMS through the EXISTING httpSMS Android gateway.
+ *
+ * HTTPSMS_API_KEY and HTTPSMS_FROM_NUMBER belong on the AutoCare Web
+ * server (for example Vercel environment variables), never in Expo.
+ *
+ * The client is instantiated after checking configuration so missing
+ * SMS credentials cannot cause unrelated push notification imports
+ * to fail at module load time.
+ */
+export async function sendSMS(to: string, message: string) {
+  const normalizedTo = normalizePhilippinePhone(to);
 
-const API_KEY =
-  process.env.HTTPSMS_API_KEY;
-
-const FROM_NUMBER =
-  process.env.HTTPSMS_FROM_NUMBER;
-
-if (!API_KEY) {
-  console.warn(
-    '[httpSMS] HTTPSMS_API_KEY is not configured.'
-  );
-}
-
-if (!FROM_NUMBER) {
-  console.warn(
-    '[httpSMS] HTTPSMS_FROM_NUMBER is not configured.'
-  );
-}
-
-const client =
-  new HttpSms(API_KEY!);
-
-// ------------------------------------------------------------------
-// Send SMS
-// ------------------------------------------------------------------
-export async function sendSMS(
-  to: string,
-  message: string
-) {
-  const normalizedTo =
-    normalizePhilippinePhone(to);
-
-  if (
-    !isValidPhilippinePhone(
-      normalizedTo
-    )
-  ) {
-    throw new Error(
-      `Invalid Philippine phone number: ${to}`
-    );
+  if (!isValidPhilippinePhone(normalizedTo)) {
+    throw new Error('Invalid Philippine destination phone number.');
   }
 
-  if (!message || message.trim() === '') {
-    throw new Error(
-      'SMS message cannot be empty.'
-    );
+  if (typeof message !== 'string' || !message.trim()) {
+    throw new Error('SMS message cannot be empty.');
   }
 
-  if (!API_KEY) {
-    throw new Error(
-      'HTTPSMS_API_KEY is not configured.'
-    );
+  const apiKey = process.env.HTTPSMS_API_KEY;
+  const fromNumber = process.env.HTTPSMS_FROM_NUMBER;
+
+  if (!apiKey) {
+    throw new Error('HTTPSMS_API_KEY is not configured.');
+  }
+  if (!fromNumber) {
+    throw new Error('HTTPSMS_FROM_NUMBER is not configured.');
   }
 
-  if (!FROM_NUMBER) {
-    throw new Error(
-      'HTTPSMS_FROM_NUMBER is not configured.'
-    );
-  }
+  const client = new HttpSms(apiKey);
 
   try {
-    console.log(
-      `[httpSMS] Sending SMS to ${normalizedTo}`
-    );
+    const result = await client.messages.postSend({
+      content: message.trim(),
+      from: fromNumber,
+      to: normalizedTo,
+    });
 
-    const result =
-      await client.messages.postSend({
-        content:
-          message.trim(),
-
-        from:
-          FROM_NUMBER,
-
-        /*
-         * httpSMS receives:
-         *
-         * +639157803417
-         */
-        to:
-          normalizedTo,
-      });
-
-    console.log(
-      `[httpSMS] SMS sent successfully. recipient=${normalizedTo}, messageId=${result.id}`
-    );
-
+    // httpSMS accepting a send request does not guarantee handset delivery.
+    console.info('[httpSMS] Message submitted:', result?.id || 'no id');
     return result;
   } catch (error) {
+    // Never print message content: this utility also sends sensitive OTPs.
+    // Avoid logging full phone numbers and provider request credentials.
     console.error(
-      `[httpSMS] Failed to send SMS to ${normalizedTo}:`,
-      error
+      '[httpSMS] SMS submission failed:',
+      error instanceof Error ? error.message : 'Unknown provider error',
     );
-
-    /*
-     * Development logging only.
-     *
-     * Do not rely on this as a production
-     * SMS delivery mechanism.
-     */
-    console.log(
-      `[httpSMS] OTP/message for ${normalizedTo}: ${message}`
-    );
-
     throw error;
   }
 }

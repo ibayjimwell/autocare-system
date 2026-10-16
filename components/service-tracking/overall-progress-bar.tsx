@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
 
 interface OverallProgressBarProps {
   tasks: any[];
@@ -12,54 +13,26 @@ export default function OverallProgressBar({
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const totalDuration = tasks.reduce(
-        (sum, t) => sum + (t.durationMinutes || 0),
-        0
-      );
-
-      if (totalDuration === 0) {
-        setProgress(0);
+    const update = () => {
+      const total = tasks.reduce((sum, task) => sum + Math.max(0, Number(task.durationMinutes) || 0), 0);
+      const allDone = tasks.length > 0 && tasks.every((task) => task.status === 'DONE');
+      if (!total) {
+        const done = tasks.filter((task) => task.status === 'DONE').length;
+        setProgress(tasks.length ? Math.round((done / tasks.length) * 100) : 0);
         return;
       }
-
-      const completedMs = tasks.reduce((sum, t) => {
-        if (t.status === 'DONE') {
-          return (
-            sum +
-            (t.durationMinutes || 0) * 60 * 1000
-          );
-        }
-
-        if (
-          t.status === 'IN_PROGRESS' &&
-          t.startedAt
-        ) {
-          const elapsed = Math.min(
-            (t.durationMinutes || 0) * 60 * 1000,
-            Date.now() -
-              new Date(t.startedAt).getTime()
-          );
-
-          return sum + elapsed;
-        }
-
-        return sum;
+      const completedMs = tasks.reduce((sum, task) => {
+        const durationMs = Math.max(0, Number(task.durationMinutes) || 0) * 60000;
+        if (task.status === 'DONE') return sum + durationMs;
+        if (task.status !== 'IN_PROGRESS' || !task.startedAt) return sum;
+        const startedAt = new Date(task.startedAt).getTime();
+        if (!Number.isFinite(startedAt)) return sum;
+        return sum + Math.max(0, Math.min(durationMs, Date.now() - startedAt));
       }, 0);
-
-      const totalMs =
-        totalDuration * 60 * 1000;
-
-      setProgress(
-        Math.min(
-          100,
-          Math.round(
-            (completedMs / totalMs) * 100
-          )
-        )
-      );
-    }, 1000);
-
+      setProgress(allDone ? 100 : Math.min(100, Math.max(0, Math.round(completedMs / (total * 60000) * 100))));
+    };
+    update();
+    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [tasks]);
 
@@ -72,7 +45,9 @@ export default function OverallProgressBar({
           </p>
 
           <p className="text-[11px] text-muted-foreground">
-            Based on task duration
+            {tasks.reduce((sum, task) => sum + Math.max(0, Number(task.durationMinutes) || 0), 0) > 0
+              ? `Planned time: ${formatDurationMinutes(tasks.reduce((sum, task) => sum + Math.max(0, Number(task.durationMinutes) || 0), 0))}`
+              : 'Based on completed task count'}
           </p>
         </div>
 

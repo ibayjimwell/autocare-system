@@ -124,6 +124,8 @@ export async function GET(req: NextRequest) {
         name: Services.name,
         description: Services.description,
         basePrice: Services.basePrice,
+        subcategory: Services.subcategory,
+        isLaborInclude: Services.isLaborInclude,
         estimatedDuration: Services.estimatedDuration,
         type: Services.type,
       })
@@ -281,6 +283,8 @@ const buildDuplicateDetails = async (
       name: Services.name,
       description: Services.description,
       basePrice: Services.basePrice,
+      subcategory: Services.subcategory,
+      isLaborInclude: Services.isLaborInclude,
       estimatedDuration: Services.estimatedDuration,
       type: Services.type,
     })

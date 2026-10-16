@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
+
 import React, {
   useState,
   useEffect,
@@ -64,6 +66,8 @@ import HistoryTaskPickerModal from "./history-task-picker-modal";
 import DefaultFindingManagerModal from "./default-finding-manager-modal";
 
 import DefaultFindingPickerModal from "./default-finding-picker-modal";
+import DiagnosticChecklistModal from "@/components/diagnostic-checklist/DiagnosticChecklistModal";
+import { ClipboardCheck } from "lucide-react";
 
 import HistoryFindingPickerModal from "./history-finding-picker-modal";
 
@@ -314,6 +318,8 @@ export default function ServiceDetailPanel({
   ] = useState(
     false
   );
+
+  const [diagnosticChecklistOpen, setDiagnosticChecklistOpen] = useState(false);
 
   const [
     findingModalOpen,
@@ -2866,10 +2872,7 @@ export default function ServiceDetailPanel({
                                   {item.durationMinutes !=
                                     null && (
                                     <span>
-                                      {
-                                        item.durationMinutes
-                                      }{" "}
-                                      min
+                                      {formatDurationMinutes(item.durationMinutes)}
                                     </span>
                                   )}
                                 </div>
@@ -3171,6 +3174,25 @@ export default function ServiceDetailPanel({
             handleWorkDone
           }
           confirmText="Complete Job"
+        />
+
+        {/* Diagnostic Checklist is independent from task and findings editors. */}
+        <div className="fixed bottom-5 right-4 z-40 sm:bottom-7 sm:right-7">
+          <Button
+            type="button"
+            className="h-12 gap-2 rounded-full px-5 shadow-xl sm:h-14"
+            onClick={() => setDiagnosticChecklistOpen(true)}
+            aria-label="Open Diagnostic Checklist"
+          >
+            <ClipboardCheck className="h-5 w-5" /> Diagnostic Checklist
+          </Button>
+        </div>
+
+        <DiagnosticChecklistModal
+          open={diagnosticChecklistOpen}
+          onOpenChange={setDiagnosticChecklistOpen}
+          appointment={appointment}
+          onFindingsChanged={() => loadData(true)}
         />
 
         {/* ========================================================

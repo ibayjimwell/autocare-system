@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
+
 import React from 'react';
 
 import {
@@ -352,7 +354,7 @@ function getDurationLabel(
       ) &&
       value > 0
     ) {
-      return `${value} min`;
+      return formatDurationMinutes(value);
     }
   }
 
@@ -391,7 +393,7 @@ function getDurationLabel(
       serviceDuration >
       0
     ) {
-      return `${serviceDuration} min`;
+      return formatDurationMinutes(serviceDuration);
     }
   }
 

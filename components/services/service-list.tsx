@@ -49,6 +49,7 @@ import {
   ArrowDown,
   X,
   PackageCheck,
+  Trash2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -61,6 +62,10 @@ import {
   formatPrice,
   typeBadgeConfig,
   SERVICE_TYPES,
+  REPAIR_SUBCATEGORIES,
+  formatDurationMinutes,
+  serviceCategoryLabel,
+  serviceLaborLabel,
 } from '@/app-utils/services/helpers';
 
 import ServiceFormModal from './service-form-modal';
@@ -93,6 +98,7 @@ export default function ServiceList({
     loadServices,
     disableService,
     enableService,
+    deleteService,
   } = useServiceData();
 
   const [searchQuery, setSearchQuery] =
@@ -103,6 +109,9 @@ export default function ServiceList({
 
   const [typeFilter, setTypeFilter] =
     useState<string>('ALL');
+
+  const [subcategoryFilter, setSubcategoryFilter] = useState<string>('ALL');
+  const [subcategoryOpen, setSubcategoryOpen] = useState(false);
 
   const [sortField, setSortField] =
     useState<SortField>('name');
@@ -132,6 +141,7 @@ export default function ServiceList({
       name: '',
     });
 
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null as string | null, name: '' });
   const [filterOpen, setFilterOpen] =
     useState(false);
 
@@ -152,7 +162,8 @@ export default function ServiceList({
             .includes(term) ||
           (t.type || '')
             .toLowerCase()
-            .includes(term)
+            .includes(term) ||
+          (t.subcategory || '').toLowerCase().includes(term)
       );
     }
 
@@ -172,6 +183,10 @@ export default function ServiceList({
       data = data.filter(
         (t) => t.type === typeFilter
       );
+    }
+
+    if (typeFilter === 'REPAIR' && subcategoryFilter !== 'ALL') {
+      data = data.filter((service) => service.subcategory === subcategoryFilter);
     }
 
     data.sort((a, b) => {
@@ -243,6 +258,7 @@ export default function ServiceList({
     searchQuery,
     statusFilter,
     typeFilter,
+    subcategoryFilter,
     sortField,
     sortDirection,
   ]);
@@ -265,6 +281,7 @@ export default function ServiceList({
     searchQuery,
     statusFilter,
     typeFilter,
+    subcategoryFilter,
     sortField,
     sortDirection,
   ]);
@@ -306,6 +323,7 @@ export default function ServiceList({
   const resetFilters = () => {
     setStatusFilter('active');
     setTypeFilter('ALL');
+    setSubcategoryFilter('ALL');
     setSearchQuery('');
   };
 
@@ -315,6 +333,7 @@ export default function ServiceList({
   const hasFilters =
     statusFilter !== 'active' ||
     typeFilter !== 'ALL' ||
+    subcategoryFilter !== 'ALL' ||
     Boolean(searchQuery);
 
   const getStatusCount = (
@@ -371,6 +390,12 @@ export default function ServiceList({
         }
       }
     };
+
+  const handleDelete = async () => {
+    if (!deleteDialog.id) return;
+    const ok = await deleteService(deleteDialog.id, deleteDialog.name);
+    if (ok) setDeleteDialog({ open: false, id: null, name: '' });
+  };
 
   const handleEnable =
     async () => {
@@ -671,6 +696,7 @@ export default function ServiceList({
                   type="button"
                   onClick={() => {
                     setTypeFilter('ALL');
+                    setSubcategoryFilter('ALL');
                     setFilterOpen(false);
                   }}
                   className={cn(
@@ -705,6 +731,7 @@ export default function ServiceList({
                         setTypeFilter(
                           type
                         );
+                        setSubcategoryFilter('ALL');
                         setFilterOpen(
                           false
                         );
@@ -737,7 +764,31 @@ export default function ServiceList({
               </div>
             </PopoverContent>
           </Popover>
-
+          {typeFilter === 'REPAIR' && (
+            <Popover open={subcategoryOpen} onOpenChange={setSubcategoryOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="h-11 shrink-0 rounded-md px-3 text-sm md:h-9">
+                  <Filter className="h-4 w-4" />
+                  {subcategoryFilter === 'ALL' ? 'Repair category' : subcategoryFilter}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" sideOffset={8} className="max-h-[320px] w-[min(90vw,280px)] overflow-y-auto p-2">
+                <p className="px-2 py-2 text-xs font-semibold text-muted-foreground">Filter REPAIR services</p>
+                {['ALL', ...REPAIR_SUBCATEGORIES].map((subcategory) => (
+                  <button
+                    key={subcategory} type="button"
+                    onClick={() => { setSubcategoryFilter(subcategory); setSubcategoryOpen(false); }}
+                    className={cn(
+                      'flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm hover:bg-muted',
+                      subcategoryFilter === subcategory && 'bg-primary/10 font-semibold text-primary',
+                    )}
+                  >
+                    {subcategory === 'ALL' ? 'All repair categories' : subcategory}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
 
@@ -787,6 +838,12 @@ export default function ServiceList({
               "
             >
               Type: {typeFilter}
+            </Badge>
+          )}
+
+          {typeFilter === 'REPAIR' && subcategoryFilter !== 'ALL' && (
+            <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
+              Repair: {subcategoryFilter}
             </Badge>
           )}
 
@@ -982,9 +1039,9 @@ export default function ServiceList({
                           </div>
 
                           <div className="mt-3">
-                            {typeBadge(
-                              service.type
-                            )}
+                            {typeBadge(service.type)}
+                            {service.subcategory && <span className="ml-2 text-xs text-muted-foreground">{service.subcategory}</span>}
+                            <p className="mt-1 text-xs text-muted-foreground">{serviceLaborLabel(service)}</p>
                           </div>
 
                           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1026,10 +1083,7 @@ export default function ServiceList({
                                 <Clock className="h-3.5 w-3.5 text-primary" />
 
                                 <p className="text-sm font-semibold text-foreground">
-                                  {
-                                    service.durationMinutes
-                                  }{' '}
-                                  min
+                                  {formatDurationMinutes(service.durationMinutes)}
                                 </p>
                               </div>
                             </div>
@@ -1069,6 +1123,12 @@ export default function ServiceList({
                         >
                           <Pencil className="h-4 w-4" />
                           Edit
+                        </Button>
+
+                        <Button type="button" variant="ghost" size="icon"
+                          onClick={() => setDeleteDialog({ open: true, id: service.id, name: service.name })}
+                          aria-label={`Delete ${service.name}`} className="h-11 w-11 text-destructive">
+                          <Trash2 className="h-5 w-5" />
                         </Button>
 
                         {service.active ? (
@@ -1414,9 +1474,10 @@ export default function ServiceList({
 
                           {/* Type */}
                           <TableCell className="px-4 py-3 lg:px-5">
-                            {typeBadge(
-                              service.type
-                            )}
+                            <div>{typeBadge(service.type)}
+                              {service.subcategory && <p className="mt-1 text-xs text-muted-foreground">{service.subcategory}</p>}
+                              <p className="mt-1 text-[11px] text-muted-foreground">{serviceLaborLabel(service)}</p>
+                            </div>
                           </TableCell>
 
                           {/* Pricing */}
@@ -1439,10 +1500,7 @@ export default function ServiceList({
                               <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
 
                               <span className="text-sm text-muted-foreground">
-                                {
-                                  service.durationMinutes
-                                }{' '}
-                                minutes
+                                {formatDurationMinutes(service.durationMinutes)}
                               </span>
                             </div>
                           </TableCell>
@@ -1510,6 +1568,12 @@ export default function ServiceList({
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                                 Edit
+                              </Button>
+
+                              <Button type="button" variant="ghost" size="icon"
+                                onClick={() => setDeleteDialog({ open: true, id: service.id, name: service.name })}
+                                aria-label={`Delete ${service.name}`} className="h-8 w-8 text-destructive">
+                                <Trash2 className="h-4 w-4" />
                               </Button>
 
                               {service.active ? (
@@ -1755,6 +1819,9 @@ export default function ServiceList({
         enableDialog={enableDialog}
         onDeactivate={handleDisable}
         onEnable={handleEnable}
+        deleteDialog={deleteDialog}
+        setDeleteDialog={setDeleteDialog}
+        onDelete={handleDelete}
         setDeactivateDialog={
           setDeactivateDialog
         }

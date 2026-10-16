@@ -7,7 +7,9 @@ export const Services = pgTable('services', {
   basePrice: decimal('base_price', { precision: 10, scale: 2 }),
   estimatedDuration: integer('duration_minutes').notNull(),
   active: boolean('active').default(true).notNull(),
-  type: varchar('type', { length: 50 }).default('REPAIR'), // 'PMS', 'REPAIR', 'CHECKUP'
+  type: varchar('type', { length: 50 }).default('REPAIR').notNull(), // PMS | REPAIR | DIAGNOSTIC
+  subcategory: varchar('subcategory', { length: 80 }), // REPAIR subcategory, nullable for legacy records
+  isLaborInclude: boolean('is_labor_include').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

@@ -1,6 +1,7 @@
 import {
   triggerPush,
 } from './invoke';
+import { sendCustomerNotification } from '@/lib/notifications/customer-notification';
 
 /* ================================================================
    TYPES
@@ -138,61 +139,33 @@ export const serviceQueueTriggers = {
 };
 
 /* ================================================================
-   CUSTOMER PUSH COMPATIBILITY
-
-   The existing project already has a customer push helper at:
-
-     @/lib/push/customer-push
-
-   Different versions of the project have used either positional
-   arguments or an options object. This adapter supports both forms
-   without changing the existing helper implementation.
+   CUSTOMER NOTIFICATIONS (PUSH + SMS)
 ================================================================ */
 
-async function sendCustomerPush(
-  payload: CustomerArrivalRequestPayload,
-) {
-  try {
-    const pushModule =
-      (await import(
-        '@/lib/push/customer-push'
-      )) as any;
 
-    const sendPush =
-      pushModule?.sendPushToCustomer;
+/** Only mobile customers receive SMS; staff web-push remains unchanged. */
+export const mobileServiceQueueTriggers = {
+  async onArrivalQuestion(
+    payload: CustomerArrivalRequestPayload,
+  ) {
+    const title = 'AutoCare: Are You Arriving Today?';
+    const vehicle = [
+      payload.vehicleMake,
+      payload.vehicleModel,
+      payload.vehicleYear,
+    ].filter(value => value !== null && value !== undefined && value !== '').join(' ');
+    const plate = payload.plateNumber
+      ? ` (Plate ${payload.plateNumber})`
+      : '';
+    const body = `Please confirm if you will arrive today for appointment #${payload.trackingNumber}, ${vehicle || 'your vehicle'}${plate}. Open AutoCare to respond.`;
 
-    if (
-      typeof sendPush !==
-      'function'
-    ) {
-      console.warn(
-        '[serviceQueueTriggers] sendPushToCustomer is unavailable; realtime arrival request remains active.',
-      );
-
-      return;
-    }
-
-    const title =
-      'AutoCare: Are You Arriving Today?';
-
-    const body =
-      `AutoCare is asking whether ${payload.customerName || 'you'} will be arriving today.`;
-
-    const data = {
+    await sendCustomerNotification(payload.customerId, title, body, {
       type: 'ARRIVAL_REQUEST',
       url: `/tracking?appointmentId=${encodeURIComponent(payload.appointmentId)}`,
-      appointmentId:
-        payload.appointmentId,
-      trackingNumber:
-        payload.trackingNumber,
+      appointmentId: payload.appointmentId,
+      trackingNumber: payload.trackingNumber,
       screen: '/tracking',
-      route: `/tracking?appointmentId=${encodeURIComponent(
-        payload.appointmentId,
-      )}`,
-    };
-
-    await sendPush(payload.customerId, title, body, {
-      ...data,
+      route: `/tracking?appointmentId=${encodeURIComponent(payload.appointmentId)}`,
       requestAt: payload.requestAt,
       customerId: payload.customerId,
       vehicleMake: payload.vehicleMake,
@@ -200,119 +173,20 @@ async function sendCustomerPush(
       vehicleYear: payload.vehicleYear,
       plateNumber: payload.plateNumber,
     });
-  } catch (error) {
-    /*
-     * Push delivery must never block the queue database update.
-     * The customer can still receive the arrival request through
-     * Supabase Realtime while the app is in the foreground.
-     */
-    console.error(
-      '[serviceQueueTriggers] Customer push failed:',
-      error,
-    );
-  }
-}
-
-/* ================================================================
-   MOBILE / CUSTOMER TRIGGERS
-================================================================ */
-
-export const mobileServiceQueueTriggers = {
-  /* ==============================================================
-     STAFF ASKS CUSTOMER ABOUT ARRIVAL
-  ============================================================== */
-
-  async onArrivalQuestion(
-    payload: CustomerArrivalRequestPayload,
-  ) {
-    await sendCustomerPush(
-      payload,
-    );
   },
-
-  /* ==============================================================
-     QUEUE POSITION CHANGED
-
-     Kept for compatibility with the existing legacy reorder route.
-     The effective queue order is still calculated by the canonical
-     queue API; the push only informs the customer.
-  ============================================================== */
 
   async onPositionChanged(
     payload: CustomerQueuePositionPayload,
   ) {
-    try {
-      const pushModule =
-        (await import(
-          '@/lib/push/customer-push'
-        )) as any;
+    const title = '🔄 Service Queue Updated';
+    const body = `Your appointment #${payload.trackingNumber} is now shown at queue position #${payload.newPosition}.`;
 
-      const sendPush =
-        pushModule?.sendPushToCustomer;
-
-      if (
-        typeof sendPush !==
-        'function'
-      ) {
-        console.warn(
-          '[mobileServiceQueueTriggers] sendPushToCustomer is unavailable.',
-        );
-        return;
-      }
-
-      const title =
-        '🔄 Service Queue Updated';
-
-      const body =
-        `Your appointment #${payload.trackingNumber} is now shown at queue position #${payload.newPosition}.`;
-
-      const data = {
-        type: 'QUEUE_POSITION_CHANGED',
-        appointmentId: null,
-        trackingNumber:
-          payload.trackingNumber,
-        queuePosition:
-          payload.newPosition,
-        screen: '/tracking',
-      };
-
-      if (
-        sendPush.length >=
-        4
-      ) {
-        await sendPush(
-          payload.customerId,
-          title,
-          body,
-          data,
-        );
-        return;
-      }
-
-      if (
-        sendPush.length ===
-        3
-      ) {
-        await sendPush(
-          payload.customerId,
-          title,
-          body,
-        );
-        return;
-      }
-
-      await sendPush({
-        customerId:
-          payload.customerId,
-        title,
-        body,
-        data,
-      });
-    } catch (error) {
-      console.error(
-        '[mobileServiceQueueTriggers] Queue position push failed:',
-        error,
-      );
-    }
+    await sendCustomerNotification(payload.customerId, title, body, {
+      type: 'QUEUE_POSITION_CHANGED',
+      appointmentId: null,
+      trackingNumber: payload.trackingNumber,
+      queuePosition: payload.newPosition,
+      screen: '/tracking',
+    });
   },
 };

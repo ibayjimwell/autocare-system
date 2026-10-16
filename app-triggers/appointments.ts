@@ -1,5 +1,5 @@
 // app-triggers/appointments.ts
-import { sendPushToCustomer } from '@/lib/push/customer-push';
+import { sendCustomerNotification } from '@/lib/notifications/customer-notification';
 
 interface MobileAppointmentPayload {
   customerId: string;
@@ -22,7 +22,7 @@ export const mobileAppointmentsTriggers = {
   async onNew(payload: MobileAppointmentPayload) {
     const title = '📅 Appointment Booked';
     const body = `Your appointment #${payload.trackingNumber} on ${formatDate(payload.appointmentDate)} has been booked.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: '/appointments',
     });
   },
@@ -31,7 +31,7 @@ export const mobileAppointmentsTriggers = {
   async onConfirmed(payload: MobileAppointmentPayload) {
     const title = '✅ Appointment Confirmed';
     const body = `Your appointment #${payload.trackingNumber} on ${formatDate(payload.appointmentDate)} has been confirmed.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
@@ -40,7 +40,7 @@ export const mobileAppointmentsTriggers = {
   async onCancelled(payload: MobileAppointmentPayload) {
     const title = '❌ Appointment Cancelled';
     const body = `Your appointment #${payload.trackingNumber} has been cancelled. Reason: ${payload.reason || 'N/A'}`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: '/appointments',
     });
   },
@@ -49,7 +49,7 @@ export const mobileAppointmentsTriggers = {
   async onUnderInspection(payload: MobileAppointmentPayload) {
     const title = '🔍 Inspection Started';
     const body = `Your vehicle for appointment #${payload.trackingNumber} is now being inspected.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
@@ -58,7 +58,7 @@ export const mobileAppointmentsTriggers = {
   async onWaitingForApproval(payload: MobileAppointmentPayload) {
     const title = '📊 Estimate Ready for Review';
     const body = `The estimate for appointment #${payload.trackingNumber} is ready. Please review and approve.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
@@ -67,7 +67,7 @@ export const mobileAppointmentsTriggers = {
   async onInProgress(payload: MobileAppointmentPayload) {
     const title = '🔧 Repair In Progress';
     const body = `Your vehicle for appointment #${payload.trackingNumber} is now being repaired.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
@@ -76,7 +76,7 @@ export const mobileAppointmentsTriggers = {
   async onCompleted(payload: MobileAppointmentPayload) {
     const title = '🏁 Service Completed';
     const body = `All work for appointment #${payload.trackingNumber} has been completed.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
@@ -85,7 +85,7 @@ export const mobileAppointmentsTriggers = {
   async onRescheduleRequested(payload: MobileAppointmentPayload & { newDate: string; newTime: string }) {
     const title = '📅 Reschedule Request';
     const body = `Staff requested to reschedule your appointment #${payload.trackingNumber} to ${payload.newDate} at ${payload.newTime}.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
@@ -94,7 +94,7 @@ export const mobileAppointmentsTriggers = {
   async onRescheduleApproved(payload: MobileAppointmentPayload & { newDate: string; newTime: string }) {
     const title = '✅ Reschedule Approved';
     const body = `Your appointment #${payload.trackingNumber} has been rescheduled to ${payload.newDate} at ${payload.newTime}.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },
@@ -103,7 +103,7 @@ export const mobileAppointmentsTriggers = {
   async onRescheduleRejected(payload: MobileAppointmentPayload) {
     const title = '❌ Reschedule Rejected';
     const body = `Your reschedule request for appointment #${payload.trackingNumber} was rejected.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: `/tracking?appointmentId=${payload.trackingNumber}`,
     });
   },

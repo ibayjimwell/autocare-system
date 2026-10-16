@@ -32,7 +32,7 @@ import {
   useServiceForm,
 } from '@/hooks/services/useServiceForm';
 
-import { SERVICE_TYPES, SERVICE_TYPE_LABELS } from '@/app-utils/services/helpers';
+import { SERVICE_TYPES, SERVICE_TYPE_LABELS, REPAIR_SUBCATEGORIES, splitDurationMinutes, combineDurationMinutes, formatDurationMinutes } from '@/app-utils/services/helpers';
 interface ServiceFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -68,6 +68,15 @@ export default function ServiceFormModal({
     open,
     editingService,
   ]);
+
+  const duration = splitDurationMinutes(form.durationMinutes);
+
+  const updateDuration = (hours: unknown, minutes: unknown) => {
+    setForm((previous) => ({
+      ...previous,
+      durationMinutes: String(combineDurationMinutes(hours, minutes)),
+    }));
+  };
 
   const onSubmit = (
     e: React.FormEvent
@@ -190,7 +199,8 @@ export default function ServiceFormModal({
             ) =>
               setForm({
                 ...form,
-                type: value,
+                type: value as 'PMS' | 'REPAIR' | 'DIAGNOSTIC',
+                subcategory: value === 'REPAIR' ? form.subcategory : '',
               })
             }
           >
@@ -217,6 +227,30 @@ export default function ServiceFormModal({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Repair subcategory */}
+        {form.type === 'REPAIR' && (
+          <div className="space-y-2">
+            <Label>Repair Subcategory</Label>
+            <Select value={form.subcategory || undefined} onValueChange={(value) => setForm({ ...form, subcategory: value })}>
+              <SelectTrigger className="h-11 rounded-md bg-background md:h-9"><SelectValue placeholder="Choose repair subcategory" /></SelectTrigger>
+              <SelectContent>
+                {REPAIR_SUBCATEGORIES.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Required when the service category is REPAIR.</p>
+          </div>
+        )}
+
+        {/* Labor inclusion */}
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/20 p-4">
+          <input type="checkbox" checked={form.isLaborInclude} onChange={(event) => setForm({ ...form, isLaborInclude: event.target.checked })}
+            className="h-5 w-5 accent-primary" />
+          <span className="flex-1">
+            <span className="block text-sm font-semibold">Base price includes labor</span>
+            <span className="mt-1 block text-xs text-muted-foreground">If enabled, labor is already included in the service's base price.</span>
+          </span>
+        </label>
 
         {/* Description */}
         <div className="space-y-2">
@@ -307,52 +341,35 @@ export default function ServiceFormModal({
           </div>
 
           <div className="space-y-2">
-            <Label
-              htmlFor="service-duration"
-              className="text-sm font-medium text-foreground"
-            >
-              Duration (Mins)
+            <Label className="text-sm font-medium text-foreground">
+              <Clock className="mr-1 inline h-4 w-4 text-muted-foreground" />
+              Estimated Duration
             </Label>
-
-            <div className="relative">
-              <Clock
-                className="
-                  pointer-events-none
-                  absolute left-3
-                  top-1/2
-                  h-4 w-4
-                  -translate-y-1/2
-                  text-muted-foreground
-                "
-              />
-
-              <Input
-                id="service-duration"
-                type="number"
-                value={
-                  form.durationMinutes
-                }
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    durationMinutes:
-                      e.target.value,
-                  })
-                }
-                placeholder="30"
-                className="
-                  h-11 rounded-md
-                  bg-background
-                  pl-10
-                  text-base
-                  focus-visible:outline-none
-                  focus-visible:ring-2
-                  focus-visible:ring-ring
-                  focus-visible:ring-offset-1
-                  md:h-9 md:text-sm
-                "
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label htmlFor="service-hours" className="mb-1 block text-xs text-muted-foreground">Hours</Label>
+                <Input
+                  id="service-hours" type="number" inputMode="numeric" min="0" step="1"
+                  value={form.durationMinutes === '' ? '' : duration.hours}
+                  onChange={(e) => updateDuration(e.target.value, duration.minutes)}
+                  placeholder="0" className="h-11 bg-background md:h-9"
+                />
+              </div>
+              <div>
+                <Label htmlFor="service-minutes" className="mb-1 block text-xs text-muted-foreground">Minutes (0–59)</Label>
+                <Input
+                  id="service-minutes" type="number" inputMode="numeric" min="0" max="59" step="1"
+                  value={form.durationMinutes === '' ? '' : duration.minutes}
+                  onChange={(e) => updateDuration(duration.hours, e.target.value)}
+                  placeholder="30" className="h-11 bg-background md:h-9"
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {form.durationMinutes && Number(form.durationMinutes) > 0
+                ? `Estimated completion: ${formatDurationMinutes(form.durationMinutes)}`
+                : 'Enter at least 1 minute; e.g. 2 hours and 30 minutes.'}
+            </p>
           </div>
         </div>
       </div>

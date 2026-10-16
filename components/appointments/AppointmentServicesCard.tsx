@@ -150,6 +150,11 @@ export default function AppointmentServicesCard({
                       </div>
                     </div>
 
+                    <p className="text-xs text-muted-foreground">
+                      {service?.subcategory && `${service.subcategory} • `}
+                      {service?.isLaborInclude ? 'Labor included' : 'Labor not included'}
+                    </p>
+
                     <div className="shrink-0 font-mono text-sm font-semibold text-foreground">
                       {money(
                         service?.basePrice

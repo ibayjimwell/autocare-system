@@ -26,6 +26,7 @@ export * from "./service-tracking/inspection-finding-parts.model";
 export * from "./service-tracking/work-tasks.model";
 export * from "./service-tracking/default-task-groups.model";
 export * from "./service-tracking/default-tasks.model";
+export * from "./service-tracking/service-default-task-groups.model";
 export * from "./service-tracking/task-history.model"
 export * from "./service-tracking/default-findings.model"
 export * from "./service-tracking/default-finding-parts.model"
@@ -71,3 +72,6 @@ export * from "./configurations/configurations-logs.model";
 export * from './dashboard/dashboard.model';
 
 export * from "./payments/payment-transactions.model";
+
+// Diagnostic Checklist (independent Service Tracking submodule)
+export * from './diagnostic-checklist/diagnostic-checklists.model';

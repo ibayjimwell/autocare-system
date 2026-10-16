@@ -95,10 +95,12 @@ export async function POST(req: NextRequest) {
   const insertData = {
     name: rawData.name.trim(),
     description: rawData.description?.trim() || null,
-    basePrice: rawData.basePrice ? parseFloat(rawData.basePrice) : null,
+    basePrice: rawData.basePrice !== '' && rawData.basePrice != null ? String(Number(rawData.basePrice)) : null,
     estimatedDuration: rawData.durationMinutes ? parseInt(rawData.durationMinutes, 10) : null, // ← key change: durationMinutes → estimatedDuration
     active: true,
-    type: rawData.type
+    type: rawData.type,
+    subcategory: rawData.type === 'REPAIR' ? String(rawData.subcategory || '').trim() : null,
+    isLaborInclude: rawData.isLaborInclude === true || rawData.isLaborInclude === 'true',
   };
 
   try {

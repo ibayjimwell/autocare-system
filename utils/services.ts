@@ -3,31 +3,31 @@ import { Services } from "@/database/models/services/services.model";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { isValidUUID } from "./shared";
+import { SERVICE_TYPES, REPAIR_SUBCATEGORIES } from '@/app-utils/services/helpers';
 
 /**
  * Validates service data for creation/update.
  */
 export function validateServiceData(data: any): string[] {
   const errors: string[] = [];
-  if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
-    errors.push("Service name is required.");
+  if (typeof data?.name !== 'string' || !data.name.trim() || data.name.trim().length > 100) {
+    errors.push('Service name is required (up to 100 characters).');
   }
-  if (data.description !== undefined && typeof data.description !== 'string') {
-    errors.push("Description must be a string.");
+  if (data.description != null && typeof data.description !== 'string') errors.push('Description must be a string.');
+  if (data.basePrice != null && data.basePrice !== '') {
+    const price = Number(data.basePrice);
+    if (!Number.isFinite(price) || price < 0) errors.push('Base price must be zero or greater.');
   }
-  if (data.basePrice !== undefined && data.basePrice !== null) {
-    const price = parseFloat(data.basePrice);
-    if (isNaN(price) || price < 0) {
-      errors.push("Base price must be a positive number.");
-    }
+  const duration = Number(data.durationMinutes);
+  if (!Number.isInteger(duration) || duration < 1) errors.push('Duration must be a positive integer.');
+  if (!SERVICE_TYPES.includes(data.type)) errors.push('Service category must be PMS, REPAIR, or DIAGNOSTIC.');
+  const subcategory = typeof data.subcategory === 'string' ? data.subcategory.trim() : '';
+  if (data.type === 'REPAIR' && !REPAIR_SUBCATEGORIES.includes(subcategory as any)) {
+    errors.push('Select a valid REPAIR subcategory.');
   }
-  if (!data.durationMinutes) {
-    errors.push("Duration (minutes) is required.");
-  } else {
-    const duration = parseInt(data.durationMinutes, 10);
-    if (isNaN(duration) || duration < 1) {
-      errors.push("Duration must be a positive integer.");
-    }
+  if (data.type !== 'REPAIR' && subcategory) errors.push('Only REPAIR services may have a subcategory.');
+  if (typeof data.isLaborInclude !== 'boolean' && data.isLaborInclude !== 'true' && data.isLaborInclude !== 'false') {
+    errors.push('Labor inclusion must be true or false.');
   }
   return errors;
 }

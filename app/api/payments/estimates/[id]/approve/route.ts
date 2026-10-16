@@ -1,4 +1,5 @@
 import { recordPaymentTransaction } from '@/utils/payments/payment-transactions';
+import { applyLinkedDefaultTasks } from '@/lib/service-tracking/apply-linked-default-tasks';
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
@@ -230,6 +231,9 @@ export async function PATCH(
           updatedAt: new Date(),
         })
         .where(eq(Appointments.id, estimate.appointmentId));
+
+      // Same transaction: enter repair phase and initialize linked work tasks.
+      await applyLinkedDefaultTasks(estimate.appointmentId, 'WORK', tx);
 
       return {
         appointmentId: estimate.appointmentId,

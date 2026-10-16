@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
+
 import React, {
   useEffect,
   useMemo,
@@ -167,6 +169,7 @@ export default function DefaultTaskPickerModal({
       const groupText = [
         group?.title,
         group?.description,
+        ...(Array.isArray(group?.linkedServices) ? group.linkedServices.map((service: any) => service?.name) : []),
         ...(Array.isArray(group?.tasks)
           ? group.tasks.map((task: any) => task?.title)
           : []),
@@ -598,6 +601,11 @@ export default function DefaultTaskPickerModal({
                               {phaseLabel} task
                               {groupTasks.length === 1 ? '' : 's'}
                             </span>
+                            {group.linkedServices?.length > 0 && (
+                              <span className="mt-1 block text-[10px] font-medium text-primary">
+                                Linked to {group.linkedServices.map((service: any) => service.name).join(', ')}
+                              </span>
+                            )}
                           </span>
                         </div>
                       </button>
@@ -624,6 +632,11 @@ export default function DefaultTaskPickerModal({
                         {selectedGroup.title}
                       </h3>
 
+                      {selectedGroup.linkedServices?.length > 0 && (
+                        <p className="mt-1 text-xs font-medium text-primary">
+                          Auto-linked: {selectedGroup.linkedServices.map((service: any) => service.name).join(', ')}
+                        </p>
+                      )}
                       {selectedGroup.description && (
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">
                           {selectedGroup.description}
@@ -697,7 +710,7 @@ export default function DefaultTaskPickerModal({
                                     className="rounded-md text-[9px]"
                                   >
                                     <Clock3 className="mr-1 h-3 w-3" />
-                                    {duration} min
+                                    {formatDurationMinutes(duration)}
                                   </Badge>
                                 )}
 

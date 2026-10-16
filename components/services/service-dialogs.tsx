@@ -5,6 +5,9 @@ import React from 'react';
 import ConfirmationDialog from '@/components/services/confirmation-dialog';
 
 interface ServiceDialogsProps {
+  deleteDialog: { open: boolean; id: string | null; name: string };
+  setDeleteDialog: (data: any) => void;
+  onDelete: () => void;
   deactivateDialog: {
     open: boolean;
     id: string | null;
@@ -32,6 +35,9 @@ interface ServiceDialogsProps {
 export default function ServiceDialogs({
   deactivateDialog,
   enableDialog,
+  deleteDialog,
+  setDeleteDialog,
+  onDelete,
   onDeactivate,
   onEnable,
   setDeactivateDialog,
@@ -39,6 +45,15 @@ export default function ServiceDialogs({
 }: ServiceDialogsProps) {
   return (
     <>
+      <ConfirmationDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
+        title="Permanently Delete Service?"
+        description={`You are responsible for this action. Permanently deleting "${deleteDialog.name}" cannot be undone. Services attached to appointments cannot be deleted; disable those instead.`}
+        onConfirm={onDelete}
+        confirmText="Permanently Delete"
+        variant="destructive"
+      />
       <ConfirmationDialog
         open={
           deactivateDialog.open

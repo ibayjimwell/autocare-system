@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
+
 import React, {
   useEffect,
   useMemo,
@@ -328,7 +330,7 @@ export default function HistoryTaskPickerModal({
                               {Number.isFinite(duration) && duration > 0 && (
                                 <Badge variant="secondary" className="rounded-md text-[9px]">
                                   <Clock3 className="mr-1 h-3 w-3" />
-                                  {duration} min
+                                  {formatDurationMinutes(duration)}
                                 </Badge>
                               )}
 

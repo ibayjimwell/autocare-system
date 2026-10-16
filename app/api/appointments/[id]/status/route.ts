@@ -44,6 +44,8 @@ import {
   mobileAppointmentsTriggers,
 } from "@/app-triggers/appointments";
 
+import { applyLinkedDefaultTasks } from "@/lib/service-tracking/apply-linked-default-tasks";
+
 import {
   addToQueue,
   removeFromQueue,
@@ -648,26 +650,18 @@ export async function PATCH(
        UPDATE APPOINTMENT
     ============================================================= */
 
-    const [
-      updated,
-    ] =
-      await Database.update(
-        Appointments,
-      )
-        .set({
-          status:
-            newStatus,
-
-          updatedAt:
-            new Date(),
-        })
-        .where(
-          eq(
-            Appointments.id,
-            id,
-          ),
-        )
-        .returning();
+    const updated = await Database.transaction(async (tx) => {
+      const [appointment] = await tx.update(Appointments)
+        .set({ status: newStatus, updatedAt: new Date() })
+        .where(eq(Appointments.id, id)).returning();
+      if (!appointment) throw new Error('Appointment could not be updated.');
+      if (current.status !== newStatus && newStatus === 'UNDER_INSPECTION') {
+        await applyLinkedDefaultTasks(id, 'INSPECTION', tx);
+      } else if (current.status !== newStatus && newStatus === 'IN_PROGRESS') {
+        await applyLinkedDefaultTasks(id, 'WORK', tx);
+      }
+      return appointment;
+    });
 
     /* ============================================================
        RESTORE KEPT INVENTORY ON CANCELLATION

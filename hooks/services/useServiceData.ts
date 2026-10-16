@@ -53,5 +53,15 @@ export function useServiceData() {
     return true;
   };
 
-  return { services, loading, apiError, loadServices, disableService, enableService };
+  const deleteService = async (id: string, name: string) => {
+    try {
+      const res = await servicesApi.delete(id);
+      if (res.error) { toast.error(res.errorMessage || 'Failed to delete service.'); return false; }
+      toast.success(`\"${name}\" permanently deleted.`);
+      await loadServices();
+      return true;
+    } catch (error: any) { toast.error(error?.message || 'Failed to delete service.'); return false; }
+  };
+
+  return { services, loading, apiError, loadServices, disableService, enableService, deleteService };
 }

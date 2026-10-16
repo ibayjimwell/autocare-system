@@ -10,6 +10,7 @@ import { isValidUUID } from "@/utils/shared";
 import { getTrackingNumber } from "@/utils/service-tracking/get-tracking-number";
 import { serviceTrackingTriggers } from "@/triggers/service-tracking";
 import { mobileInspectionTaskTriggers } from "@/app-triggers/inspection-task";
+import { applyLinkedDefaultTasks } from "@/lib/service-tracking/apply-linked-default-tasks";
 
 // ------------------------------------------------------------------
 // GET /api/service-tracking/inspection-tasks?appointmentId=...
@@ -108,35 +109,44 @@ export async function POST(req: NextRequest) {
   const taskCount = Number(existingTasks[0]?.count || 0);
 
   try {
-    const [newTask] = await Database.insert(InspectionTasks)
-      .values({
-        appointmentId,
-        title: title.trim(),
-        order: order || taskCount + 1,
-        status: 'PENDING',
-        durationMinutes: durationMinutes ?? null,   // new field
-      })
-      .returning();
+    const newTask = await Database.transaction(async (tx) => {
+      const [created] = await tx.insert(InspectionTasks)
+        .values({
+          appointmentId,
+          title: title.trim(),
+          order: order || taskCount + 1,
+          status: 'PENDING',
+          durationMinutes: durationMinutes ?? null,
+        })
+        .returning();
 
-     // Staff trigger
+      // This old endpoint can itself begin inspection when adding the first
+      // task. Keep both the status transition and template copy atomic.
+      if (taskCount === 0) {
+        const [appointment] = await tx.select({ status: Appointments.status })
+          .from(Appointments).where(eq(Appointments.id, appointmentId)).limit(1);
+        if (appointment && ['PENDING', 'CONFIRMED', 'UNDER_INSPECTION'].includes(appointment.status)) {
+          if (appointment.status !== 'UNDER_INSPECTION') {
+            await tx.update(Appointments)
+              .set({ status: 'UNDER_INSPECTION', updatedAt: new Date() })
+              .where(eq(Appointments.id, appointmentId));
+          }
+          await applyLinkedDefaultTasks(appointmentId, 'INSPECTION', tx);
+        }
+      }
+      return created;
+    });
+
+    // Preserve the existing staff and customer notification behavior.
     const trackingNumber = await getTrackingNumber(appointmentId);
     serviceTrackingTriggers.onInspectionTaskAdded({
       taskTitle: newTask.title,
       trackingNumber,
     }).catch(console.error);
-
-    // Mobile customer trigger 
     mobileInspectionTaskTriggers.onTaskAdded({
       appointmentId,
       taskTitle: newTask.title,
     }).catch(console.error);
-
-    // If this is the first task, update appointment status to UNDER_INSPECTION
-    if (taskCount === 0) {
-      await Database.update(Appointments)
-        .set({ status: 'UNDER_INSPECTION', updatedAt: new Date() })
-        .where(eq(Appointments.id, appointmentId));
-    }
 
     return NextResponse.json({
       error: false,

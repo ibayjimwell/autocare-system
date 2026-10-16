@@ -14,6 +14,8 @@ export interface DefaultGroupInput {
   title: string;
   description?: string;
   tasks?: DefaultTaskInput[];
+  /** Linked catalog services; when booked their phase tasks import automatically. */
+  serviceIds?: string[];
 }
 
 export const defaultGroupsApi = {

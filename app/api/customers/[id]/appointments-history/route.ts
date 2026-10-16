@@ -93,6 +93,8 @@ export async function GET(
         name: Services.name,
         description: Services.description,
         basePrice: Services.basePrice,
+        subcategory: Services.subcategory,
+        isLaborInclude: Services.isLaborInclude,
         estimatedDuration: Services.estimatedDuration,
         type: Services.type,
       })

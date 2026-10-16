@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
+
 import React from 'react';
 
 import {
@@ -165,10 +167,7 @@ export default function AppointmentTasksCard({
                           <span className="flex items-center gap-1">
                             <Clock3 className="h-3 w-3" />
 
-                            {
-                              task.durationMinutes
-                            }{' '}
-                            min
+                            {formatDurationMinutes(task.durationMinutes)}
                           </span>
                         )}
 

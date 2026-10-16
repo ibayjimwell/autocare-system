@@ -10,12 +10,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Package, Plus, Search, Trash2, Edit2, X } from 'lucide-react';
 import InventoryPicker from '@/components/inventory/inventory-picker';
 import { defaultFindingsApi } from '@/lib/service-tracking/default-findings';
+import { diagnosticChecklistApi } from '@/lib/diagnostic-checklist/diagnostic-checklists';
+import { DIAGNOSTIC_SECTIONS } from '@/lib/diagnostic-checklist/catalog';
 import { toast } from 'sonner';
 
 interface Props { open: boolean; onOpenChange: (open: boolean) => void; onSaved: () => void; }
 interface PartForm { id?: string; inventoryItemId?: string | null; partName: string; quantity: number; priceAtTime: number; isPms: boolean; }
-interface FindingForm { title: string; parts: PartForm[]; }
-const emptyForm = (): FindingForm => ({ title: '', parts: [] });
+interface FindingForm { title: string; parts: PartForm[]; checklistKeys: string[]; }
+const emptyForm = (): FindingForm => ({ title: '', parts: [], checklistKeys: [] });
 
 export default function DefaultFindingManagerModal({ open, onOpenChange, onSaved }: Props) {
   const [findings, setFindings] = useState<any[]>([]);
@@ -23,13 +25,16 @@ export default function DefaultFindingManagerModal({ open, onOpenChange, onSaved
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [checklistSearch, setChecklistSearch] = useState('');
+  const [findingLinks, setFindingLinks] = useState<Array<{ itemKey: string; defaultFindingId: string }>>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FindingForm>(emptyForm());
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await defaultFindingsApi.list();
+      const [res, linksRes] = await Promise.all([defaultFindingsApi.list(), diagnosticChecklistApi.listLinks()]);
+      setFindingLinks(Array.isArray(linksRes?.data) ? linksRes.data : []);
       if (res?.error) throw new Error(res.errorMessage || 'Failed to load default findings.');
       setFindings(Array.isArray(res?.data) ? res.data : []);
     } catch (e: any) { toast.error(e?.message || 'Failed to load default findings.'); setFindings([]); }
@@ -44,11 +49,14 @@ export default function DefaultFindingManagerModal({ open, onOpenChange, onSaved
     return findings.filter((f) => [f?.title, ...(f?.parts || []).map((p: any) => p?.partName)].filter(Boolean).join(' ').toLowerCase().includes(q));
   }, [findings, search]);
 
-  const reset = () => { setEditingId(null); setForm(emptyForm()); };
+  const reset = () => { setEditingId(null); setForm(emptyForm()); setChecklistSearch(''); };
+  const toggleChecklistKey = (key: string) => setForm(current => ({ ...current, checklistKeys: current.checklistKeys.includes(key)
+    ? current.checklistKeys.filter(value => value !== key) : [...current.checklistKeys, key] }));
   const edit = (f: any) => {
     setEditingId(f.id);
     setForm({
       title: String(f?.title || ''),
+      checklistKeys: findingLinks.filter(link => link.defaultFindingId === f.id).map(link => link.itemKey),
       parts: (Array.isArray(f?.parts) ? f.parts : []).map((p: any) => ({
         id: p.id,
         inventoryItemId: p.inventoryItemId || null,
@@ -75,6 +83,10 @@ export default function DefaultFindingManagerModal({ open, onOpenChange, onSaved
         ? await defaultFindingsApi.update(editingId, { title, parts })
         : await defaultFindingsApi.create({ title, parts });
       if (res?.error) throw new Error(res.errorMessage || 'Could not save default finding.');
+      const savedId = editingId || res?.data?.id;
+      if (!savedId) throw new Error('Saved finding ID is missing.');
+      setEditingId(savedId); // Retry linking without creating a duplicate finding.
+      await diagnosticChecklistApi.saveFindingLinks(savedId, form.checklistKeys);
       toast.success(editingId ? 'Default finding updated.' : 'Default finding added.');
       reset();
       onSaved();
@@ -108,7 +120,7 @@ export default function DefaultFindingManagerModal({ open, onOpenChange, onSaved
             <div className="p-4"><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/><Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search findings or parts" className="pl-9"/></div></div>
             <ScrollArea className="min-h-0 flex-1 px-4 pb-4">
               {loading ? <div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin"/></div> : visible.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No default findings found.</div> : <div className="space-y-2">
-                {visible.map((f) => <div key={f.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{f.title}</p><p className="mt-1 text-xs text-muted-foreground">{(f.parts || []).length} attached part(s)</p></div><div className="flex gap-1"><Button variant="ghost" size="icon" onClick={()=>edit(f)} aria-label="Edit"><Edit2 className="h-4 w-4"/></Button><Button variant="ghost" size="icon" disabled={deletingId===f.id} onClick={()=>void remove(f.id)} aria-label="Delete">{deletingId===f.id?<Loader2 className="h-4 w-4 animate-spin"/>:<Trash2 className="h-4 w-4"/>}</Button></div></div></div>)}
+                {visible.map((f) => <div key={f.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{f.title}</p><p className="mt-1 text-xs text-muted-foreground">{(f.parts || []).length} attached part(s) · {findingLinks.filter(link => link.defaultFindingId === f.id).length} checklist links</p></div><div className="flex gap-1"><Button variant="ghost" size="icon" onClick={()=>edit(f)} aria-label="Edit"><Edit2 className="h-4 w-4"/></Button><Button variant="ghost" size="icon" disabled={deletingId===f.id} onClick={()=>void remove(f.id)} aria-label="Delete">{deletingId===f.id?<Loader2 className="h-4 w-4 animate-spin"/>:<Trash2 className="h-4 w-4"/>}</Button></div></div></div>)}
               </div>}
             </ScrollArea>
           </div>
@@ -117,6 +129,28 @@ export default function DefaultFindingManagerModal({ open, onOpenChange, onSaved
               <div className="space-y-5 pr-3">
                 <div><Label>Finding title</Label><Input className="mt-2" value={form.title} onChange={(e)=>setForm((v)=>({...v,title:e.target.value}))} placeholder="e.g. Worn front brake pads"/></div>
                 <div className="flex items-center justify-between"><div><Label>Attached parts</Label><p className="text-xs text-muted-foreground">Pick inventory to keep the stock reference when this default is used.</p></div><Button type="button" variant="outline" onClick={addPart}><Plus className="mr-2 h-4 w-4"/>Part</Button></div>
+                {/* A single Default Finding may be suggested by several vehicle components. */}
+                <div className="rounded-xl border border-border p-4">
+                  <Label className="text-sm font-semibold">Diagnostic Checklist links</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">Checking Warning or Replace for a linked component suggests this finding in Service Tracking. Unlinked findings remain available in the manual selector.</p>
+                  <div className="relative mt-3">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
+                    <Input value={checklistSearch} onChange={event => setChecklistSearch(event.target.value)} placeholder="Search vehicle components..." className="pl-9"/>
+                  </div>
+                  <div className="mt-3 max-h-52 space-y-3 overflow-y-auto rounded-md border p-3">
+                    {DIAGNOSTIC_SECTIONS.map(section => {
+                      const items = section.items.filter(([,label]) => label.toLowerCase().includes(checklistSearch.trim().toLowerCase()) || section.title.toLowerCase().includes(checklistSearch.trim().toLowerCase()));
+                      if (!items.length) return null;
+                      return <div key={section.id}>
+                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{section.title}</p>
+                        <div className="grid gap-2 sm:grid-cols-2">{items.map(([key,label]) => <label key={key} className="flex cursor-pointer items-center gap-2 text-xs">
+                          <Checkbox checked={form.checklistKeys.includes(key)} onCheckedChange={() => toggleChecklistKey(key)}/>{label}
+                        </label>)}</div>
+                      </div>;
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{form.checklistKeys.length} checklist item(s) linked</p>
+                </div>
                 <div className="space-y-3">{form.parts.map((part,i)=><div key={part.id || i} className="rounded-lg border p-3"><div className="grid gap-3 md:grid-cols-[1fr_110px_140px_auto]">
                   <div><Label>Part</Label><div className="mt-2 flex gap-2"><Input value={part.partName} onChange={(e)=>changePart(i,{partName:e.target.value,inventoryItemId:null})} placeholder="Part name"/><InventoryPicker onSelect={(item)=>changePart(i,{inventoryItemId:item.id,partName:item.name,priceAtTime:item.price})}><Button type="button" variant="outline" size="icon" title="Pick from inventory"><Package className="h-4 w-4"/></Button></InventoryPicker></div>{part.inventoryItemId && <p className="mt-1 text-[11px] text-muted-foreground">Linked to inventory</p>}</div>
                   <div><Label>Qty</Label><Input className="mt-2" type="number" min={1} value={part.quantity} onChange={(e)=>changePart(i,{quantity:Number(e.target.value)})}/></div>

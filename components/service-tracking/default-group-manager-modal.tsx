@@ -39,8 +39,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { defaultGroupsApi } from '@/lib/service-tracking/default-groups';
+import { servicesApi } from '@/lib/services/services';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  splitDurationMinutes,
+  combineDurationMinutes,
+  formatDurationMinutes,
+  REPAIR_SUBCATEGORIES,
+} from '@/app-utils/services/helpers';
 
 /* ================================================================
    TYPES
@@ -53,6 +60,14 @@ interface DefaultGroupManagerModalProps {
 }
 
 type TaskType = 'INSPECTION' | 'WORK';
+type ServiceCategory = 'ALL' | 'PMS' | 'REPAIR' | 'DIAGNOSTIC';
+
+const SERVICE_CATEGORIES: Array<{ value: ServiceCategory; label: string }> = [
+  { value: 'ALL', label: 'All Services' },
+  { value: 'PMS', label: 'PMS' },
+  { value: 'REPAIR', label: 'REPAIR' },
+  { value: 'DIAGNOSTIC', label: 'DIAGNOSTIC' },
+];
 
 interface TaskForm {
   id?: string;
@@ -66,12 +81,14 @@ interface GroupForm {
   title: string;
   description: string;
   tasks: TaskForm[];
+  serviceIds: string[];
 }
 
 const EMPTY_FORM: GroupForm = {
   title: '',
   description: '',
   tasks: [],
+  serviceIds: [],
 };
 
 /* ================================================================
@@ -84,9 +101,15 @@ export default function DefaultGroupManagerModal({
   onSaved,
 }: DefaultGroupManagerModalProps) {
   const [groups, setGroups] = useState<any[]>([]);
+  const [catalogServices, setCatalogServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [serviceCategory, setServiceCategory] = useState<ServiceCategory>('ALL');
+  const [repairSubcategory, setRepairSubcategory] = useState('ALL');
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [servicesError, setServicesError] = useState('');
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [formData, setFormData] = useState<GroupForm>(EMPTY_FORM);
 
@@ -132,9 +155,34 @@ export default function DefaultGroupManagerModal({
   };
 
   useEffect(() => {
-    if (open) {
-      void loadGroups();
-    }
+    if (!open) return;
+
+    let cancelled = false;
+    setServicesLoading(true);
+    setServicesError('');
+    void loadGroups();
+
+    void servicesApi.list()
+      .then((result: any) => {
+        if (cancelled) return;
+        if (result?.error) {
+          setCatalogServices([]);
+          setServicesError(result.errorMessage || 'Could not load services.');
+          return;
+        }
+        setCatalogServices(Array.isArray(result?.data) ? result.data : []);
+      })
+      .catch((error: any) => {
+        if (cancelled) return;
+        console.error('[DefaultTaskLibrary] Service catalog load failed:', error);
+        setCatalogServices([]);
+        setServicesError('Could not load the service catalog. Reopen the library to retry.');
+      })
+      .finally(() => {
+        if (!cancelled) setServicesLoading(false);
+      });
+
+    return () => { cancelled = true; };
   }, [open]);
 
   /* ==============================================================
@@ -152,6 +200,7 @@ export default function DefaultGroupManagerModal({
       const text = [
         group?.title,
         group?.description,
+        ...(Array.isArray(group?.linkedServices) ? group.linkedServices.map((service: any) => service?.name) : []),
         ...(Array.isArray(group?.tasks)
           ? group.tasks.map((task: any) => task?.title)
           : []),
@@ -165,6 +214,50 @@ export default function DefaultGroupManagerModal({
   }, [groups, search]);
 
   /* ==============================================================
+     LINKED SERVICE PICKER FILTERS
+
+     Search is separate from the task-group search. Filters affect
+     which services are visible, never which service IDs are saved.
+  ============================================================== */
+
+  const serviceCategoryCounts = useMemo(() => {
+    return {
+      ALL: catalogServices.length,
+      PMS: catalogServices.filter((service) => String(service?.type || '').toUpperCase() === 'PMS').length,
+      REPAIR: catalogServices.filter((service) => String(service?.type || '').toUpperCase() === 'REPAIR').length,
+      DIAGNOSTIC: catalogServices.filter((service) => String(service?.type || '').toUpperCase() === 'DIAGNOSTIC').length,
+    };
+  }, [catalogServices]);
+
+  const filteredCatalogServices = useMemo(() => {
+    const query = serviceSearch.trim().toLocaleLowerCase();
+
+    return catalogServices
+      .filter((service) => {
+        const type = String(service?.type || '').trim().toUpperCase();
+        const subcategory = String(service?.subcategory || '').trim().toUpperCase();
+        if (serviceCategory !== 'ALL' && type !== serviceCategory) return false;
+        if (serviceCategory === 'REPAIR' && repairSubcategory !== 'ALL' && subcategory !== repairSubcategory) return false;
+        return !query || String(service?.name || '').toLocaleLowerCase().includes(query);
+      })
+      .sort((left, right) => String(left?.name || '').localeCompare(String(right?.name || '')));
+  }, [catalogServices, serviceSearch, serviceCategory, repairSubcategory]);
+
+  const handleServiceCategoryChange = (category: ServiceCategory) => {
+    setServiceCategory(category);
+    setRepairSubcategory('ALL');
+  };
+
+  const toggleServiceLink = (serviceId: string, checked: boolean) => {
+    setFormData((previous) => ({
+      ...previous,
+      serviceIds: checked
+        ? [...new Set([...previous.serviceIds, serviceId])]
+        : previous.serviceIds.filter((id) => id !== serviceId),
+    }));
+  };
+
+  /* ==============================================================
      FORM
   ============================================================== */
 
@@ -172,6 +265,7 @@ export default function DefaultGroupManagerModal({
     setFormData({
       ...EMPTY_FORM,
       tasks: [],
+      serviceIds: [],
     });
 
     setEditingGroupId(null);
@@ -183,6 +277,7 @@ export default function DefaultGroupManagerModal({
     setFormData({
       title: String(group?.title || ''),
       description: String(group?.description || ''),
+      serviceIds: Array.isArray(group?.serviceIds) ? group.serviceIds : [],
           tasks: (Array.isArray(group?.tasks) ? group.tasks : [])
         .sort(
           (left: any, right: any) =>
@@ -264,6 +359,7 @@ export default function DefaultGroupManagerModal({
 
     const validTasks = formData.tasks
       .map((task, index) => ({
+        id: task.id,
         title: task.title.trim(),
         durationMinutes:
           task.durationMinutes &&
@@ -285,7 +381,8 @@ export default function DefaultGroupManagerModal({
         title,
         description:
           formData.description.trim() || undefined,
-              tasks: validTasks,
+        serviceIds: formData.serviceIds,
+        tasks: validTasks,
       };
 
       const res = editingGroupId
@@ -546,8 +643,16 @@ export default function DefaultGroupManagerModal({
                                   {group.description}
                                 </p>
                               )}
+                              {group.linkedServices?.length > 0 && (
+                                <p className="mt-1 text-[11px] text-primary">
+                                  {group.linkedServices.map((service: any) => service.name).join(', ')}
+                                </p>
+                              )}
 
                               <div className="mt-2 flex flex-wrap gap-1.5">
+                                <Badge variant="secondary" className="rounded-md text-[9px]">
+                                  {group.serviceIds?.length || 0} linked services
+                                </Badge>
                                 <Badge
                                   variant="secondary"
                                   className="rounded-md text-[9px]"
@@ -709,6 +814,189 @@ export default function DefaultGroupManagerModal({
                   />
                 </div>
 
+                {/* Service links: searchable by name, categorized, with REPAIR subcategories. */}
+                <div className="space-y-3 rounded-xl border border-border bg-card p-3 sm:p-4">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label className="text-sm font-semibold text-foreground">
+                        Link to Services
+                      </Label>
+                      <Badge variant="secondary" className="rounded-full text-[10px]">
+                        {formData.serviceIds.length} linked
+                      </Badge>
+                    </div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Automatically add this group's inspection and work tasks when a booked
+                      service reaches its corresponding phase. Use the tabs to browse services.
+                    </p>
+                  </div>
+
+                  {/* Separate search: does not filter the task groups on the left. */}
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <Input
+                      aria-label="Search service names"
+                      value={serviceSearch}
+                      onChange={(event) => setServiceSearch(event.target.value)}
+                      placeholder="Search service name..."
+                      className="h-10 rounded-lg pl-9 pr-9 text-sm"
+                    />
+                    {serviceSearch && (
+                      <button
+                        type="button"
+                        aria-label="Clear service search"
+                        onClick={() => setServiceSearch('')}
+                        className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Service category tabs. */}
+                  <div
+                    role="tablist"
+                    aria-label="Service categories"
+                    className="flex w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/40 p-1"
+                  >
+                    {SERVICE_CATEGORIES.map((category) => (
+                      <button
+                        key={category.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={serviceCategory === category.value}
+                        onClick={() => handleServiceCategoryChange(category.value)}
+                        className={cn(
+                          'flex min-h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          serviceCategory === category.value
+                            ? 'bg-card text-primary shadow-sm'
+                            : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
+                        )}
+                      >
+                        {category.label}
+                        <span className={cn(
+                          'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                          serviceCategory === category.value ? 'bg-primary/10 text-primary' : 'bg-background/80 text-muted-foreground',
+                        )}>
+                          {serviceCategoryCounts[category.value]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Repair subcategory tabs are only visible inside REPAIR. */}
+                  {serviceCategory === 'REPAIR' && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Repair subcategory
+                      </p>
+                      <div className="flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Repair subcategories">
+                        {(['ALL', ...REPAIR_SUBCATEGORIES] as string[]).map((subcategory) => (
+                          <button
+                            key={subcategory}
+                            type="button"
+                            aria-pressed={repairSubcategory === subcategory}
+                            onClick={() => setRepairSubcategory(subcategory)}
+                            className={cn(
+                              'min-h-8 shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              repairSubcategory === subcategory
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                            )}
+                          >
+                            {subcategory === 'ALL' ? 'All Repairs' : subcategory}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span>{filteredCatalogServices.length} matching service{filteredCatalogServices.length === 1 ? '' : 's'}</span>
+                    <span>{formData.serviceIds.length} selected across all categories</span>
+                  </div>
+
+                  {/* Keep selection in formData.serviceIds even when a row is hidden by filters. */}
+                  <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-1.5">
+                    {servicesLoading ? (
+                      <div className="flex min-h-28 items-center justify-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading services...
+                      </div>
+                    ) : servicesError ? (
+                      <div className="p-4 text-center text-xs text-destructive">{servicesError}</div>
+                    ) : catalogServices.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-muted-foreground">
+                        No services available in the catalog.
+                      </div>
+                    ) : filteredCatalogServices.length === 0 ? (
+                      <div className="space-y-2 p-4 text-center">
+                        <p className="text-xs text-muted-foreground">No matching services found.</p>
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-primary hover:underline"
+                          onClick={() => {
+                            setServiceSearch('');
+                            handleServiceCategoryChange('ALL');
+                          }}
+                        >
+                          Clear service filters
+                        </button>
+                      </div>
+                    ) : (
+                      filteredCatalogServices.map((service: any) => {
+                        const linked = formData.serviceIds.includes(service.id);
+                        const repair = String(service.type || '').toUpperCase() === 'REPAIR';
+                        return (
+                          <label
+                            key={service.id}
+                            className={cn(
+                              'flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-2.5 transition-colors',
+                              linked
+                                ? 'border-primary/25 bg-primary/5'
+                                : 'border-transparent hover:border-border hover:bg-muted/40',
+                            )}
+                          >
+                            <Checkbox
+                              checked={linked}
+                              onCheckedChange={(checked) => toggleServiceLink(service.id, checked === true)}
+                              aria-label={`Link ${service.name}`}
+                              className="mt-0.5 shrink-0"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block break-words text-xs font-medium text-foreground">
+                                {service.name}
+                              </span>
+                              <span className="mt-1 flex flex-wrap items-center gap-1">
+                                <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px]">
+                                  {service.type || 'Other'}
+                                </Badge>
+                                {repair && service.subcategory && (
+                                  <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[9px]">
+                                    {service.subcategory}
+                                  </Badge>
+                                )}
+                                {service.active === false && (
+                                  <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] text-muted-foreground">
+                                    Disabled
+                                  </Badge>
+                                )}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                  <p className="text-[11px] leading-4 text-muted-foreground">
+                    Changing categories or searching does not remove previously linked services.
+                    Save the group to apply changes.
+                  </p>
+                </div>
+
                 {/* Tasks */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -757,7 +1045,7 @@ export default function DefaultGroupManagerModal({
                             className="
                               grid
                               gap-2
-                              md:grid-cols-[minmax(0,1fr)_90px_120px_36px]
+                              md:grid-cols-[minmax(0,1fr)_176px_120px_36px]
                               md:items-end
                             "
                           >
@@ -782,33 +1070,31 @@ export default function DefaultGroupManagerModal({
 
                             <div className="space-y-1">
                               <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Minutes
+                                Duration
                               </Label>
-
-                              <div className="relative">
-                                <Clock3 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  value={
-                                    task.durationMinutes ?? ''
-                                  }
-                                  onChange={(event) =>
-                                    handleTaskChange(
-                                      index,
-                                      'durationMinutes',
-                                      event.target.value
-                                        ? Number(
-                                            event.target.value,
-                                          )
-                                        : undefined,
-                                    )
-                                  }
-                                  placeholder="Min"
-                                  className="h-10 rounded-md pl-8 text-base md:h-9 md:text-sm"
-                                />
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <div>
+                                  <Label className="text-[9px] text-muted-foreground" htmlFor={`group-task-hours-${index}`}>Hours</Label>
+                                  <Input id={`group-task-hours-${index}`} type="number" min="0" step="1" inputMode="numeric"
+                                    value={task.durationMinutes == null ? '' : splitDurationMinutes(task.durationMinutes).hours}
+                                    onChange={(e) => {
+                                      const total = combineDurationMinutes(e.target.value, splitDurationMinutes(task.durationMinutes).minutes);
+                                      handleTaskChange(index, 'durationMinutes', total || undefined);
+                                    }} placeholder="0" className="h-10 rounded-md px-2 md:h-9" />
+                                </div>
+                                <div>
+                                  <Label className="text-[9px] text-muted-foreground" htmlFor={`group-task-min-${index}`}>Minutes</Label>
+                                  <Input id={`group-task-min-${index}`} type="number" min="0" max="59" step="1" inputMode="numeric"
+                                    value={task.durationMinutes == null ? '' : splitDurationMinutes(task.durationMinutes).minutes}
+                                    onChange={(e) => {
+                                      const total = combineDurationMinutes(splitDurationMinutes(task.durationMinutes).hours, e.target.value);
+                                      handleTaskChange(index, 'durationMinutes', total || undefined);
+                                    }} placeholder="0" className="h-10 rounded-md px-2 md:h-9" />
+                                </div>
                               </div>
+                              {task.durationMinutes ? (
+                                <p className="text-[10px] text-muted-foreground">{formatDurationMinutes(task.durationMinutes)}</p>
+                              ) : null}
                             </div>
 
                             <div className="space-y-1">

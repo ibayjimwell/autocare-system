@@ -4,7 +4,9 @@ import { authOptions } from '@/lib/auth/staffs/auth';
 import { Database } from '@/lib/drizzle';
 import { DefaultTaskGroups } from '@/database/models/service-tracking/default-task-groups.model';
 import { DefaultTasks } from '@/database/models/service-tracking/default-tasks.model';
-import { asc, eq } from 'drizzle-orm';
+import { ServiceDefaultTaskGroups } from '@/database/models/service-tracking/service-default-task-groups.model';
+import { Services } from '@/database/models/services/services.model';
+import { asc, eq, inArray, notInArray, and } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
 
 /* ================================================================
@@ -164,41 +166,67 @@ export async function PUT(
         null;
     }
 
-    await Database.update(DefaultTaskGroups)
-      .set(updateData)
-      .where(eq(DefaultTaskGroups.id, id));
-
-    if (body?.tasks !== undefined) {
-      if (!Array.isArray(body.tasks)) {
-        return NextResponse.json(
-          {
-            error: true,
-            errorType: 'fve',
-            errorTitle: 'Invalid tasks',
-            errorMessage: 'tasks must be an array.',
-          },
-          { status: 422 },
-        );
-      }
-
-      const tasks = body.tasks
-        .map((task: any, index: number) =>
-          normalizeTask(task, index, id),
-        )
-        .filter(
-          (task: any) =>
-            task.title.length > 0,
-        );
-
-      await Database.delete(DefaultTasks)
-        .where(eq(DefaultTasks.groupId, id));
-
-      if (tasks.length > 0) {
-        await Database.insert(
-          DefaultTasks,
-        ).values(tasks);
+    // Save the group, linked services and template changes atomically.
+    // Preserve IDs of existing templates: those IDs are the provenance key
+    // that prevents duplicate automatic import into appointments.
+    if (body?.tasks !== undefined && !Array.isArray(body.tasks)) {
+      return NextResponse.json({ error: true, errorMessage: 'tasks must be an array.' }, { status: 422 });
+    }
+    const serviceIds = body?.serviceIds;
+    if (serviceIds !== undefined && (!Array.isArray(serviceIds) || serviceIds.some((value: unknown) =>
+      typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(value)
+    ))) {
+      return NextResponse.json({ error: true, errorMessage: 'serviceIds must contain valid service UUIDs.' }, { status: 422 });
+    }
+    const uniqueServiceIds: string[] = Array.from(new Set((serviceIds || []) as string[]));
+    if (serviceIds !== undefined && uniqueServiceIds.length) {
+      const validServices = await Database.select({ id: Services.id }).from(Services)
+        .where(inArray(Services.id, uniqueServiceIds));
+      if (validServices.length !== uniqueServiceIds.length) {
+        return NextResponse.json({ error: true, errorMessage: 'One or more selected services no longer exist.' }, { status: 422 });
       }
     }
+    const oldTasks = await Database.select({ id: DefaultTasks.id })
+      .from(DefaultTasks).where(eq(DefaultTasks.groupId, id));
+    const ownedIds = new Set(oldTasks.map((task) => task.id));
+    if (Array.isArray(body.tasks) && body.tasks.some((task: any) => task?.id && !ownedIds.has(task.id))) {
+      return NextResponse.json({ error: true, errorMessage: 'A task does not belong to this group.' }, { status: 422 });
+    }
+
+    await Database.transaction(async (tx) => {
+      await tx.update(DefaultTaskGroups).set(updateData).where(eq(DefaultTaskGroups.id, id));
+      if (serviceIds !== undefined) {
+        await tx.delete(ServiceDefaultTaskGroups).where(eq(ServiceDefaultTaskGroups.groupId, id));
+        if (uniqueServiceIds.length) await tx.insert(ServiceDefaultTaskGroups).values(
+          uniqueServiceIds.map((serviceId) => ({ serviceId, groupId: id })),
+        );
+      }
+      if (Array.isArray(body.tasks)) {
+        const tasks = body.tasks.map((task: any, index: number) => ({
+          ...normalizeTask(task, index, id),
+          id: task?.id && ownedIds.has(task.id) ? task.id as string : undefined,
+        })).filter((task: any) => task.title.length > 0);
+        const retained = tasks.map((task: any) => task.id).filter(Boolean) as string[];
+        // A removed template may have already generated appointment tasks;
+        // their defaultTaskId becomes null (ON DELETE SET NULL), preserving history.
+        await tx.delete(DefaultTasks).where(retained.length
+          ? and(eq(DefaultTasks.groupId, id), notInArray(DefaultTasks.id, retained))
+          : eq(DefaultTasks.groupId, id));
+        for (const task of tasks) {
+          if (task.id) {
+            await tx.update(DefaultTasks).set({
+              title: task.title, durationMinutes: task.durationMinutes,
+              taskType: task.taskType, order: task.order, updatedAt: new Date(),
+            }).where(eq(DefaultTasks.id, task.id));
+          } else {
+            await tx.insert(DefaultTasks).values({
+              groupId: id, title: task.title, durationMinutes: task.durationMinutes,
+              taskType: task.taskType, order: task.order,
+            });
+          }
+        }
+      }
+    });
 
     const [updatedGroup] = await Database.select()
       .from(DefaultTaskGroups)
@@ -212,12 +240,15 @@ export async function PUT(
         asc(DefaultTasks.createdAt),
       );
 
+    const currentLinks = await Database.select({ serviceId: ServiceDefaultTaskGroups.serviceId })
+      .from(ServiceDefaultTaskGroups).where(eq(ServiceDefaultTaskGroups.groupId, id));
     return NextResponse.json({
       error: false,
       message: 'Default task group updated.',
       data: {
         ...(() => { const { isActive: _legacyIsActive, ...publicGroup } = updatedGroup; return publicGroup; })(),
         tasks,
+        serviceIds: currentLinks.map((link) => link.serviceId),
       },
     });
   } catch (error) {

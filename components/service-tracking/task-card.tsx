@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { formatDurationMinutes } from '@/app-utils/services/helpers';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -59,7 +60,7 @@ export default function TaskCard({
 
     const update = () => {
       const now = Date.now();
-      const diff = Math.min(durationMs, now - startTime);
+      const diff = Math.max(0, Math.min(durationMs, now - startTime));
       setElapsed(diff);
     };
 
@@ -142,7 +143,7 @@ export default function TaskCard({
                         className="h-5 rounded-md px-1.5 text-[10px]"
                       >
                         <Clock className="mr-1 h-3 w-3" />
-                        {duration} min
+                        {formatDurationMinutes(duration)}
                       </Badge>
                     )}
                   </div>

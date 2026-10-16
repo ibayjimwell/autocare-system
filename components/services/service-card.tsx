@@ -30,8 +30,10 @@ interface ServiceData {
   type:
     | 'PMS'
     | 'REPAIR'
-    | 'CHECKUP'
+    | 'DIAGNOSTIC'
     | string;
+  subcategory?: string | null;
+  isLaborInclude?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,8 +66,8 @@ const SERVICE_TYPE_CONFIG: Record<
     icon: Wrench,
   },
 
-  CHECKUP: {
-    label: 'Checkup',
+  DIAGNOSTIC: {
+    label: 'Diagnostic',
     bg: 'bg-blue-500/10 dark:bg-blue-500/20',
     text: 'text-blue-600 dark:text-blue-400',
     icon: Gauge,
@@ -298,6 +300,7 @@ export default function ServiceCard({
             >
               {typeConfig.label}
             </span>
+            {service.subcategory && <span className="text-[10px] font-semibold text-muted-foreground">{service.subcategory}</span>}
 
             <span
               className={cn(
@@ -309,6 +312,7 @@ export default function ServiceCard({
             />
           </div>
 
+          <p className="text-[11px] text-muted-foreground">{service.isLaborInclude ? 'Labor included in base price' : 'Labor not included'}</p>
           <h4 className="truncate text-sm font-semibold tracking-tight text-foreground">
             {service.name}
           </h4>

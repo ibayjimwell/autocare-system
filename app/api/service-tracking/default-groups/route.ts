@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth/staffs/auth';
 import { Database } from '@/lib/drizzle';
 import { DefaultTaskGroups } from '@/database/models/service-tracking/default-task-groups.model';
 import { DefaultTasks } from '@/database/models/service-tracking/default-tasks.model';
+import { ServiceDefaultTaskGroups } from '@/database/models/service-tracking/service-default-task-groups.model';
+import { Services } from '@/database/models/services/services.model';
 import { asc, eq, inArray } from 'drizzle-orm';
 
 /* ================================================================
@@ -124,12 +126,22 @@ export async function GET() {
       }
     }
 
+    const links = groupIds.length ? await Database.select({
+      groupId: ServiceDefaultTaskGroups.groupId,
+      serviceId: ServiceDefaultTaskGroups.serviceId,
+      serviceName: Services.name,
+    }).from(ServiceDefaultTaskGroups)
+      .innerJoin(Services, eq(ServiceDefaultTaskGroups.serviceId, Services.id))
+      .where(inArray(ServiceDefaultTaskGroups.groupId, groupIds)) : [];
+
     return NextResponse.json({
       error: false,
       message: 'Default task groups retrieved.',
       data: groups.map(({ isActive: _legacyIsActive, ...group }) => ({
         ...group,
         tasks: tasksByGroup[group.id] || [],
+        serviceIds: links.filter((link) => link.groupId === group.id).map((link) => link.serviceId),
+        linkedServices: links.filter((link) => link.groupId === group.id).map((link) => ({ id: link.serviceId, name: link.serviceName })),
       })),
     });
   } catch (error) {
@@ -197,6 +209,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const serviceIds = body?.serviceIds ?? [];
+  if (!Array.isArray(serviceIds) || serviceIds.some((id: unknown) =>
+    typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id)
+  )) {
+    return NextResponse.json({ error: true, errorMessage: 'serviceIds must be an array of valid service UUIDs.' }, { status: 422 });
+  }
+  const selectedServiceIds: string[] = Array.from(new Set(serviceIds as string[]));
+  if (selectedServiceIds.length) {
+    const validServices = await Database.select({ id: Services.id }).from(Services)
+      .where(inArray(Services.id, selectedServiceIds));
+    if (validServices.length !== selectedServiceIds.length) {
+      return NextResponse.json({ error: true, errorMessage: 'One or more selected services no longer exist.' }, { status: 422 });
+    }
+  }
+
   const inputTasks = Array.isArray(body?.tasks)
     ? body.tasks
     : [];
@@ -211,55 +238,33 @@ export async function POST(req: NextRequest) {
     );
 
   try {
-    const [group] = await Database.insert(
-      DefaultTaskGroups,
-    )
-      .values({
+    const newGroup = await Database.transaction(async (tx) => {
+      const [group] = await tx.insert(DefaultTaskGroups).values({
         title,
-        description:
-          String(
-            body?.description || '',
-          ).trim() || null,
-        // Retained in the schema only for backward compatibility.
-        // Default task groups no longer have an Active/Inactive state in the product.
+        description: String(body?.description || '').trim() || null,
         isActive: true,
-      })
-      .returning();
-
-    if (tasks.length > 0) {
-      await Database.insert(
-        DefaultTasks,
-      ).values(
-        tasks.map((task: any) => ({
-          groupId: group.id,
-          title: task.title,
-          durationMinutes:
-            task.durationMinutes,
-          taskType:
-            task.taskType,
-          order: task.order,
-        })),
+      }).returning();
+      if (tasks.length) await tx.insert(DefaultTasks).values(tasks.map((task: any) => ({
+        groupId: group.id,
+        title: task.title,
+        durationMinutes: task.durationMinutes,
+        taskType: task.taskType,
+        order: task.order,
+      })));
+      if (selectedServiceIds.length) await tx.insert(ServiceDefaultTaskGroups).values(
+        selectedServiceIds.map((serviceId) => ({ serviceId, groupId: group.id })),
       );
-    }
-
-    const [storedGroup] = await Database.select()
-      .from(DefaultTaskGroups)
-      .where(eq(DefaultTaskGroups.id, group.id));
-
-    const storedTasks = await Database.select()
-      .from(DefaultTasks)
-      .where(eq(DefaultTasks.groupId, group.id))
-      .orderBy(
-        asc(DefaultTasks.order),
-        asc(DefaultTasks.createdAt),
-      );
-
+      return group;
+    });
+    const storedTasks = await Database.select().from(DefaultTasks)
+      .where(eq(DefaultTasks.groupId, newGroup.id)).orderBy(asc(DefaultTasks.order));
     return NextResponse.json(
       {
         error: false,
         message: 'Default task group created.',
         data: {
-          ...(() => { const { isActive: _legacyIsActive, ...publicGroup } = storedGroup; return publicGroup; })(),
+          ...(() => { const { isActive: _legacyIsActive, ...publicGroup } = newGroup; return publicGroup; })(),
+          serviceIds: selectedServiceIds,
           tasks: storedTasks,
         },
       },

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Save, X, Clock } from "lucide-react";
+import { splitDurationMinutes, combineDurationMinutes, formatDurationMinutes } from "@/app-utils/services/helpers";
 
 interface AddTaskModalProps {
   open: boolean;
@@ -42,6 +43,12 @@ export default function AddTaskModal({
       setDurationMinutes(undefined);
     }
   }, [editingTask, open]);
+
+  const durationParts = splitDurationMinutes(durationMinutes);
+  const updateDuration = (hours: unknown, minutes: unknown) => {
+    const combined = combineDurationMinutes(hours, minutes);
+    setDurationMinutes(combined || undefined);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,23 +85,30 @@ export default function AddTaskModal({
             />
           </div>
 
-          {/* Duration Input */}
+          {/* Hours and minutes are converted into total minutes for the API. */}
           <div className="space-y-2">
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Duration (minutes, optional)
+            <Label className="flex items-center gap-1 text-sm font-semibold">
+              <Clock className="h-4 w-4" /> Estimated Duration (optional)
             </Label>
-            <Input
-              type="number"
-              min="1"
-              value={durationMinutes ?? ""}
-              onChange={(e) =>
-                setDurationMinutes(e.target.value ? parseInt(e.target.value) : undefined)
-              }
-              placeholder="e.g., 30"
-              className="rounded-xl border-slate-200"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              Estimated time to complete this task.
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="task-hours" className="mb-1 block text-xs text-muted-foreground">Hours</Label>
+                <Input id="task-hours" type="number" min="0" step="1" inputMode="numeric"
+                  value={durationMinutes === undefined ? '' : durationParts.hours}
+                  onChange={(e) => updateDuration(e.target.value, durationParts.minutes)}
+                  placeholder="0" className="h-11 rounded-xl" />
+              </div>
+              <div>
+                <Label htmlFor="task-minutes" className="mb-1 block text-xs text-muted-foreground">Minutes (0–59)</Label>
+                <Input id="task-minutes" type="number" min="0" max="59" step="1" inputMode="numeric"
+                  value={durationMinutes === undefined ? '' : durationParts.minutes}
+                  onChange={(e) => updateDuration(durationParts.hours, e.target.value)}
+                  placeholder="30" className="h-11 rounded-xl" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {durationMinutes ? `Estimated: ${formatDurationMinutes(durationMinutes)}`
+                : 'Leave both fields empty for a task without a time estimate.'}
             </p>
           </div>
 

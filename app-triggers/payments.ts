@@ -1,5 +1,5 @@
 // app-triggers/payments.ts
-import { sendPushToCustomer } from '@/lib/push/customer-push';
+import { sendCustomerNotification } from '@/lib/notifications/customer-notification';
 
 interface PaymentTriggerPayload {
   customerId: string;
@@ -27,7 +27,7 @@ export const mobilePaymentsTriggers = {
   async onEstimateGenerated(payload: PaymentTriggerPayload) {
     const title = '📊 Estimate Generated';
     const body = `An estimate for appointment #${payload.trackingNumber} has been prepared and is pending review.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getAppointmentLink(payload.appointmentId),
     });
   },
@@ -38,7 +38,7 @@ export const mobilePaymentsTriggers = {
   async onEstimateSentForApproval(payload: PaymentTriggerPayload) {
     const title = '📤 Estimate Ready for Approval';
     const body = `The estimate for appointment #${payload.trackingNumber} is ready. Please review and approve it.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getAppointmentLink(payload.appointmentId),
     });
   },
@@ -49,7 +49,7 @@ export const mobilePaymentsTriggers = {
   async onEstimateApproved(payload: PaymentTriggerPayload) {
     const title = '✅ Estimate Approved';
     const body = `The estimate for appointment #${payload.trackingNumber} has been approved. Work will now begin.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getAppointmentLink(payload.appointmentId),
     });
   },
@@ -61,7 +61,7 @@ export const mobilePaymentsTriggers = {
     const title = '❌ Estimate Declined';
     const reasonMsg = payload.reason ? ` Reason: ${payload.reason}` : '';
     const body = `The estimate for appointment #${payload.trackingNumber} was declined.${reasonMsg}`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getAppointmentLink(payload.appointmentId),
     });
   },
@@ -73,7 +73,7 @@ export const mobilePaymentsTriggers = {
   async onFinalBillGenerated(payload: PaymentTriggerPayload) {
     const title = '🧾 Final Cost Generated';
     const body = `Your Final Cost for appointment #${payload.trackingNumber} has been generated and is pending review.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getAppointmentLink(payload.appointmentId),
     });
   },
@@ -84,7 +84,7 @@ export const mobilePaymentsTriggers = {
   async onFinalBillHold(payload: PaymentTriggerPayload) {
     const title = '⏸️ Final Cost on Hold';
     const body = `The Final Cost for appointment #${payload.trackingNumber} has been placed on hold. Parking fees may apply.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getBillLink(payload.billId),
     });
   },
@@ -95,7 +95,7 @@ export const mobilePaymentsTriggers = {
   async onFinalBillBackToPending(payload: PaymentTriggerPayload) {
     const title = '🔄 Final Cost Unhold';
     const body = `The hold on the Final Cost for appointment #${payload.trackingNumber} has been removed.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getBillLink(payload.billId),
     });
   },
@@ -106,7 +106,7 @@ export const mobilePaymentsTriggers = {
   async onFinalBillOfficial(payload: PaymentTriggerPayload) {
     const title = '📋 Final Cost Ready for Payment';
     const body = `The Final Cost for appointment #${payload.trackingNumber} is now official and ready for payment.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getBillLink(payload.billId),
     });
   },
@@ -117,7 +117,7 @@ export const mobilePaymentsTriggers = {
   async onFinalBillPaid(payload: PaymentTriggerPayload) {
     const title = '💰 Payment Successful';
     const body = `Your payment for appointment #${payload.trackingNumber} has been processed successfully.`;
-    await sendPushToCustomer(payload.customerId, title, body, {
+    await sendCustomerNotification(payload.customerId, title, body, {
       url: getBillLink(payload.billId),
     });
   },
