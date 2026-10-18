@@ -461,145 +461,148 @@ export default function ServiceTrackingPage() {
      Under Inspection.
   ============================================================== */
 
-  const handleStartInspectionFromQueue =
-    async (
-      appointmentId: string,
-    ) => {
+  /*
+   * Prevent repeated Inspect requests while a status transition is
+   * running. Realtime queue updates can rerender the Confirmed list
+   * before the first request finishes.
+   */
+  const startingInspectionRef = useRef(false);
+
+  const handleStartInspectionFromQueue = async (
+    appointmentId: string,
+  ) => {
+    if (startingInspectionRef.current) return;
+
+    const currentQueueItem = queue.find(
+      (item) =>
+        String(item?.appointmentId ?? item?.id ?? '') ===
+        String(appointmentId),
+    );
+
+    const currentQueueStatus = String(
+      currentQueueItem?.queueStatus ?? '',
+    )
+      .trim()
+      .toUpperCase();
+
+    // Keep the current queue rule: Inspect is only allowed after arrival.
+    if (currentQueueStatus !== 'ARRIVED') {
+      toast.error(
+        'The vehicle must be marked Arrived before inspection can start.',
+      );
+      return;
+    }
+
+    startingInspectionRef.current = true;
+
+    try {
+      // 1. Move the appointment to the inspection phase.
+      const appointmentResponse = await appointmentsApi.updateStatus(
+        appointmentId,
+        'UNDER_INSPECTION',
+      );
+
+      if (appointmentResponse?.error) {
+        toast.error(
+          appointmentResponse.errorMessage ||
+            'Failed to start inspection.',
+        );
+        return;
+      }
+
+      // 2. Hydrate the full appointment before opening the panel.
+      // Queue rows are lightweight and do not always contain the
+      // customerId, vehicleId or booked service records needed by
+      // ServiceDetailPanel.
+      const detail = await loadCompleteAppointmentForDetail(
+        appointmentId,
+        {
+          ...currentQueueItem,
+          ...(appointmentResponse?.data || {}),
+          queueStatus: 'INSPECTING',
+        },
+        'UNDER_INSPECTION',
+      );
+
+      // IMPORTANT: Selecting the detail must happen BEFORE the queue
+      // update and refresh. A failed/slow queue request must never
+      // prevent inspection detail navigation after a successful status
+      // change. The successful status response also provides a usable
+      // fallback with appointment/customer/vehicle IDs if a subsequent
+      // GET fails temporarily.
+      const updatedAppointment = appointmentResponse?.data;
+      const fallbackDetail =
+        updatedAppointment?.customerId && updatedAppointment?.vehicleId
+          ? normalizeQueueAppointment(
+              {
+                ...currentQueueItem,
+                ...updatedAppointment,
+                queueStatus: 'INSPECTING',
+              },
+              'UNDER_INSPECTION',
+            )
+          : null;
+
+      if (detail || fallbackDetail) {
+        setQueueDetailAppointment(detail || fallbackDetail);
+      } else {
+        // The appointment already entered inspection, so expose it
+        // on the Under Inspection tab even if detail hydration fails.
+        toast.error(
+          'Inspection started, but the details could not be opened automatically. Select the appointment in Under Inspection.',
+        );
+      }
+
+      setActiveFilter('UNDER_INSPECTION');
+      toast.success('Inspection started!');
+
+      // 3. Keep the service queue synchronized. Failure here is
+      // independent of navigation and must not close the detail panel.
       try {
-        /*
-         * ----------------------------------------------------------
-         * Validate current queue state first.
-         * ----------------------------------------------------------
-         *
-         * The UI already hides Inspect for other states, but this
-         * guard prevents an accidental/stale click from starting
-         * inspection before the vehicle is ARRIVED.
-         */
-        const currentQueueItem =
-          queue.find(
-            item =>
-              String(
-                item?.appointmentId ??
-                  item?.id ??
-                  '',
-              ) ===
-              String(
-                appointmentId,
-              ),
-          );
+        const queueResponse = await serviceQueueApi.updateStatus(
+          appointmentId,
+          'INSPECTING',
+        );
 
-        const currentQueueStatus =
-          String(
-            currentQueueItem
-              ?.queueStatus ??
-              '',
-          )
-            .trim()
-            .toUpperCase();
-
-        if (
-          currentQueueStatus !==
-          'ARRIVED'
-        ) {
-          toast.error(
-            'The vehicle must be marked Arrived before inspection can start.',
-          );
-
-          return;
-        }
-
-        /*
-         * ----------------------------------------------------------
-         * STEP 1
-         *
-         * Appointment:
-         *
-         * CONFIRMED
-         *     ↓
-         * UNDER_INSPECTION
-         * ----------------------------------------------------------
-         */
-
-        const appointmentResponse =
-          await appointmentsApi.updateStatus(
-            appointmentId,
-            'UNDER_INSPECTION',
-          );
-
-        if (
-          appointmentResponse?.error
-        ) {
-          toast.error(
-            appointmentResponse.errorMessage ||
-              'Failed to start inspection.',
-          );
-
-          return;
-        }
-
-        /*
-         * ----------------------------------------------------------
-         * STEP 2
-         *
-         * Keep the queue lifecycle synchronized:
-         *
-         * ARRIVED
-         *     ↓
-         * INSPECTING
-         *
-         * The status route accepts INSPECTING once the appointment
-         * itself is UNDER_INSPECTION.
-         * ----------------------------------------------------------
-         */
-
-        const queueResponse =
-          await serviceQueueApi.updateStatus(
-            appointmentId,
-            'INSPECTING',
-          );
-
-        if (
-          queueResponse?.error
-        ) {
-          /*
-           * The appointment status has already changed. Do not hide
-           * that successful lifecycle transition, but notify the
-           * staff that the queue marker could not be synchronized.
-           */
+        if (queueResponse?.error) {
           toast.error(
             queueResponse.errorMessage ||
               'Inspection started, but the queue status could not be synchronized.',
           );
-        } else {
-          toast.success(
-            'Inspection started!',
-          );
         }
-
-        /*
-         * Refresh both data sources so the appointment leaves the
-         * Confirmed queue immediately and appears in Under Inspection.
-         */
-        await refreshQueueAndAppointments();
-
-        const detail = await loadCompleteAppointmentForDetail(
-          appointmentId,
-          currentQueueItem,
-          'UNDER_INSPECTION',
+      } catch (queueError: any) {
+        console.error(
+          '[ServiceTracking] Queue inspection sync failed:',
+          queueError,
         );
-
-        if (detail) {
-          setQueueDetailAppointment(detail);
-        }
-      } catch (
-        err: any
-      ) {
         toast.error(
-          err?.message ||
-            'Error starting inspection.',
+          queueError?.message ||
+            'Inspection started, but the queue status could not be synchronized.',
         );
       }
-    };
+
+      // Switching the active filter automatically reloads the
+      // UNDER_INSPECTION appointment grid through useAppointmentList.
+      // Refreshing the queue here is best-effort and cannot block
+      // the already-open detail panel.
+      try {
+        await loadQueue();
+      } catch (refreshError) {
+        console.error(
+          '[ServiceTracking] Failed to refresh queue after inspection:',
+          refreshError,
+        );
+      }
+    } catch (error: any) {
+      console.error(
+        '[ServiceTracking] Failed to start inspection:',
+        error,
+      );
+      toast.error(error?.message || 'Error starting inspection.');
+    } finally {
+      startingInspectionRef.current = false;
+    }
+  };
 
   /* ==============================================================
      ASK ARRIVING

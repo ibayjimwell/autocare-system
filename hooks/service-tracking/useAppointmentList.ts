@@ -112,21 +112,61 @@ export function useAppointmentList() {
     }
   };
 
+  const startingConfirmationRef = useRef(false);
+
   const handleConfirmStartInspection = async () => {
-    if (!pendingAppointment) return;
+    if (!pendingAppointment || startingConfirmationRef.current) return;
+    startingConfirmationRef.current = true;
+
+    const appointmentToInspect = pendingAppointment;
+
     try {
-      const res = await appointmentsApi.updateStatus(pendingAppointment.id, 'UNDER_INSPECTION');
-      if (res.error) {
+      const res = await appointmentsApi.updateStatus(
+        appointmentToInspect.id,
+        'UNDER_INSPECTION',
+      );
+
+      if (res?.error) {
         toast.error(res.errorMessage || 'Failed to start inspection.');
-      } else {
-        toast.success('Inspection started!');
-        setConfirmDialogOpen(false);
-        setSelectedAppointment(pendingAppointment);
+        return;
       }
+
+      // The old handler selected the original CONFIRMED appointment.
+      // Load the full updated record so the panel immediately renders
+      // the inspection phase and has its service/customer/vehicle data.
+      let detail: any = null;
+      try {
+        const detailResponse = await appointmentsApi.get(
+          appointmentToInspect.id,
+        );
+        if (!detailResponse?.error && detailResponse?.data) {
+          detail = detailResponse.data;
+        }
+      } catch (error) {
+        console.error(
+          '[useAppointmentList] Unable to refresh inspection detail:',
+          error,
+        );
+      }
+
+      // The source appointment from the grid is already hydrated.
+      // Use it if fetching the latest detail fails rather than leaving
+      // the user on the Confirmed screen after a successful update.
+      setSelectedAppointment({
+        ...appointmentToInspect,
+        ...(res?.data || {}),
+        ...(detail || {}),
+        id: appointmentToInspect.id,
+        status: 'UNDER_INSPECTION',
+      });
+      setActiveFilter('UNDER_INSPECTION');
+      setConfirmDialogOpen(false);
+      toast.success('Inspection started!');
     } catch (err: any) {
-      toast.error(err.message || 'Error starting inspection.');
+      toast.error(err?.message || 'Error starting inspection.');
     } finally {
       setPendingAppointment(null);
+      startingConfirmationRef.current = false;
     }
   };
 
