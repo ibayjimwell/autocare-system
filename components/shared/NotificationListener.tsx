@@ -1,41 +1,29 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { useNotifications } from '@/context/NotificationContext';
 
 export default function NotificationListener() {
-  const { addNotification } = useNotifications();
+  const { data: session } = useSession();
+  const staffId = session?.user?.id || null;
+  const { refreshNotifications } = useNotifications();
 
   useEffect(() => {
+    if (!staffId || !('serviceWorker' in navigator)) return;
+
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'NEW_NOTIFICATION') {
-        const { notification } = event.data;
-        addNotification({
-          title: notification.title,
-          body: notification.body,
-          url: notification.url,
-          module: 'app',
-          event: 'push',
-        });
-      }
+      if (event.data?.type !== 'NEW_NOTIFICATION') return;
+      const notification = event.data.notification;
+      // The SW may control tabs belonging to different accounts. Never
+      // show another staff member's browser push in this account's inbox.
+      if (!notification?.staffId || notification.staffId !== staffId) return;
+      void refreshNotifications();
     };
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', handleMessage);
-    }
-
-    // Request any missed notifications from the service worker
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      // Optionally send a message to get missed notifications
-      // navigator.serviceWorker.controller.postMessage({ type: 'GET_NOTIFICATIONS' });
-    }
-
-    return () => {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.removeEventListener('message', handleMessage);
-      }
-    };
-  }, [addNotification]);
+    navigator.serviceWorker.addEventListener('message', handleMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
+  }, [staffId, refreshNotifications]);
 
   return null;
 }

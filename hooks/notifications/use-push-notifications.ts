@@ -1,11 +1,15 @@
 // hooks/notifications/use-push-notifications.ts
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 
 export function usePushNotifications() {
+  const { data: session, status } = useSession();
+  const staffId = session?.user?.id;
   useEffect(() => {
+    if (status !== 'authenticated' || !staffId) return;
     // --- STEP 0: Basic feature detection ---
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       console.warn('Push messaging is not supported in this browser.');
@@ -118,5 +122,5 @@ export function usePushNotifications() {
       isCancelled = true;
       clearTimeout(timer);
     };
-  }, []);
+  }, [staffId, status]);
 }

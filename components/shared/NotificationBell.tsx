@@ -13,7 +13,7 @@ import { useNotifications } from '@/context/NotificationContext';
 import NotificationModal from './NotificationModal';
 
 export default function NotificationBell() {
-  const { unreadCount } = useNotifications();
+  const { unreadCount, refreshNotifications } = useNotifications();
 
   const [isModalOpen, setIsModalOpen] =
     useState(false);
@@ -28,6 +28,7 @@ export default function NotificationBell() {
   }, [unreadCount, isModalOpen]);
 
   const handleClick = () => {
+    void refreshNotifications();
     setIsModalOpen(true);
   };
 

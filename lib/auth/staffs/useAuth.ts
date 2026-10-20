@@ -1,3 +1,4 @@
+import { releaseStaffPushSubscription } from '@/lib/notifications/release-staff-push';
 import { useSession, signOut } from "next-auth/react";
 import { staffApi } from "@/lib/staffs/staffs";
 
@@ -50,6 +51,7 @@ export function useAuth() {
    */
   const logout = async () => {
     await staffApi.updateOnlineStatus({ isOnline: false, currentModule: "" });
+    await releaseStaffPushSubscription();
     await signOut({ callbackUrl: "/login" });
   };
 

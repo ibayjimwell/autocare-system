@@ -1,5 +1,7 @@
 "use client";
 
+import { releaseStaffPushSubscription } from '@/lib/notifications/release-staff-push';
+
 import { Button } from "@/components/ui/button";
 import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
@@ -17,6 +19,7 @@ export default function LogoutButton() {
       // Presence cleanup must not block logout.
     }
 
+    await releaseStaffPushSubscription();
     await signOut({ callbackUrl: "/login" });
   };
 

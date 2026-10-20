@@ -1,6 +1,7 @@
 import { Database } from '@/lib/drizzle';
 import { Customers } from '@/database/models/customers/customers.model';
 import { Appointments } from '@/database/models/appointments/appointments.model';
+import { CustomerNotificationRecords } from '@/database/models/notifications/customer-notification-record.model';
 import { sendPushToCustomer } from '@/lib/push/customer-push';
 import { sendSMS } from '@/utils/sms';
 import {
@@ -86,11 +87,34 @@ async function deliverCustomerNotification(
     return { push: 'skipped', sms: 'skipped' };
   }
 
-  // Promise.allSettled is intentional. An Expo failure, no device token,
-  // missing SMS configuration, or a down SMS gateway must NOT prevent
-  // trying the other transport or roll back the underlying operation.
+  // Save an inbox record BEFORE attempting any transport. A customer must
+  // still see this event even when they had no push token, notification
+  // permission was denied, the handset was offline, or Expo dropped the push.
+  // If the new inbox table is not deployed yet, existing push and SMS delivery
+  // continues rather than failing the appointment/task operation.
+  let notificationId: string | undefined;
+  try {
+    const [saved] = await Database.insert(CustomerNotificationRecords)
+      .values({
+        customerId,
+        title: title.trim(),
+        body: body.trim(),
+        url: typeof data?.url === 'string' ? data.url : null,
+        module: typeof data?.module === 'string' ? data.module : 'app',
+        event: typeof data?.event === 'string' ? data.event :
+          (typeof data?.type === 'string' ? data.type : 'push'),
+      })
+      .returning({ id: CustomerNotificationRecords.id });
+    notificationId = saved?.id;
+  } catch (error) {
+    console.error('[CustomerNotify] Could not persist notification inbox record:', error);
+  }
+
+  // SMS and push remain independent attempts. Never skip one because the
+  // other channel failed or because writing inbox history failed.
+  const pushData = { ...(data || {}), customerId, ...(notificationId ? { notificationId } : {}) };
   const [pushResult, smsResult] = await Promise.allSettled([
-    sendPushToCustomer(customerId, title, body, data),
+    sendPushToCustomer(customerId, title, body, pushData),
     sendCustomerSMS(customerId, body),
   ]);
 

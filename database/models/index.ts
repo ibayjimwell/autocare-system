@@ -58,6 +58,7 @@ export * from "./inventory/enum/inventory-allocation-status.enum";
 
 // Notifications
 export * from "./notifications/push-subscription.model";
+export * from "./notifications/staff-notification.model";
 export * from "./notifications/customer-push-subscription.model";
 
 // Queue
