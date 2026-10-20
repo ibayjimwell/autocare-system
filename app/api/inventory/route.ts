@@ -45,7 +45,6 @@ function buildFilters(searchParams: URLSearchParams) {
 
   const search = searchParams.get('search')?.trim() || '';
   const stock = searchParams.get('stock') || 'all';
-  const active = searchParams.get('active') || 'all';
   const lowStockAlert = searchParams.get('lowStockAlert') || 'all';
   const unit = searchParams.get('unit')?.trim() || '';
 
@@ -75,12 +74,6 @@ function buildFilters(searchParams: URLSearchParams) {
     conditions.push(sql`${Inventory.quantity} <= ${Inventory.reorderLevel}`);
   } else if (stock === 'out') {
     conditions.push(lte(Inventory.quantity, 0));
-  }
-
-  if (active === 'true') {
-    conditions.push(eq(Inventory.active, true));
-  } else if (active === 'false') {
-    conditions.push(eq(Inventory.active, false));
   }
 
   if (lowStockAlert === 'true') {
@@ -254,10 +247,9 @@ export async function POST(req: NextRequest) {
           body.lowStockAlert !== undefined
             ? Boolean(body.lowStockAlert)
             : true,
-        active:
-          body.active !== undefined
-            ? Boolean(body.active)
-            : true,
+        // Inventory items are always available for catalog selection.
+        // Stock availability is represented by quantity, not an active flag.
+        active: true,
       })
       .returning();
 

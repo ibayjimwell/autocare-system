@@ -7,7 +7,7 @@ import { DefaultFindingParts } from '@/database/models/service-tracking/default-
 import { InspectionFindings } from '@/database/models/service-tracking/inspection-findings.model';
 import { InspectionFindingParts } from '@/database/models/service-tracking/inspection-finding-parts.model';
 import { DIAGNOSTIC_KEYS } from '@/lib/diagnostic-checklist/catalog';
-import { diagnosticError, getExistingChecklist, requireDiagnosticStaff, validDiagnosticId } from '@/lib/diagnostic-checklist/server';
+import { diagnosticError, getExistingChecklist, requireDiagnosticStaff, requireEditableDiagnosticAppointment, validDiagnosticId } from '@/lib/diagnostic-checklist/server';
 
 /** Atomically copy a suggested default finding (including inventory parts) once. */
 export async function POST(req: NextRequest) {
@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
     return diagnosticError('Valid appointment, checklist item and default finding required.', 422);
   }
   try {
+    const readOnlyError = await requireEditableDiagnosticAppointment(appointmentId);
+    if (readOnlyError) return readOnlyError;
     const checklist = await getExistingChecklist(appointmentId);
     if (!checklist) return diagnosticError('Checklist has not been started.', 404);
     const [entry] = await Database.select().from(DiagnosticChecklistEntries).where(and(

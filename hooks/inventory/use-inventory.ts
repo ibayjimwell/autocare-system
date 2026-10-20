@@ -53,7 +53,6 @@ export function useInventory(
           limit: 50,
           sortBy: 'name',
           sortDir: 'asc',
-          active: 'all',
           stock: 'all',
         });
 
@@ -77,7 +76,6 @@ export function useInventory(
         limit: pageSize,
         sortBy: 'name',
         sortDir: 'asc',
-        active: 'all',
         stock: 'all',
       });
 
@@ -106,7 +104,6 @@ export function useInventory(
               limit: pageSize,
               sortBy: 'name',
               sortDir: 'asc',
-              active: 'all',
               stock: 'all',
             }),
           );

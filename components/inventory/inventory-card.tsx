@@ -5,8 +5,6 @@ import { Button } from '@/components/ui/button';
 import {
   AlertTriangle,
   Barcode,
-  CircleCheck,
-  CircleX,
   Package,
   Pencil,
   RotateCw,
@@ -75,13 +73,9 @@ export default function InventoryCard({
                 <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
                   Low
                 </span>
-              ) : item?.active ? (
-                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
-                  Active
-                </span>
               ) : (
-                <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Inactive
+                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                  In stock
                 </span>
               )}
             </div>
@@ -147,16 +141,6 @@ export default function InventoryCard({
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
-            {item?.active ? (
-              <CircleCheck className="h-3.5 w-3.5 text-emerald-600" />
-            ) : (
-              <CircleX className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
-            <span className="text-[11px] text-muted-foreground">
-              {item?.active ? 'Active' : 'Inactive'}
-            </span>
-          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">

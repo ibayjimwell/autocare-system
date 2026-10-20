@@ -3,7 +3,7 @@ import { Database } from '@/lib/drizzle';
 import { eq } from 'drizzle-orm';
 import { DiagnosticChecklistEntries, DiagnosticChecklists } from '@/database/models/diagnostic-checklist/diagnostic-checklists.model';
 import { DIAGNOSTIC_SECTIONS } from '@/lib/diagnostic-checklist/catalog';
-import { diagnosticError, ensureChecklist, getExistingChecklist, requireDiagnosticStaff, validDiagnosticId } from '@/lib/diagnostic-checklist/server';
+import { diagnosticError, ensureChecklist, getExistingChecklist, requireDiagnosticStaff, requireEditableDiagnosticAppointment, validDiagnosticId } from '@/lib/diagnostic-checklist/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,18 +27,14 @@ export async function PATCH(req: NextRequest) {
   const denied = await requireDiagnosticStaff(); if (denied) return denied;
   let body: any; try { body = await req.json(); } catch { return diagnosticError('Invalid JSON.', 400); }
   if (!validDiagnosticId(body?.appointmentId)) return diagnosticError('Valid appointmentId is required.', 422);
-  const patch: { remarks?: string; dentsNotes?: string; engineType?: string | null; transmissionType?: string | null; timeOut?: string | null; dentsMarks?: Array<{x:number;y:number}>; updatedAt: Date } = { updatedAt: new Date() };
+  const patch: { remarks?: string; dentsNotes?: string; engineType?: string | null; transmissionType?: string | null; dentsMarks?: Array<{x:number;y:number}>; updatedAt: Date } = { updatedAt: new Date() };
   if (body.engineType !== undefined) {
-    if (body.engineType !== null && !['GAS', 'DIESEL'].includes(body.engineType)) return diagnosticError('Engine type must be GAS or DIESEL.', 422);
+    if (body.engineType !== null && !['GAS', 'DIESEL', 'EV'].includes(body.engineType)) return diagnosticError('Engine type must be GAS, DIESEL or EV.', 422);
     patch.engineType = body.engineType;
   }
   if (body.transmissionType !== undefined) {
     if (body.transmissionType !== null && !['MT','AT'].includes(body.transmissionType)) return diagnosticError('Transmission must be MT or AT.', 422);
     patch.transmissionType = body.transmissionType;
-  }
-  if (body.timeOut !== undefined) {
-    if (body.timeOut !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.timeOut)) return diagnosticError('Time out must be HH:MM.', 422);
-    patch.timeOut = body.timeOut;
   }
   if (body.dentsMarks !== undefined) {
     if (!Array.isArray(body.dentsMarks) || body.dentsMarks.length > 50 || body.dentsMarks.some((mark: any) =>
@@ -57,6 +53,8 @@ export async function PATCH(req: NextRequest) {
     patch.dentsNotes = body.dentsNotes;
   }
   try {
+    const readOnlyError = await requireEditableDiagnosticAppointment(body.appointmentId);
+    if (readOnlyError) return readOnlyError;
     const checklist = await ensureChecklist(body.appointmentId);
     if (!checklist) return diagnosticError('Appointment not found.', 404);
     const [updated] = await Database.update(DiagnosticChecklists).set(patch)

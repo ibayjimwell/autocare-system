@@ -19,28 +19,48 @@ interface Props {
   disabled?: boolean;
   engineType?: string | null;
   transmissionType?: string | null;
-  timeOut?: string | null;
   dentsMarks?: Array<{ x: number; y: number }>;
 }
+
 const names: DiagnosticStatus[] = ['GOOD', 'WARNING', 'REPLACE'];
-export default function DiagnosticChecklistPrintButton({ appointment, statuses, remarks, dentsNotes, disabled, engineType, transmissionType, timeOut, dentsMarks = [] }: Props) {
+
+export default function DiagnosticChecklistPrintButton({
+  appointment,
+  statuses,
+  remarks,
+  dentsNotes,
+  disabled,
+  engineType,
+  transmissionType,
+  dentsMarks = [],
+}: Props) {
   const handlePrint = () => {
     const popup = window.open('', '_blank', 'width=1040,height=860');
-    if (!popup) { window.alert('Allow pop-ups for AutoCare to print the checklist.'); return; }
-    const statusFor = (key: string, status: DiagnosticStatus) => statuses.get(key) === status ? '&#10003;' : '';
+    if (!popup) {
+      window.alert('Allow pop-ups for AutoCare to print the checklist.');
+      return;
+    }
+
+    const statusFor = (key: string, status: DiagnosticStatus) => (
+      statuses.get(key) === status ? '&#10003;' : ''
+    );
+
     const sectionHtml = (column: 'left' | 'right') => DIAGNOSTIC_SECTIONS.filter(section => section.column === column)
-      .map(section => `<tbody><tr class="section"><td colspan="4">${escapeHtml(section.title)}</td></tr>${section.items.map(([key,label]) => `
-      <tr><td class="item">${escapeHtml(label)}</td>${names.map(name => `<td class="choice ${name.toLowerCase()}">${statusFor(key,name)}</td>`).join('')}</tr>`).join('')}</tbody>`).join('');
+      .map(section => `<tbody><tr class="section"><td colspan="4">${escapeHtml(section.title)}</td></tr>${section.items.map(([key, label]) => `
+      <tr><td class="item">${escapeHtml(label)}</td>${names.map(name => `<td class="choice ${name.toLowerCase()}">${statusFor(key, name)}</td>`).join('')}</tr>`).join('')}</tbody>`)
+      .join('');
+
     const table = (side: 'left' | 'right') => `<table><colgroup><col><col style="width:13%"><col style="width:13%"><col style="width:13%"></colgroup>
       <thead><tr><th class="item">CHECKLIST</th><th>Good</th><th>Warning</th><th>Replace</th></tr></thead>${sectionHtml(side)}</table>`;
-    const car = `<svg viewBox="0 0 500 175" width="100%" aria-label="Top view of vehicle" xmlns="http://www.w3.org/2000/svg">
-      <g fill="none" stroke="#111" stroke-width="2.5"><rect x="110" y="30" width="280" height="105" rx="45"/>
-      <path d="M185 30 L205 6 H294 L315 30 M185 135 L205 159 H294 L315 135"/>
-      <path d="M205 33 L205 133 M295 33 L295 133 M205 55 L295 55 M205 112 L295 112"/>
-      <rect x="85" y="37" width="25" height="38" rx="8"/><rect x="85" y="90" width="25" height="38" rx="8"/>
-      <rect x="390" y="37" width="25" height="38" rx="8"/><rect x="390" y="90" width="25" height="38" rx="8"/>
-      <path d="M120 48 L167 48 M120 115 L167 115 M333 48 L380 48 M333 115 L380 115"/></g>
-      ${dentsMarks.map(mark => `<text x="${Math.round(mark.x)}" y="${Math.round(mark.y)}" fill="#c1272d" text-anchor="middle" font-weight="bold" font-size="24">×</text>`).join('')}</svg>`;
+
+    // Use the SAME generated three-view vehicle diagram as the interactive
+    // checklist, so dent X coordinates remain identical on printed copies.
+    const carArtUrl = new URL('/images/autocare-vehicle-dent-template.png', window.location.href).href;
+    const car = `<svg viewBox="0 0 500 175" preserveAspectRatio="none" width="100%" style="aspect-ratio:1817 / 866" aria-label="Three-view vehicle dent diagram" xmlns="http://www.w3.org/2000/svg">
+      <image href="${escapeHtml(carArtUrl)}" x="0" y="0" width="500" height="175" preserveAspectRatio="none" />
+      ${dentsMarks.map(mark => `<text x="${Math.round(mark.x)}" y="${Math.round(mark.y)}" text-anchor="middle" dominant-baseline="middle" fill="#C1272D" stroke="#FFFFFF" stroke-width="0.7" paint-order="stroke" font-size="11" font-weight="900">X</text>`).join('')}
+    </svg>`;
+
     const html = `<!doctype html><html><head><meta charset="utf-8"/><title>AutoCare Diagnostic Checklist - ${escapeHtml(appointment.trackingNumber)}</title><style>
       @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#171717;margin:0;font-size:10px}
       header{display:flex;justify-content:space-between;align-items:end;border-bottom:2px solid #111;padding-bottom:9px;margin-bottom:8px}
@@ -56,12 +76,37 @@ export default function DiagnosticChecklistPrintButton({ appointment, statuses, 
     </style></head><body><header><div><h1>AUTOCARE</h1><strong>VEHICLE DIAGNOSTIC CHECKLIST</strong></div><small>GOOD / WARNING / REPLACE</small></header>
     <div class="meta"><div class="field"><b>Tracking:</b> ${escapeHtml(appointment.trackingNumber)}</div><div class="field"><b>Date:</b> ${escapeHtml(appointment.appointmentDate)}</div>
     <div class="field"><b>Customer:</b> ${escapeHtml(appointment.customer?.fullname || '')}</div><div class="field"><b>Plate:</b> ${escapeHtml(appointment.vehicle?.plateNumber || '')}</div>
-    <div class="field"><b>Vehicle:</b> ${escapeHtml([appointment.vehicle?.year,appointment.vehicle?.make,appointment.vehicle?.model].filter(Boolean).join(' '))}</div>
-    <div class="field"><b>Engine:</b> ${escapeHtml(engineType || '—')} <b>Transmission:</b> ${escapeHtml(transmissionType || '—')} <b>Time out:</b> ${escapeHtml(timeOut || '—')}</div></div>
-    <div class="columns"><div>${table('left')}</div><div>${table('right')}<div class="extra"><h3>Mark (X) in Dents</h3><div class="car-caption"><span>DRIVER SIDE</span><span>FRONT</span></div><div class="car">${car}</div><div class="car-caption"><span>PASSENGER SIDE</span></div>
+    <div class="field"><b>Vehicle:</b> ${escapeHtml([appointment.vehicle?.year, appointment.vehicle?.make, appointment.vehicle?.model].filter(Boolean).join(' '))}</div>
+    <div class="field"><b>Engine:</b> ${escapeHtml(engineType || '—')} <b>Transmission:</b> ${escapeHtml(transmissionType || '—')}</div></div>
+    <div class="columns"><div>${table('left')}</div><div>${table('right')}<div class="extra"><div class="car">${car}</div>
     <div class="notes">${escapeHtml(dentsNotes)}</div><h3>Remarks</h3><div class="notes">${escapeHtml(remarks)}</div></div></div></div>
-    <script>window.addEventListener('load',()=>{setTimeout(()=>{window.focus();window.print()},180)});<\/script></body></html>`;
-    popup.document.open(); popup.document.write(html); popup.document.close();
+    <script>
+      window.addEventListener('load', async () => {
+        const vehicleImage = document.querySelector('.car svg image');
+        const url = vehicleImage ? vehicleImage.getAttribute('href') : '';
+        if (url) {
+          await new Promise(resolve => {
+            const probe = new Image();
+            probe.onload = resolve;
+            probe.onerror = resolve;
+            probe.src = url;
+            if (probe.complete) resolve();
+          });
+        }
+        window.focus();
+        window.print();
+      });
+    <\/script></body></html>`;
+
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
   };
-  return <Button type="button" variant="outline" disabled={disabled} onClick={handlePrint} className="h-10 gap-2"><Printer className="h-4 w-4"/>Print / Save PDF</Button>;
+
+  return (
+    <Button type="button" variant="outline" disabled={disabled} onClick={handlePrint} className="h-10 gap-2">
+      <Printer className="h-4 w-4" />
+      Print / Save PDF
+    </Button>
+  );
 }

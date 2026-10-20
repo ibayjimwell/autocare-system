@@ -53,7 +53,6 @@ interface InventoryPickerItem {
   costPrice?: number | string | null;
   reorderLevel?: number | string | null;
   barcode?: string | null;
-  active?: boolean;
 }
 
 interface InventoryPickerProps {
@@ -149,7 +148,6 @@ export default function InventoryPicker({
             limit: 100,
             sortBy: 'name',
             sortDir: 'asc',
-            active: 'true',
             stock: 'all',
           });
 

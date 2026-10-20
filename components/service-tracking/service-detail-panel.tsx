@@ -41,6 +41,9 @@ import AddTaskModal from "@/components/shared/add-task-modal";
 
 import ServiceTrackingLoadingModal from "./service-tracking-loading-modal";
 
+import InventoryShortageResolutionModal from "./inventory-shortage-resolution-modal";
+import { inventoryShortagesApi, type InventoryShortageReport } from "@/lib/service-tracking/inventory-shortages";
+
 import TaskCard from "./task-card";
 
 import CustomerCard from "@/components/customers/customer-card";
@@ -334,6 +337,11 @@ export default function ServiceDetailPanel({
   ] = useState(
     false
   );
+
+  /* Appointment-specific stock shortage / external sourcing */
+  const [shortageModalOpen, setShortageModalOpen] = useState(false);
+  const [shortageReport, setShortageReport] = useState<InventoryShortageReport | null>(null);
+  const submittingBillingRef = useRef(false);
 
   const [
     doneConfirmOpen,
@@ -1309,13 +1317,36 @@ export default function ServiceDetailPanel({
 
   const handleSubmitToBilling =
     async () => {
-      setIsSubmitting(
-        true
-      );
+      if (submittingBillingRef.current) return;
+      submittingBillingRef.current = true;
+      setIsSubmitting(true);
 
-      setProcessingAction(
-        "SUBMIT_TO_BILLING"
-      );
+      // Preflight BEFORE recording inspection history or generating an
+      // estimate. This means shortages do not cause partial side effects.
+      // Inventory is checked again atomically by keepAppointmentInventory
+      // during estimate generation (stock can change between requests).
+      try {
+        if (!estimate) {
+          const stockResponse = await inventoryShortagesApi.check(appointment.id);
+          if (stockResponse.data.shortages.length > 0) {
+            setShortageReport(stockResponse.data);
+            setSendConfirmOpen(false);
+            setShortageModalOpen(true);
+            return;
+          }
+        }
+      } catch (error: any) {
+        toast.error(error?.message || 'Unable to verify inventory before billing.');
+        return;
+      } finally {
+        setIsSubmitting(false);
+        submittingBillingRef.current = false;
+      }
+
+      // Only show the blocking progress overlay AFTER the preflight passes.
+      submittingBillingRef.current = true;
+      setIsSubmitting(true);
+      setProcessingAction("SUBMIT_TO_BILLING");
 
       try {
         await recordTasksToHistory(
@@ -1420,11 +1451,19 @@ export default function ServiceDetailPanel({
           if (
             genRes?.error
           ) {
-            toast.error(
-              genRes.errorMessage ||
-                "Failed to generate estimate."
-            );
-
+            if (genRes.errorType === 'inventory') {
+              try {
+                const stockResponse = await inventoryShortagesApi.check(appointment.id);
+                setShortageReport(stockResponse.data);
+                setShortageModalOpen(true);
+                setSendConfirmOpen(false);
+                toast.warning('Inventory changed. Please review the remaining shortages.');
+              } catch (stockError: any) {
+                toast.error(stockError?.message || genRes.errorMessage || 'Inventory is insufficient.');
+              }
+            } else {
+              toast.error(genRes.errorMessage || 'Failed to generate estimate.');
+            }
             return;
           }
 
@@ -1466,6 +1505,7 @@ export default function ServiceDetailPanel({
         setSendConfirmOpen(
           false
         );
+        submittingBillingRef.current = false;
       }
     };
 
@@ -2560,6 +2600,17 @@ export default function ServiceDetailPanel({
                 </div>
 
                 <div className="border-t border-border p-3 sm:p-4">
+                  {findings.some((finding: any) => Array.isArray(finding?.parts) && finding.parts.some((part: any) => part?.externalPurchaseStatus)) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mb-2 h-10 w-full gap-2 text-amber-800"
+                      onClick={() => setShortageModalOpen(true)}
+                      disabled={isSubmitting}
+                    >
+                      <AlertCircle className="h-4 w-4" /> View External Purchase List
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     onClick={() =>
@@ -2627,6 +2678,20 @@ export default function ServiceDetailPanel({
                     : "Findings"}
                 </Badge>
               </div>
+
+              {findings.some((finding: any) => Array.isArray(finding?.parts) && finding.parts.some((part: any) => Boolean(part?.externalPurchaseStatus))) && (
+                <div className="border-b px-3 py-2 sm:px-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 gap-2 text-amber-800"
+                    onClick={() => setShortageModalOpen(true)}
+                    disabled={isSubmitting}
+                  >
+                    <AlertCircle className="h-4 w-4" /> External Purchases / Status
+                  </Button>
+                </div>
+              )}
 
               {isInspection && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -3137,6 +3202,19 @@ export default function ServiceDetailPanel({
           excludeAppointmentId={
             appointment.id
           }
+        />
+
+        <InventoryShortageResolutionModal
+          open={shortageModalOpen}
+          appointmentId={appointment.id}
+          trackingNumber={appointment.trackingNumber}
+          initialReport={shortageReport}
+          onOpenChange={(next) => {
+            setShortageModalOpen(next);
+            if (!next) setShortageReport(null);
+          }}
+          onFindingsChanged={() => loadData(true)}
+          onContinueToBilling={handleSubmitToBilling}
         />
 
         <Dialog open={sendConfirmOpen} onOpenChange={(open) => !isSubmitting && setSendConfirmOpen(open)}>

@@ -103,20 +103,37 @@ export async function PUT(
 
     // If parts are provided, update them
     if (parts && Array.isArray(parts)) {
-      // First, delete existing parts for this finding
+      // Preserve the server-owned fulfillment metadata when a finding
+      // is edited before reservation. Clients may omit the metadata, but
+      // must never accidentally turn an EXTERNAL purchase into a local
+      // inventory allocation. Existing part UUIDs identify those rows.
+      const existingParts = await Database.select().from(InspectionFindingParts)
+        .where(eq(InspectionFindingParts.findingId, id));
+      const existingById = new Map(existingParts.map(part => [part.id, part]));
+
+      // Keep the previous replace-parts behavior, while copying source
+      // metadata from the matching original part where appropriate.
       await Database.delete(InspectionFindingParts)
         .where(eq(InspectionFindingParts.findingId, id));
 
       // Then insert new parts
       for (const part of parts) {
+        const previous = part?.id ? existingById.get(String(part.id)) : undefined;
         const partData: any = {
           findingId: id,
           quantity: part.quantity || 1,
           priceAtTime: part.priceAtTime || 0,
           isPms: part.isPms || false,
         };
-        const hasInventoryItem = part.inventoryItemId && isValidUUID(part.inventoryItemId);
+        const submittedInventoryId = part.inventoryItemId || null;
+        const hasInventoryItem = submittedInventoryId && isValidUUID(submittedInventoryId);
         const partName = typeof part.partName === 'string' ? part.partName.trim() : '';
+
+        // Only the stock-shortage endpoint can create external purchases.
+        // Existing external status survives normal finding edits.
+        if (previous?.externalPurchaseStatus && !hasInventoryItem) {
+          partData.externalPurchaseStatus = previous.externalPurchaseStatus;
+        }
 
         if (hasInventoryItem) {
           partData.inventoryItemId = part.inventoryItemId;

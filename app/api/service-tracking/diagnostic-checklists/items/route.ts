@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { Database } from '@/lib/drizzle';
 import { DiagnosticChecklistEntries } from '@/database/models/diagnostic-checklist/diagnostic-checklists.model';
 import { DIAGNOSTIC_KEYS, isDiagnosticStatus } from '@/lib/diagnostic-checklist/catalog';
-import { diagnosticError, ensureChecklist, requireDiagnosticStaff, validDiagnosticId } from '@/lib/diagnostic-checklist/server';
+import { diagnosticError, ensureChecklist, requireDiagnosticStaff, requireEditableDiagnosticAppointment, validDiagnosticId } from '@/lib/diagnostic-checklist/server';
 
 export async function PUT(req: NextRequest) {
   const denied = await requireDiagnosticStaff(); if (denied) return denied;
@@ -13,6 +13,8 @@ export async function PUT(req: NextRequest) {
   if (typeof itemKey !== 'string' || !DIAGNOSTIC_KEYS.has(itemKey)) return diagnosticError('Invalid checklist item.', 422);
   if (status !== null && !isDiagnosticStatus(status)) return diagnosticError('Choose Good, Warning, Replace, or clear the selection.', 422);
   try {
+    const readOnlyError = await requireEditableDiagnosticAppointment(appointmentId);
+    if (readOnlyError) return readOnlyError;
     const checklist = await ensureChecklist(appointmentId);
     if (!checklist) return diagnosticError('Appointment not found.', 404);
     if (status === null) {

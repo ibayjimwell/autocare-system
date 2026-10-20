@@ -75,6 +75,8 @@ import {
 
 interface FindingPart {
   id: string;
+  inventoryItemId?: string | null;
+  externalPurchaseStatus?: 'PENDING' | 'PURCHASED' | 'RECEIVED' | null;
   partName: string;
   quantity: number;
   priceAtTime: number;
@@ -361,6 +363,11 @@ export default function FindingsList({
 
                 isPms:
                   part.isPms,
+
+                // Preserve the original inventory link. The server owns
+                // external purchase statuses and keeps them when updating.
+                inventoryItemId:
+                  part.inventoryItemId || null,
               })
             ),
         };
@@ -690,6 +697,11 @@ export default function FindingsList({
                                       'Part'
                                     }
                                   </span>
+                                  {part.externalPurchaseStatus && (
+                                    <Badge variant="outline" className="shrink-0 border-amber-500/60 text-[10px] text-amber-700">
+                                      External · {part.externalPurchaseStatus.toLowerCase()}
+                                    </Badge>
+                                  )}
                                 </div>
 
                                 <span

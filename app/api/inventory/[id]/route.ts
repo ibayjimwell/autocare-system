@@ -148,10 +148,6 @@ export async function PUT(
         body.lowStockAlert !== undefined
           ? body.lowStockAlert
           : existing.lowStockAlert,
-      active:
-        body.active !== undefined
-          ? body.active
-          : existing.active,
     };
 
     const errors = validateInventoryData(merged);
@@ -181,7 +177,8 @@ export async function PUT(
       sellingPrice: Number(merged.sellingPrice).toFixed(2),
       reorderLevel: Number(merged.reorderLevel),
       lowStockAlert: Boolean(merged.lowStockAlert),
-      active: Boolean(merged.active),
+      // Deprecated Active toggle is ignored even for older clients.
+      active: true,
       updatedAt: new Date(),
     };
 

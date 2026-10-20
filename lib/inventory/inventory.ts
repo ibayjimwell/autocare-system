@@ -8,7 +8,6 @@ export type InventoryListParams = {
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
   stock?: InventoryStockFilter;
-  active?: InventoryBinaryFilter;
   lowStockAlert?: InventoryBinaryFilter;
   unit?: string;
   minQuantity?: number;
@@ -52,7 +51,6 @@ function buildQuery(params?: InventoryListParams) {
   if (params?.sortBy) query.set('sortBy', params.sortBy);
   if (params?.sortDir) query.set('sortDir', params.sortDir);
   if (params?.stock) query.set('stock', params.stock);
-  if (params?.active) query.set('active', params.active);
   if (params?.lowStockAlert) query.set('lowStockAlert', params.lowStockAlert);
   if (params?.unit) query.set('unit', params.unit);
   if (params?.minQuantity !== undefined) query.set('minQuantity', String(params.minQuantity));

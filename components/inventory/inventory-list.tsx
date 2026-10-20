@@ -66,7 +66,6 @@ const focusClass =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 type QuickFilter = 'ALL' | 'LOW' | 'OUT';
-type ActiveFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 type AlertFilter = 'ALL' | 'ENABLED' | 'DISABLED';
 type SortKey =
   | 'name'
@@ -126,7 +125,6 @@ export default function InventoryList() {
   const [initialBarcode, setInitialBarcode] = useState('');
 
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('ALL');
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('ALL');
   const [alertFilter, setAlertFilter] = useState<AlertFilter>('ALL');
   const [unitFilter, setUnitFilter] = useState('ALL');
   const [minQuantity, setMinQuantity] = useState('');
@@ -167,7 +165,6 @@ export default function InventoryList() {
       return sum + getInventoryStockValue(item);
     }, 0);
 
-    const activeItems = items.filter((item) => item.active).length;
     const outOfStockCount = items.filter((item) => isOutOfStock(item)).length;
     const healthyCount = items.filter(
       (item) =>
@@ -177,7 +174,6 @@ export default function InventoryList() {
     return {
       totalItems,
       totalValue,
-      activeItems,
       lowStockCount,
       outOfStockCount,
       healthyCount,
@@ -231,9 +227,6 @@ export default function InventoryList() {
 
       if (quickFilter === 'LOW' && !isLowStock(item)) return false;
       if (quickFilter === 'OUT' && !isOutOfStock(item)) return false;
-
-      if (activeFilter === 'ACTIVE' && item?.active === false) return false;
-      if (activeFilter === 'INACTIVE' && item?.active !== false) return false;
 
       if (alertFilter === 'ENABLED' && item?.lowStockAlert === false) return false;
       if (alertFilter === 'DISABLED' && item?.lowStockAlert !== false) return false;
@@ -343,7 +336,6 @@ export default function InventoryList() {
     items,
     search,
     quickFilter,
-    activeFilter,
     alertFilter,
     unitFilter,
     minQuantity,
@@ -380,7 +372,6 @@ export default function InventoryList() {
   }, [
     search,
     quickFilter,
-    activeFilter,
     alertFilter,
     unitFilter,
     minQuantity,
@@ -398,7 +389,6 @@ export default function InventoryList() {
   const clearFilters = () => {
     setSearch('');
     setQuickFilter('ALL');
-    setActiveFilter('ALL');
     setAlertFilter('ALL');
     setUnitFilter('ALL');
     setMinQuantity('');
@@ -414,7 +404,6 @@ export default function InventoryList() {
   };
 
   const hasAdvancedFilters =
-    activeFilter !== 'ALL' ||
     alertFilter !== 'ALL' ||
     unitFilter !== 'ALL' ||
     minQuantity !== '' ||
@@ -532,10 +521,10 @@ export default function InventoryList() {
                 <div className="grid grid-cols-2 gap-2 text-right">
                   <div>
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      Active
+                      Healthy stock
                     </p>
                     <p className="text-sm font-semibold text-foreground">
-                      {metrics.activeItems}
+                      {metrics.healthyCount}
                     </p>
                   </div>
                   <div>
@@ -770,20 +759,6 @@ export default function InventoryList() {
 
                     <div className="max-h-[65vh] overflow-y-auto p-4 [scrollbar-gutter:stable]">
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>Active status</Label>
-                          <Select value={activeFilter} onValueChange={(value) => setActiveFilter(value as ActiveFilter)}>
-                            <SelectTrigger className="h-11 text-base md:h-9 md:text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="ALL">All items</SelectItem>
-                              <SelectItem value="ACTIVE">Active only</SelectItem>
-                              <SelectItem value="INACTIVE">Inactive only</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
                         <div className="space-y-2">
                           <Label>Low-stock alert</Label>
                           <Select value={alertFilter} onValueChange={(value) => setAlertFilter(value as AlertFilter)}>
@@ -1099,15 +1074,10 @@ export default function InventoryList() {
                               <TrendingDown className="h-3 w-3" />
                               Low stock
                             </span>
-                          ) : item.active ? (
+                          ) : (
                             <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
                               <CircleCheck className="h-3 w-3" />
-                              Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              <CircleX className="h-3 w-3" />
-                              Inactive
+                              In stock
                             </span>
                           )}
                         </td>

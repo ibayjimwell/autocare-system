@@ -48,7 +48,6 @@ const EMPTY_FORM = {
   sellingPrice: '0.00',
   reorderLevel: '0',
   lowStockAlert: true,
-  active: true,
 };
 
 const focusClass =
@@ -99,7 +98,6 @@ export default function InventoryForm({
         sellingPrice: toInputValue(item.sellingPrice, '0.00'),
         reorderLevel: toInputValue(item.reorderLevel, '0'),
         lowStockAlert: item.lowStockAlert !== false,
-        active: item.active !== false,
       });
       return;
     }
@@ -156,7 +154,6 @@ export default function InventoryForm({
           sellingPrice: toInputValue(found.sellingPrice, '0.00'),
           reorderLevel: toInputValue(found.reorderLevel, '0'),
           lowStockAlert: found.lowStockAlert !== false,
-          active: found.active !== false,
         }));
 
         toast.success('Barcode found. Item details were filled automatically.');
@@ -247,7 +244,6 @@ export default function InventoryForm({
       sellingPrice: sellingPrice.toFixed(2),
       reorderLevel,
       lowStockAlert: form.lowStockAlert,
-      active: form.active,
     };
 
     try {
@@ -501,20 +497,6 @@ export default function InventoryForm({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">
-                        Active item
-                      </p>
-                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        Inactive items stay in records but are excluded from normal selection.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={form.active}
-                      onCheckedChange={(checked) => updateField('active', checked)}
-                    />
-                  </div>
                 </div>
               </section>
 

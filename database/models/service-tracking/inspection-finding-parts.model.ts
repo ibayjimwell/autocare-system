@@ -28,6 +28,9 @@ export const InspectionFindingParts = pgTable(
       .default("0")
       .notNull(),
     isPms: boolean("is_pms").default(false).notNull(),
+    // NULL: normal part; PENDING/PURCHASED/RECEIVED: sourced externally.
+    // Inventory link is cleared only for the affected appointment part.
+    externalPurchaseStatus: text("external_purchase_status"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
