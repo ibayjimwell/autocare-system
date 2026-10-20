@@ -229,7 +229,7 @@ export default function DiagnosticChecklistModal({ open, onOpenChange, appointme
   const handleMarkSectionGood = async (sectionId: string, sectionTitle: string, itemKeys: string[]) => {
     if (readOnly || sectionBusyId || checklist.savingItem) return;
 
-    const targets = itemKeys.filter(itemKey => checklist.statuses.get(itemKey) !== 'GOOD');
+    const targets = itemKeys.filter(itemKey => !checklist.statuses.has(itemKey));
     if (targets.length === 0) {
       toast.success(`${sectionTitle} is already checked as Good.`);
       return;

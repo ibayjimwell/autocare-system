@@ -1,5 +1,11 @@
 'use client';
 
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
 import {
   cn,
 } from '@/lib/utils';
@@ -23,6 +29,7 @@ import {
 import {
   Menu,
   ChevronRight,
+  KeyRound,
 } from 'lucide-react';
 
 import NotificationBell from './NotificationBell';
@@ -199,6 +206,30 @@ export function Header({
   const {
     user,
   } = useAuth();
+
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) { toast.error('Passwords do not match.'); return; }
+    setPasswordSaving(true);
+    try {
+      const res = await fetch('/api/staffs/profile/change-password', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok || data?.error) throw new Error(data?.errorMessage || 'Unable to change password.');
+      toast.success('Your password was changed.');
+      setPasswordModalOpen(false);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+    } catch (error: any) { toast.error(error?.message || 'Unable to change password.'); }
+    finally { setPasswordSaving(false); }
+  };
 
   const pathname =
     usePathname();
@@ -401,6 +432,12 @@ export function Header({
         ========================================================= */}
 
         <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={accountMenuOpen}
+          aria-label="Open account options"
+          onClick={() => setAccountMenuOpen(value => !value)}
+          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setAccountMenuOpen(value => !value); } }}
           className="
             group
             flex
@@ -540,6 +577,24 @@ export function Header({
           </div>
         </div>
       </div>
+      {accountMenuOpen && (
+        <div className="absolute right-4 top-[calc(100%-2px)] z-50 w-56 rounded-lg border border-border bg-card p-1 shadow-xl">
+          <Button variant="ghost" className="h-10 w-full justify-start gap-2" onClick={() => { setAccountMenuOpen(false); setPasswordModalOpen(true); }}>
+            <KeyRound className="h-4 w-4" /> Change Password
+          </Button>
+        </div>
+      )}
+      <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Change Password</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5"><Label>Current password</Label><Input autoComplete="current-password" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>New password</Label><Input autoComplete="new-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Confirm new password</Label><Input autoComplete="new-password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setPasswordModalOpen(false)} disabled={passwordSaving}>Cancel</Button><Button disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword} onClick={() => void handleChangePassword()}>{passwordSaving ? 'Saving...' : 'Change Password'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

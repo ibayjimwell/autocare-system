@@ -13,6 +13,7 @@ import { getAppointmentInfo } from '@/utils/payments/get-appointment-info';
 import { appointmentsTriggers } from '@/triggers/appointments';
 import { mobileAppointmentsTriggers } from '@/app-triggers/appointments';
 import { verifyJWT } from '@/utils/jwt';
+import { customerChangeWindow } from '@/lib/appointments/customer-change-window';
 
 // -----------------------------------------------------------------------------
 // GET /api/appointments/[id]/reschedule-request
@@ -131,27 +132,20 @@ export async function POST(
   if (session?.user?.id) {
     staffId = session.user.id;
     requestedBy = 'staff';
-  } else if (body?.customerId && isValidUUID(body.customerId)) {
-    customerId = body.customerId;
-    requestedBy = 'customer';
   } else {
+    // A customerId in the JSON body is not authentication. Mobile sends
+    // its bearer token and the server derives the customer ID from it.
     const authHeader = req.headers.get('authorization');
-
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
-
+    const match = /^Bearer\s+(.+)$/i.exec(authHeader || '');
+    if (match) {
       try {
-        const decoded = await verifyJWT(token);
-
-        if (decoded?.id) {
+        const decoded = await verifyJWT(match[1]);
+        if (typeof decoded?.id === 'string' && isValidUUID(decoded.id)) {
           customerId = decoded.id;
           requestedBy = 'customer';
         }
       } catch (error) {
-        console.error(
-          '[POST reschedule-request] JWT verification failed:',
-          error
-        );
+        console.error('[POST reschedule-request] JWT verification failed:', error);
       }
     }
   }
@@ -206,6 +200,13 @@ export async function POST(
       },
       { status: 403 }
     );
+  }
+
+  // Confirmed customer bookings cannot be changed after the permitted window.
+  // Staff-managed exception requests retain their existing behavior.
+  if (requestedBy === 'customer' && appointment.status === 'CONFIRMED') {
+    const window = await customerChangeWindow(appointment);
+    if (!window.allowed) return NextResponse.json({ error: true, errorMessage: window.reason, deadline: window.deadline }, { status: 409 });
   }
 
   // ---------------------------------------------------------------------------

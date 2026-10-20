@@ -17,9 +17,9 @@ import { splitDurationMinutes, combineDurationMinutes, formatDurationMinutes } f
 interface AddTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddTask: (title: string, durationMinutes?: number) => void;   // extended signature
+  onAddTask: (title: string, durationMinutes?: number) => void | boolean | Promise<void | boolean>;   // extended signature
   editingTask?: { id: string; title: string; durationMinutes?: number } | null;
-  onEditTask?: (id: string, title: string, durationMinutes?: number) => void;
+  onEditTask?: (id: string, title: string, durationMinutes?: number) => void | boolean | Promise<void | boolean>;
   isLoading?: boolean;
 }
 
@@ -50,13 +50,17 @@ export default function AddTaskModal({
     setDurationMinutes(combined || undefined);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    if (editingTask && onEditTask) {
-      onEditTask(editingTask.id, title.trim(), durationMinutes);
-    } else {
-      onAddTask(title.trim(), durationMinutes);
+    try {
+      const result = editingTask && onEditTask
+        ? await onEditTask(editingTask.id, title.trim(), durationMinutes)
+        : await onAddTask(title.trim(), durationMinutes);
+      if (result === false) return;
+    } catch (error) {
+      console.error('[AddTaskModal] Unable to save task', error);
+      return;
     }
     setTitle("");
     setDurationMinutes(undefined);

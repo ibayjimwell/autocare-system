@@ -613,6 +613,8 @@ export default function EstimatesList({
                   Customer
                 </TableHead>
 
+                <TableHead className="h-11 min-w-[150px] px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tracking Number</TableHead>
+
                 <TableHead
                   className="
                     h-11
@@ -746,18 +748,18 @@ export default function EstimatesList({
                               'Customer'}
                           </p>
 
-                          {est
-                            .appointment
-                            ?.trackingNumber && (
-                            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                          {(est?.appointment?.trackingNumber || est?.trackingNumber) && (
+                            <p className="mt-1 inline-block rounded-md border border-primary/20 bg-primary/5 px-2 py-1 font-mono text-xs font-semibold text-foreground">
                               {
-                                est
-                                  .appointment
-                                  .trackingNumber
+                                est?.appointment?.trackingNumber || est?.trackingNumber
                               }
                             </p>
                           )}
                         </div>
+                      </TableCell>
+
+                      <TableCell className="px-4 py-3 font-mono text-xs font-semibold text-foreground">
+                        {est?.appointment?.trackingNumber || est?.trackingNumber || 'Tracking unavailable'}
                       </TableCell>
 
                       <TableCell className="px-4 py-3">

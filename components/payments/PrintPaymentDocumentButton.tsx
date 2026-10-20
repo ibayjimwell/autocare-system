@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
 
 import { appointmentsApi } from '@/lib/appointments/appointments';
+import { DIAGNOSTIC_SECTIONS } from '@/lib/diagnostic-checklist/catalog';
 
 interface PrintPaymentDocumentButtonProps {
   detailType: 'estimate' | 'final-bill';
@@ -307,6 +308,27 @@ function normalizeTasks(
   }));
 }
 
+function diagnosticPrintSection(data: any, origin: string) {
+  if (!data?.checklist) return `<section class="section"><div class="section-title">Diagnostic Checklist</div><div class="empty-box">No diagnostic checklist recorded.</div></section>`;
+  const statusByKey = new Map((Array.isArray(data.entries) ? data.entries : []).map((entry: any) => [entry.itemKey, entry.status]));
+  const checklist = data.checklist;
+  const sections = DIAGNOSTIC_SECTIONS.map(section => `
+    <tr><td colspan="2" style="background:#f0f0f0;font-weight:bold">${escapeHtml(section.title)}</td></tr>
+    ${section.items.map(([key,label]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(statusByKey.get(key) || '—')}</td></tr>`).join('')}` ).join('');
+  const marks = (Array.isArray(checklist.dentsMarks) ? checklist.dentsMarks : []).map((mark: any) =>
+    `<text x="${Math.max(0,Math.min(500,Number(mark.x)||0))}" y="${Math.max(0,Math.min(175,Number(mark.y)||0))}" fill="#c1272d" font-weight="bold">X</text>`).join('');
+  return `<section class="section" style="break-before:page;page-break-before:always">
+    <div class="section-title">Vehicle Diagnostic Checklist — Read Only</div>
+    <p style="padding:10px">Engine: ${escapeHtml(checklist.engineType || '—')} · Transmission: ${escapeHtml(checklist.transmissionType || '—')}</p>
+    <table><thead><tr><th>Component</th><th>Status</th></tr></thead><tbody>${sections}</tbody></table>
+    <p style="padding:10px;white-space:pre-wrap"><b>Remarks:</b> ${escapeHtml(checklist.remarks || '—')}</p>
+    <p style="padding:10px;white-space:pre-wrap"><b>Dent Notes:</b> ${escapeHtml(checklist.dentsNotes || '—')}</p>
+    <svg viewBox="0 0 500 175" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <image href="${escapeHtml(origin)}/images/autocare-vehicle-dent-template.png" width="500" height="175" preserveAspectRatio="none" />${marks}
+    </svg>
+  </section>`;
+}
+
 /* ================================================================
    PRINT DOCUMENT HTML
 ================================================================ */
@@ -315,10 +337,12 @@ function buildPrintHtml({
   detailType,
   item,
   appointment,
+  diagnosticHtml = '',
 }: {
   detailType: 'estimate' | 'final-bill';
   item: any;
   appointment: any;
+  diagnosticHtml?: string;
 }): string {
   const isEstimate = detailType === 'estimate';
   const documentTitle = isEstimate
@@ -825,6 +849,8 @@ table th:last-child { width: 125px; }
     </div>
   </section>
 
+  ${diagnosticHtml}
+
   <section class="ack">
     <div class="ack-title">Customer Acknowledgment</div>
     <p>
@@ -967,10 +993,20 @@ export default function PrintPaymentDocumentButton({
           services.length > 0 ? services : initialServices,
       };
 
+      let diagnosticHtml = '';
+      if (appointmentId) {
+        try {
+          const res = await fetch(`/api/service-tracking/diagnostic-checklists?appointmentId=${encodeURIComponent(String(appointmentId))}`, { cache: 'no-store' });
+          const body = await res.json();
+          if (res.ok && !body?.error) diagnosticHtml = diagnosticPrintSection(body?.data, window.location.origin);
+        } catch (error) { console.warn('[Print] Diagnostic Checklist unavailable', error); }
+      }
+
       const html = buildPrintHtml({
         detailType,
         item: selectedItem,
         appointment: printableAppointment,
+        diagnosticHtml,
       });
 
       printWindow.document.open();

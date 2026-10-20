@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/drizzle';
 import { Customers } from '@/database/models/customers/customers.model';
 import { PasswordResetOtps } from '@/database/models/customers/password-reset-otps.model';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
+import { normalizePhilippinePhone, isValidPhilippinePhone, formatPhilippinePhoneLocal } from '@/utils/phone';
 import { generateOTP } from '@/utils/otp';
 import { sendSMS } from '@/utils/sms'; // we'll implement this
 
@@ -22,10 +23,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Find customer by phone
+  // Customer records are stored as +639... but the mobile screen often
+  // submits 09...; match the canonical format and its common legacy variants.
+  if (!isValidPhilippinePhone(phone)) {
+    return NextResponse.json({ error: true, errorMessage: 'Enter a valid Philippine mobile number.' }, { status: 422 });
+  }
+  const canonicalPhone = normalizePhilippinePhone(phone);
+  const localPhone = formatPhilippinePhoneLocal(canonicalPhone);
+  const internationalDigits = canonicalPhone.slice(1);
+  const localDigits = canonicalPhone.slice(3);
   const [customer] = await Database.select()
     .from(Customers)
-    .where(eq(Customers.phone, phone.trim()))
+    .where(or(
+      eq(Customers.phone, canonicalPhone),
+      eq(Customers.phone, localPhone),
+      eq(Customers.phone, internationalDigits),
+      eq(Customers.phone, localDigits),
+    ))
     .limit(1);
 
   if (!customer) {

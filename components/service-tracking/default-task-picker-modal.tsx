@@ -392,7 +392,7 @@ export default function DefaultTaskPickerModal({
 
             <div className="min-w-0">
               <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">
-                Add Tasks from Templates
+                Add Tasks from Defaults
               </DialogTitle>
 
               <DialogDescription className="mt-1 text-xs leading-5 sm:text-sm">
@@ -474,9 +474,8 @@ export default function DefaultTaskPickerModal({
               disabled={phaseTasks.length === 0}
               className="h-8 rounded-md px-2.5 text-xs"
             >
-              {allVisibleSelected
-                ? 'Clear visible'
-                : 'Select visible'}
+              <Checkbox checked={allVisibleSelected} onCheckedChange={() => handleSelectAll()} onClick={event => event.stopPropagation()} className="mr-2" aria-label="Select all tasks in this group" />
+              {allVisibleSelected ? 'Deselect All' : 'Select All'}
             </Button>
           </div>
         </div>

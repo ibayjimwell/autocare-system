@@ -99,7 +99,7 @@ function getQueueStatusLabel(
       return 'Arrived';
 
     case 'NOT_ARRIVED':
-      return 'Not Arrived';
+      return 'Not Coming Today — Reschedule / Cancel';
 
     default:
       return status || 'Pending';

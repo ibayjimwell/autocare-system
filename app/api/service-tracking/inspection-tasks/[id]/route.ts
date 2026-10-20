@@ -5,6 +5,7 @@ import { Database } from '@/lib/drizzle';
 import { InspectionTasks } from '@/database/models/service-tracking/inspection-tasks.model';
 import { eq } from 'drizzle-orm';
 import { isValidUUID } from '@/utils/shared';
+import { Appointments } from '@/database/models/appointments/appointments.model';
 
 /* ================================================================
    DELETE INSPECTION TASK
@@ -149,5 +150,47 @@ export async function DELETE(
       },
       { status: 500 },
     );
+  }
+}
+
+
+/* ================================================================
+   EDIT INSPECTION TASK
+   A task's title and estimated duration may change during an active job.
+   Existing status, order, appointment, and start time remain unchanged.
+================================================================ */
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  if (!isValidUUID(id)) return NextResponse.json({ error: true, errorMessage: 'Invalid task ID.' }, { status: 422 });
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: true, errorMessage: 'Staff login required.' }, { status: 401 });
+  let body: any;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: true, errorMessage: 'Invalid JSON.' }, { status: 400 }); }
+  const title = typeof body?.title === 'string' ? body.title.trim() : '';
+  const duration = body?.durationMinutes;
+  if (!title || title.length > 500 ||
+    (duration !== null && duration !== undefined && (!Number.isInteger(duration) || duration < 1 || duration > 43200))) {
+    return NextResponse.json({ error: true, errorMessage: 'Enter a task title and a positive duration in whole minutes (or leave duration blank).' }, { status: 422 });
+  }
+  try {
+    const [task] = await Database.select().from(InspectionTasks).where(eq(InspectionTasks.id, id)).limit(1);
+    if (!task) return NextResponse.json({ error: true, errorMessage: 'Task not found.' }, { status: 404 });
+    const [appointment] = await Database.select({ status: Appointments.status }).from(Appointments)
+      .where(eq(Appointments.id, task.appointmentId)).limit(1);
+    if (appointment?.status !== 'UNDER_INSPECTION') {
+      return NextResponse.json({ error: true, errorMessage: 'Tasks can be edited only during their active appointment phase.' }, { status: 409 });
+    }
+    const [updated] = await Database.update(InspectionTasks).set({
+      title,
+      durationMinutes: duration == null ? null : duration,
+      updatedAt: new Date(),
+    }).where(eq(InspectionTasks.id, id)).returning();
+    return NextResponse.json({ error: false, message: 'Task updated.', data: updated });
+  } catch (error) {
+    console.error('[Edit inspection task]', error);
+    return NextResponse.json({ error: true, errorMessage: 'Unable to update task.' }, { status: 500 });
   }
 }

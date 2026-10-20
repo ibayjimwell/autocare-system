@@ -318,9 +318,9 @@ export default function ServiceDetailPanel({
   const [
     addTaskModalOpen,
     setAddTaskModalOpen,
-  ] = useState(
-    false
-  );
+  ] = useState(false);
+
+  const [editingTask, setEditingTask] = useState<any | null>(null);
 
   const [diagnosticChecklistOpen, setDiagnosticChecklistOpen] = useState(false);
 
@@ -768,6 +768,35 @@ export default function ServiceDetailPanel({
   }, [
     loadData,
   ]);
+
+  /* ==============================================================
+     CATCH UP BOOKED-SERVICE DEFAULT TASKS
+
+     Normal status transitions already import linked tasks. This also
+     handles appointments that were in inspection/work before groups
+     were linked, without duplicating existing task rows.
+  ============================================================== */
+  useEffect(() => {
+    if (!['UNDER_INSPECTION', 'IN_PROGRESS'].includes(appointment.status)) return;
+    let mounted = true;
+    const hydrate = async () => {
+      try {
+        const response = await fetch('/api/service-tracking/linked-tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appointmentId: appointment.id }),
+        });
+        const result = await response.json();
+        if (mounted && !result?.error && Number(result?.data?.added) > 0) {
+          await loadData(false);
+        }
+      } catch (error) {
+        console.error('[ServiceTracking] Could not refresh linked default tasks', error);
+      }
+    };
+    void hydrate();
+    return () => { mounted = false; };
+  }, [appointment.id, appointment.status, loadData]);
 
   /* ==============================================================
      REALTIME TASKS
@@ -1251,6 +1280,32 @@ export default function ServiceDetailPanel({
         );
       }
     };
+
+  /* ==============================================================
+     EDIT EXISTING INDIVIDUAL TASK
+  ============================================================== */
+  const handleTaskEdit = async (
+    taskId: string,
+    title: string,
+    durationMinutes?: number,
+  ) => {
+    try {
+      const api = taskPhase === 'INSPECTION' ? inspectionTasksApi : workTasksApi;
+      const result = await api.update(taskId, title, durationMinutes);
+      if (result?.error) {
+        toast.error(result.errorMessage || 'Unable to edit task.');
+        return false;
+      }
+      // Realtime also refreshes the Web and Mobile lists via database change.
+      await loadData(false);
+      setEditingTask(null);
+      toast.success('Task updated.');
+      return true;
+    } catch (error: any) {
+      toast.error(error?.message || 'Unable to edit task.');
+      return false;
+    }
+  };
 
   /* ==============================================================
      DELETE TASK
@@ -2276,7 +2331,7 @@ export default function ServiceDetailPanel({
                     }
                   >
                     <Layers className="mr-2 h-4 w-4" />
-                    Templates
+                    Defaults
                   </Button>
 
                   <Button
@@ -2398,7 +2453,7 @@ export default function ServiceDetailPanel({
                         onDelete={
                           handleTaskDelete
                         }
-                        onEdit={() => {}}
+                        onEdit={() => setEditingTask(task)}
                         appointmentId={
                           appointment.id
                         }
@@ -2481,11 +2536,11 @@ export default function ServiceDetailPanel({
                   </div>
                 </div>
 
-                <div className="max-h-[520px] overflow-auto">
-                  <div className="min-w-[560px] space-y-3 p-3 sm:p-4">
+                <div className="max-h-[520px] min-w-0 overflow-y-auto overflow-x-hidden">
+                  <div className="min-w-0 space-y-3 break-words p-3 sm:p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
+                        <p className="break-words text-sm font-medium">
                           {appointment.services
                             ?.map(
                               (
@@ -2526,7 +2581,7 @@ export default function ServiceDetailPanel({
                           }
                           className="space-y-2"
                         >
-                          <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <p className="break-words text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             {
                               finding.description
                             }
@@ -3065,15 +3120,14 @@ export default function ServiceDetailPanel({
         ========================================================= */}
 
         <AddTaskModal
-          open={
-            addTaskModalOpen
-          }
-          onOpenChange={
-            setAddTaskModalOpen
-          }
-          onAddTask={
-            handleAddTask
-          }
+          open={addTaskModalOpen || Boolean(editingTask)}
+          onOpenChange={(next) => {
+            if (!next) { setAddTaskModalOpen(false); setEditingTask(null); }
+            else setAddTaskModalOpen(true);
+          }}
+          editingTask={editingTask}
+          onEditTask={handleTaskEdit}
+          onAddTask={handleAddTask}
         />
 
         <FindingModal

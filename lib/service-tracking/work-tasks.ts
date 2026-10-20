@@ -82,6 +82,18 @@ export const workTasksApi = {
   },
 
   /* ==============================================================
+     EDIT TASK TITLE / ESTIMATED DURATION
+  ============================================================== */
+  update: async (taskId: string, title: string, durationMinutes?: number) => {
+    const res = await fetch(`/api/service-tracking/work-tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ title, durationMinutes: durationMinutes ?? null }),
+    });
+    return res.json();
+  },
+
+  /* ==============================================================
      DELETE WORK TASK
   ============================================================== */
 

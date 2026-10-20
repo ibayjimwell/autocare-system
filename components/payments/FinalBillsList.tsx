@@ -262,28 +262,12 @@ export default function FinalBillsList({
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              onClick={() =>
-                router.push(
-                  `/payments/qrph/${encodeURIComponent(String(bill.id))}`,
-                )
-              }
-              disabled={loading}
-              className="h-8 rounded-md border-primary/30 px-2.5 text-xs font-medium text-primary hover:bg-primary/5"
-            >
-              <QrCode className="mr-1.5 h-3.5 w-3.5" />
-              QRPh
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
               onClick={() => onPay(bill)}
               disabled={loading}
               className="h-8 rounded-md bg-blue-600 px-2.5 text-xs font-medium text-white hover:bg-blue-700"
             >
               <DollarSign className="mr-1.5 h-3.5 w-3.5" />
-              Pay
+              Pay To Counter
             </Button>
           </div>
         );
@@ -386,6 +370,7 @@ export default function FinalBillsList({
                     <TableHead className="px-4 py-3">Bill</TableHead>
                     <TableHead className="px-4 py-3">Created</TableHead>
                     <TableHead className="px-4 py-3">Customer</TableHead>
+                    <TableHead className="px-4 py-3">Tracking Number</TableHead>
                     <TableHead className="px-4 py-3">Status</TableHead>
                     <TableHead className="px-4 py-3 text-right">Total</TableHead>
                     <TableHead className="px-4 py-3">Parking</TableHead>
@@ -411,8 +396,9 @@ export default function FinalBillsList({
                       <TableCell className="px-4 py-3 text-sm text-muted-foreground">{safeDate(bill.createdAt)}</TableCell>
                       <TableCell className="px-4 py-3">
                         <p className="font-medium text-foreground">{getCustomerName(bill)}</p>
-                        {bill?.appointment?.trackingNumber && <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{bill.appointment.trackingNumber}</p>}
+                        {(bill?.appointment?.trackingNumber || bill?.trackingNumber) && <p className="mt-1 inline-block rounded-md border border-primary/20 bg-primary/5 px-2 py-1 font-mono text-xs font-semibold text-foreground">Tracking #{bill?.appointment?.trackingNumber || bill?.trackingNumber}</p>}
                       </TableCell>
+                      <TableCell className="px-4 py-3 font-mono text-xs font-semibold text-foreground">{bill?.appointment?.trackingNumber || bill?.trackingNumber || 'Tracking unavailable'}</TableCell>
                       <TableCell className="px-4 py-3"><div className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${styles.wrapper} ${styles.pulse}`}><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${styles.dot}`} />{styles.label}</div></TableCell>
                       <TableCell className="px-4 py-3 text-right font-semibold text-primary">₱{formatCurrency(bill.grandTotal)}</TableCell>
                       <TableCell className="px-4 py-3">{renderParkingSummary(bill)}</TableCell>

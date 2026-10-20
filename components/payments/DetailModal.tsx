@@ -33,6 +33,7 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import ServiceCard from '@/components/services/service-card';
 
 import PrintPaymentDocumentButton from '@/components/payments/PrintPaymentDocumentButton';
+import DiagnosticChecklistReadOnly from '@/components/diagnostic-checklist/DiagnosticChecklistReadOnly';
 
 import {
   CheckCircle,
@@ -1481,6 +1482,8 @@ export default function DetailModal({
                   </p>
                 </div>
               </div>
+
+              <DiagnosticChecklistReadOnly appointmentId={selectedItem?.appointmentId || selectedItem?.appointment?.id} />
 
               {/* ==================================================
                   REASON

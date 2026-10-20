@@ -45,6 +45,7 @@ import {
 } from "@/app-triggers/appointments";
 
 import { applyLinkedDefaultTasks } from "@/lib/service-tracking/apply-linked-default-tasks";
+import { customerChangeWindow } from "@/lib/appointments/customer-change-window";
 
 import {
   addToQueue,
@@ -333,6 +334,8 @@ export async function PATCH(
 
         appointmentDate:
           Appointments.appointmentDate,
+        appointmentTime: Appointments.appointmentTime,
+        createdAt: Appointments.createdAt,
 
         notes:
           Appointments.notes,
@@ -490,6 +493,12 @@ export async function PATCH(
           },
         );
       }
+    }
+
+    // Enforce the customer deadline on the server, not just inside Mobile.
+    if (isAppointmentCustomer && !isAuthenticatedStaff && newStatus === 'CANCELLED' && current.status === 'CONFIRMED') {
+      const window = await customerChangeWindow(current);
+      if (!window.allowed) return NextResponse.json({ error: true, errorMessage: window.reason, deadline: window.deadline }, { status: 409 });
     }
 
     /* ============================================================
