@@ -67,6 +67,7 @@ interface InventoryPickerProps {
     outOfStock?: boolean;
   }) => void;
   className?: string;
+  context?: 'finding' | 'pos';
   children?: ReactNode;
 }
 
@@ -89,6 +90,7 @@ const isLowStock = (
 export default function InventoryPicker({
   onSelect,
   className,
+  context = 'finding',
   children,
 }: InventoryPickerProps) {
   const [
@@ -352,14 +354,7 @@ export default function InventoryPicker({
         }}
       >
         <DialogContent
-          className="
-            w-[calc(100%-1rem)]
-            max-w-2xl
-            rounded-xl
-            border-border
-            bg-card
-            p-0
-          "
+          className="!flex !h-[min(92dvh,880px)] !max-h-[calc(100dvh-1rem)] !w-[calc(100vw-1rem)] !max-w-[1100px] !min-w-0 !flex-col !gap-0 !overflow-hidden !rounded-2xl !border-border !bg-card !p-0 sm:!w-[calc(100vw-2rem)]"
         >
           <DialogHeader
             className="
@@ -382,14 +377,16 @@ export default function InventoryPicker({
                 </DialogTitle>
 
                 <DialogDescription className="mt-1">
-                  Select an actual inventory item for this finding. Stock is checked again when the estimate is submitted to billing.
+                  {context === 'pos'
+                    ? 'Choose a registered product to add to the POS sale. Stock is checked again at checkout.'
+                    : 'Select an actual inventory item for this finding. Stock is checked again when the estimate is submitted to billing.'}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <div className="space-y-3 p-4 sm:p-5">
-            <div className="relative">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden p-3 sm:p-5">
+            <div className="relative min-w-0 shrink-0">
               <Search
                 className="
                   pointer-events-none
@@ -451,7 +448,7 @@ export default function InventoryPicker({
               </p>
             </div>
 
-            <ScrollArea className="h-[min(60vh,28rem)] rounded-lg border border-border">
+            <ScrollArea className="min-h-[160px] min-w-0 flex-1 overflow-hidden rounded-lg border border-border">
               {loading ? (
                 <div className="flex min-h-64 items-center justify-center">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -524,9 +521,11 @@ export default function InventoryPicker({
                           className={cn(
                             `
                               flex
+                              min-w-0
                               w-full
                               items-center
-                              gap-3
+                              gap-2
+                              sm:gap-3
                               px-4
                               py-3
                               text-left
@@ -568,7 +567,7 @@ export default function InventoryPicker({
                           </span>
 
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-foreground">
+                            <span className="block min-w-0 break-words text-sm font-semibold leading-5 text-foreground">
                               {item.name}
                             </span>
 
@@ -601,7 +600,7 @@ export default function InventoryPicker({
                             </span>
                           </span>
 
-                          <span className="flex shrink-0 items-center gap-2">
+                          <span className="hidden shrink-0 items-center gap-2 md:flex">
                             {out ? (
                               <span className="rounded-full bg-destructive/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-destructive">
                                 Out of stock
@@ -626,8 +625,10 @@ export default function InventoryPicker({
               )}
             </ScrollArea>
 
-            <p className="text-[11px] leading-5 text-muted-foreground">
-              Inventory quantities are reserved only when the service estimate is submitted to billing. This prevents simply opening or selecting an item from reducing actual stock.
+            <p className="shrink-0 text-[11px] leading-5 text-muted-foreground">
+              {context === 'pos'
+                ? 'Adding an item to the cart does not deduct stock. Inventory is deducted only after the POS sale is completed.'
+                : 'Inventory quantities are reserved only when the service estimate is submitted to billing. This prevents simply opening or selecting an item from reducing actual stock.'}
             </p>
           </div>
         </DialogContent>

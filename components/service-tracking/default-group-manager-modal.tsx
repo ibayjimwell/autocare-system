@@ -3,6 +3,7 @@
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -112,6 +113,20 @@ export default function DefaultGroupManagerModal({
   const [servicesError, setServicesError] = useState('');
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [formData, setFormData] = useState<GroupForm>(EMPTY_FORM);
+
+  // Keep the task editor independently scrollable when many tasks exist.
+  const taskListRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollToNewTaskRef = useRef(false);
+
+  useEffect(() => {
+    if (!shouldScrollToNewTaskRef.current) return;
+
+    shouldScrollToNewTaskRef.current = false;
+    const container = taskListRef.current;
+    if (!container) return;
+
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [formData.tasks.length]);
 
   /* ==============================================================
      LOAD
@@ -302,6 +317,7 @@ export default function DefaultGroupManagerModal({
   };
 
   const handleAddTask = () => {
+    shouldScrollToNewTaskRef.current = true;
     setFormData((previous) => ({
       ...previous,
       tasks: [
@@ -1002,7 +1018,7 @@ export default function DefaultGroupManagerModal({
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Template Tasks
+                        Default Tasks
                       </p>
 
                       <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -1035,7 +1051,13 @@ export default function DefaultGroupManagerModal({
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div
+                      ref={taskListRef}
+                      role="region"
+                      aria-label="Default task editor list"
+                      tabIndex={0}
+                      className="max-h-[min(42dvh,420px)] min-h-0 space-y-2 overflow-y-auto overscroll-contain rounded-lg pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]"
+                    >
                       {formData.tasks.map((task, index) => (
                         <div
                           key={task.id || `task-${index}`}

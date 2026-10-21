@@ -10,6 +10,7 @@ export const paymentsPosApi = {
   createTransaction: async (data: {
     items: any[];
     paymentReceived: number;
+    transactionId?: string;
   }) => {
     const res = await fetch('/api/payments/pos', {
       method: 'POST',

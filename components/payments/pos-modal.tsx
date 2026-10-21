@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -13,11 +14,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Banknote,
+  Barcode,
+  Camera,
+  CheckCircle2,
   History,
   Loader2,
   Minus,
   Package,
   Plus,
+  ScanLine,
   ShoppingCart,
   Trash2,
   WalletCards,
@@ -25,9 +30,18 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { paymentsPosApi } from '@/lib/payments/pos';
+import { inventoryApi } from '@/lib/inventory/inventory';
 import InventoryPicker from '@/components/inventory/inventory-picker';
+import BarcodeScannerModal from '@/components/inventory/barcode-scanner-modal';
+import BarcodeNotFoundModal from '@/components/inventory/barcode-not-found-modal';
 import PosHistoryModal from '@/components/payments/pos-history-modal';
+import PosReceiptModal, { type PosReceiptTransaction } from '@/components/payments/pos-receipt-modal';
 import { formatCurrency } from '@/app-utils/inventory/inventory';
+import {
+  formatCashierAmount,
+  getCashierPaymentChoices,
+  parseCashierPaymentInput,
+} from '@/app-utils/payments/cashier';
 
 interface POSModalProps {
   open: boolean;
@@ -44,49 +58,64 @@ interface CartItem {
   unit?: string;
 }
 
+interface SelectedInventoryItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity?: number;
+  unit?: string | null;
+}
+
 const focusClass =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
-export default function POSModal({
-  open,
-  onClose,
-  onCompleted,
-}: POSModalProps) {
+/**
+ * POS deliberately uses the existing inventory lookup and transaction APIs.
+ * Scanning only adds a cart line. Stock is deducted by the existing POS API
+ * after successful payment; no stock writes happen during scanning.
+ */
+export default function POSModal({ open, onClose, onCompleted }: POSModalProps) {
+  const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentReceived, setPaymentReceived] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [receiptTransaction, setReceiptTransaction] = useState<PosReceiptTransaction | null>(null);
+  const checkoutIdRef = useRef<string | null>(null);
+
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeNotFound, setBarcodeNotFound] = useState<string | null>(null);
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const scanningRef = useRef(false);
 
   const total = useMemo(
-    () =>
-      cart.reduce(
-        (sum, item) =>
-          sum + item.sellingPrice * item.quantity,
-        0,
-      ),
+    () => cart.reduce((sum, item) => sum + item.sellingPrice * item.quantity, 0),
     [cart],
   );
+  const totalInCents = Math.round(total * 100);
+  const payment = parseCashierPaymentInput(paymentReceived);
+  const changeInCents = Math.round(payment * 100) - totalInCents;
+  const canPay = totalInCents > 0 && changeInCents >= 0;
+  const hasPayment = paymentReceived.trim().length > 0;
+  const paymentChoices = useMemo(() => getCashierPaymentChoices(total), [total]);
+  const totalUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const payment = Number.parseFloat(paymentReceived) || 0;
-  const change = Math.round((payment - total) * 100) / 100;
-  const canPay = total > 0 && payment >= total;
-
-  const addItem = (selected: {
-    id: string;
-    name: string;
-    price: number;
-    quantity?: number;
-  }) => {
+  const addItem = useCallback((selected: SelectedInventoryItem) => {
+    checkoutIdRef.current = null;
     const stock = Number(selected.quantity) || 0;
-
+    const sellingPrice = Number(selected.price);
     if (stock <= 0) {
       toast.error(`${selected.name} is out of stock.`);
       return;
     }
-
+    if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
+      toast.error(`Invalid selling price for ${selected.name}.`);
+      return;
+    }
     setCart((current) => {
       const existing = current.find((item) => item.id === selected.id);
-
       if (!existing) {
         return [
           ...current,
@@ -94,78 +123,144 @@ export default function POSModal({
             id: selected.id,
             name: selected.name,
             quantity: 1,
-            sellingPrice: selected.price,
+            sellingPrice,
             stock,
+            unit: selected.unit || undefined,
           },
         ];
       }
-
-      if (existing.quantity >= existing.stock) {
-        toast.error(`Only ${existing.stock} ${existing.stock === 1 ? 'unit' : 'units'} of ${existing.name} are available.`);
-        return current;
+      // Refresh the stock snapshot each time we scan. The server still
+      // performs the authoritative check at checkout.
+      const latestStock = stock;
+      if (existing.quantity >= latestStock) {
+        toast.error(`Only ${latestStock} ${selected.unit || 'unit'} available for ${selected.name}.`);
+        return current.map((item) => item.id === selected.id ? { ...item, stock: latestStock } : item);
       }
-
       return current.map((item) =>
         item.id === selected.id
-          ? { ...item, quantity: item.quantity + 1 }
+          ? { ...item, quantity: item.quantity + 1, stock: latestStock, sellingPrice, unit: selected.unit || undefined }
           : item,
       );
     });
-  };
+  }, []);
+
+  const scanBarcode = useCallback(async (rawBarcode: string) => {
+    const barcode = String(rawBarcode || '').trim();
+    if (!barcode || scanningRef.current || loading) return;
+    scanningRef.current = true;
+    setBarcodeLoading(true);
+    try {
+      const result = await inventoryApi.lookupBarcode(barcode);
+      if (result?.error) {
+        if (result.errorType === 'not_found') {
+          setBarcodeNotFound(barcode);
+        } else {
+          toast.error(result.errorMessage || 'Could not look up the scanned barcode.');
+        }
+        return;
+      }
+      const item = result?.data;
+      if (!item?.id) {
+        toast.error('Barcode lookup returned an invalid inventory item.');
+        return;
+      }
+      const quantity = Number(item.quantity) || 0;
+      if (quantity <= 0) {
+        toast.error(`${item.name} is out of stock and cannot be added to the POS cart.`);
+        return;
+      }
+      addItem({
+        id: item.id,
+        name: item.name,
+        quantity,
+        price: Number(item.sellingPrice ?? item.costPrice ?? 0),
+        unit: item.unit,
+      });
+      setBarcodeInput('');
+      // A hardware scanner typically sends Enter after its barcode. Restore
+      // input focus so several different products can be scanned in a row.
+      requestAnimationFrame(() => barcodeInputRef.current?.focus());
+    } catch (error: any) {
+      console.error('[POS] Barcode lookup failed:', error);
+      toast.error(error?.message || 'Unable to look up this barcode.');
+    } finally {
+      scanningRef.current = false;
+      setBarcodeLoading(false);
+    }
+  }, [addItem, loading]);
+
+  const handleCameraDetected = useCallback((barcode: string) => {
+    setScannerOpen(false);
+    setBarcodeInput(barcode);
+    void scanBarcode(barcode);
+  }, [scanBarcode]);
 
   const updateQuantity = (id: string, nextQuantity: number) => {
-    setCart((current) =>
-      current
-        .map((item) => {
-          if (item.id !== id) return item;
-          const quantity = Math.min(
-            Math.max(1, nextQuantity),
-            item.stock,
-          );
-          return { ...item, quantity };
-        })
-        .filter((item) => item.quantity > 0),
-    );
+    checkoutIdRef.current = null;
+    setCart((current) => current.map((item) => {
+      if (item.id !== id) return item;
+      const quantity = Math.min(Math.max(1, nextQuantity), item.stock);
+      return { ...item, quantity };
+    }));
   };
 
   const removeItem = (id: string) => {
+    checkoutIdRef.current = null;
     setCart((current) => current.filter((item) => item.id !== id));
   };
 
   const reset = () => {
+    checkoutIdRef.current = null;
     setCart([]);
     setPaymentReceived('');
+    setBarcodeInput('');
+    setBarcodeNotFound(null);
+  };
+
+  const openInventoryToAdd = (withBarcode: boolean) => {
+    const params = new URLSearchParams();
+    params.set('source', 'pos');
+    if (withBarcode && barcodeNotFound) {
+      params.set('addBarcode', barcodeNotFound);
+    } else {
+      params.set('addManual', '1');
+    }
+    setBarcodeNotFound(null);
+    onClose();
+    router.push(`/inventory?${params.toString()}`);
   };
 
   const handleComplete = async () => {
-    if (total <= 0) {
+    if (loading) return;
+    if (totalInCents <= 0) {
       toast.error('Add at least one item to the cart.');
       return;
     }
-
-    if (payment < total) {
+    if (!canPay) {
       toast.error('Insufficient payment amount.');
       return;
     }
-
     setLoading(true);
-
     try {
+      // Reuse this checkout ID if the network loses the response after commit.
+      // The server returns the same saved receipt without deducting stock twice.
+      checkoutIdRef.current ||= (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null);
       const result = await paymentsPosApi.createTransaction({
-        items: cart.map((item) => ({
-          id: item.id,
-          name: item.name,
-          quantity: item.quantity,
-        })),
+        transactionId: checkoutIdRef.current || undefined,
+        items: cart.map((item) => ({ id: item.id, name: item.name, quantity: item.quantity })),
         paymentReceived: payment,
       });
-
       if (result?.error) {
         toast.error(result.errorMessage || 'Transaction failed.');
         return;
       }
-
-      toast.success('POS sale completed successfully.');
+      if (!result?.data?.id) {
+        toast.error('The server did not return a saved transaction. Open POS History to verify this sale before retrying.');
+        return;
+      }
+      // Render the receipt from the committed DB row, not the temporary cart.
+      setReceiptTransaction(result.data as PosReceiptTransaction);
+      toast.success(result.alreadyRecorded ? 'This sale was already recorded; displaying the saved receipt.' : 'POS sale saved. Receipt is ready.');
       reset();
       onCompleted();
       onClose();
@@ -182,127 +277,140 @@ export default function POSModal({
       <Dialog
         open={open}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen && !loading) onClose();
+          if (!nextOpen && !loading && !scannerOpen && !barcodeNotFound) onClose();
         }}
       >
-        <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl flex-col overflow-hidden rounded-2xl p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-full">
-          <DialogHeader className="shrink-0 border-b border-border p-4 sm:p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <ShoppingCart className="h-5 w-5 text-primary" />
+        <DialogContent
+          className="!flex !h-[calc(100dvh-1rem)] !max-h-[920px] !w-[calc(100vw-1rem)] !max-w-[1240px] !min-w-0 !flex-col !gap-0 !overflow-hidden !rounded-2xl !p-0 sm:!h-[min(90dvh,900px)] sm:!w-[calc(100vw-2rem)]"
+        >
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 pr-5">
+              <div className="min-w-0">
+                <DialogTitle className="flex items-center gap-2 text-lg font-semibold sm:text-xl">
+                  <ShoppingCart className="h-5 w-5 shrink-0 text-primary" />
                   Point of Sale
                 </DialogTitle>
-                <DialogDescription>
-                  Sell parts, supplies, and consumables while deducting stock.
+                <DialogDescription className="mt-1 max-w-2xl text-left">
+                  Scan products, sell inventory, and deduct stock only after completing payment.
                 </DialogDescription>
               </div>
-
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setHistoryOpen(true)}
                 disabled={loading}
-                className={`h-11 shrink-0 rounded-md md:h-9 ${focusClass}`}
+                className={`h-10 shrink-0 rounded-md ${focusClass}`}
               >
-                <History className="mr-2 h-4 w-4" />
-                History
+                <History className="mr-2 h-4 w-4" />History
               </Button>
             </div>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
-              <section className="rounded-xl border border-border bg-card p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Products
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Search inventory and add items to the sale.
-                    </p>
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3 sm:p-5 lg:p-6 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] lg:items-start">
+              <section className="min-w-0 rounded-xl border border-border bg-card p-3 sm:p-5">
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Products</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Scan a barcode or search inventory to add products.</p>
                   </div>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Package className="h-4 w-4" />
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <InventoryPicker onSelect={addItem}>
-                    <>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add product
-                    </>
+                <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="relative min-w-0">
+                    <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      ref={barcodeInputRef}
+                      value={barcodeInput}
+                      onChange={(event) => setBarcodeInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === 'Tab') {
+                          if (barcodeInput.trim()) {
+                            event.preventDefault();
+                            void scanBarcode(barcodeInput);
+                          }
+                        }
+                      }}
+                      disabled={loading || barcodeLoading}
+                      placeholder="Scan or type barcode, then press Enter"
+                      aria-label="POS barcode input"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="h-11 min-w-0 rounded-lg pl-10 pr-11 text-sm"
+                    />
+                    {barcodeLoading && <Loader2 className="absolute right-3 top-3.5 h-4 w-4 animate-spin text-primary" />}
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => void scanBarcode(barcodeInput)}
+                    disabled={loading || barcodeLoading || !barcodeInput.trim()}
+                    className={`h-11 rounded-lg px-4 ${focusClass}`}
+                  >
+                    {barcodeLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanLine className="mr-2 h-4 w-4" />}
+                    Add by Barcode
+                  </Button>
+                </div>
+                <div className="mt-2 flex min-w-0 flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setScannerOpen(true)}
+                    disabled={loading || barcodeLoading}
+                    className={`h-10 rounded-lg ${focusClass}`}
+                  >
+                    <Camera className="mr-2 h-4 w-4" />Scan with Camera
+                  </Button>
+                  <InventoryPicker onSelect={addItem} context="pos" className="h-10 rounded-lg">
+                    <Plus className="mr-2 h-4 w-4" />Pick Inventory Item
                   </InventoryPicker>
                 </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  USB/Bluetooth barcode scanners work in the barcode field. Scan the next item after each lookup finishes.
+                </p>
 
-                <div className="mt-4 space-y-2">
+                <div className="mt-5 flex items-center justify-between border-b border-border pb-2">
+                  <p className="text-sm font-semibold text-foreground">Cart</p>
+                  <span className="text-xs text-muted-foreground">{totalUnits} {totalUnits === 1 ? 'unit' : 'units'}</span>
+                </div>
+                <div className="mt-3 min-w-0 space-y-2">
                   {cart.length === 0 ? (
-                    <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 text-center">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                        <ShoppingCart className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <p className="mt-3 text-sm font-semibold text-foreground">
-                        Cart is empty
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Add an inventory item to begin a POS sale.
-                      </p>
+                    <div className="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted"><ShoppingCart className="h-5 w-5 text-muted-foreground" /></div>
+                      <p className="mt-3 text-sm font-semibold">Cart is empty</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Scan a barcode or choose an inventory item to begin a sale.</p>
                     </div>
                   ) : (
                     cart.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-xl border border-border bg-background p-3"
-                      >
-                        <div className="flex items-start gap-3">
+                      <div key={item.id} className="min-w-0 rounded-xl border border-border bg-background p-3 sm:p-4">
+                        <div className="flex min-w-0 items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-foreground">
-                              {item.name}
-                            </p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              ₱{formatCurrency(item.sellingPrice)} each · {item.stock} available
+                            <p className="break-words text-sm font-semibold leading-5 text-foreground">{item.name}</p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              ₱{formatCurrency(item.sellingPrice)} each · {item.stock} {item.unit || 'unit'} available
                             </p>
                           </div>
-
-                          <button
+                          <Button
                             type="button"
-                            onClick={() => removeItem(item.id)}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            variant="ghost"
+                            size="icon"
                             aria-label={`Remove ${item.name}`}
+                            onClick={() => removeItem(item.id)}
+                            disabled={loading}
+                            className={`h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive ${focusClass}`}
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </div>
-
-                        <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label="Decrease quantity"
-                            >
-                              <Minus className="h-3.5 w-3.5" />
-                            </button>
-                            <span className="w-8 text-center text-sm font-semibold text-foreground">
-                              {item.quantity}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              disabled={item.quantity >= item.stock}
-                              className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label="Increase quantity"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9" disabled={loading || item.quantity <= 1} onClick={() => updateQuantity(item.id, item.quantity - 1)} aria-label={`Decrease ${item.name} quantity`}><Minus className="h-4 w-4" /></Button>
+                            <span className="w-8 text-center text-sm font-semibold tabular-nums">{item.quantity}</span>
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9" disabled={loading || item.quantity >= item.stock} onClick={() => updateQuantity(item.id, item.quantity + 1)} aria-label={`Increase ${item.name} quantity`}><Plus className="h-4 w-4" /></Button>
                           </div>
-
-                          <p className="text-sm font-semibold text-primary">
-                            ₱{formatCurrency(item.sellingPrice * item.quantity)}
-                          </p>
+                          <span className="break-words text-base font-semibold text-primary">₱{formatCurrency(item.sellingPrice * item.quantity)}</span>
                         </div>
                       </div>
                     ))
@@ -310,110 +418,123 @@ export default function POSModal({
                 </div>
               </section>
 
-              <section className="rounded-xl border border-border bg-card p-4">
+              <section className="min-w-0 rounded-xl border border-border bg-card p-3 sm:p-5 lg:sticky lg:top-0">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <WalletCards className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Payment summary
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      Complete the sale after receiving payment.
-                    </p>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><WalletCards className="h-5 w-5" /></div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment Summary</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Collect cash and complete the sale.</p>
                   </div>
                 </div>
-
-                <div className="mt-5 rounded-xl border border-primary/15 bg-primary/[0.04] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Total sale
-                  </p>
-                  <p className="mt-1 text-3xl font-semibold tracking-tight text-primary">
-                    ₱{formatCurrency(total)}
-                  </p>
+                <div className="mt-4 rounded-xl border border-primary/15 bg-primary/[0.04] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Sale</p>
+                  <p className="mt-1 break-words text-2xl font-bold tracking-tight text-primary sm:text-3xl">₱{formatCurrency(total)}</p>
                 </div>
-
                 <div className="mt-4 space-y-2">
-                  <label htmlFor="pos-payment" className="text-sm font-medium text-foreground">
-                    Payment received (₱)
-                  </label>
+                  <label htmlFor="pos-payment" className="text-sm font-medium">Payment received (₱)</label>
                   <Input
                     id="pos-payment"
                     type="number"
-                    min={0}
+                    min="0"
                     step="0.01"
                     inputMode="decimal"
                     value={paymentReceived}
-                    onChange={(e) => setPaymentReceived(e.target.value)}
+                    onChange={(event) => { checkoutIdRef.current = null; setPaymentReceived(event.target.value); }}
+                    disabled={loading}
                     placeholder="Enter amount received"
-                    className="h-12 rounded-md text-base md:h-9 md:text-sm"
+                    className={`h-11 rounded-lg text-base ${focusClass}`}
                   />
                 </div>
-
-                <div
-                  className={`mt-3 rounded-xl border p-4 ${
-                    canPay
-                      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/20'
-                      : 'border-border bg-muted/30'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
+                {paymentChoices.length > 0 && (
+                  <div className="mt-4 space-y-2">
                     <div className="flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-primary" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Change
-                      </p>
+                      <Banknote className="h-4 w-4 shrink-0 text-primary" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Suggested Payment Amounts</p>
                     </div>
-                    <p className={`text-xl font-bold ${canPay ? 'text-emerald-600' : 'text-foreground'}`}>
-                      ₱{formatCurrency(Math.max(change, 0))}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+                      {paymentChoices.map((choice) => {
+                        const selected = hasPayment && Math.abs(payment - choice.amount) < 0.005;
+                        return (
+                          <Button
+                            key={choice.amount}
+                            type="button"
+                            variant={selected ? 'default' : 'outline'}
+                            onClick={() => { checkoutIdRef.current = null; setPaymentReceived(choice.amount.toFixed(2)); }}
+                            disabled={loading}
+                            className={`h-auto min-h-14 min-w-0 rounded-lg px-2 py-2 ${focusClass}`}
+                          >
+                            <span className="flex min-w-0 flex-col items-center gap-0.5 text-center">
+                              <span className="break-all text-sm font-semibold tabular-nums">₱{formatCashierAmount(choice.amount)}</span>
+                              <span className={`text-[10px] font-normal ${selected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                                {choice.isExact ? 'Exact amount' : `Change ₱${formatCashierAmount(choice.change)}`}
+                              </span>
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] leading-5 text-muted-foreground">
+                      Exact amount is always included. Other choices round up using Philippine peso denominations ₱1, ₱5, ₱10, ₱20, ₱50, ₱100, ₱200, ₱500, and ₱1,000.
                     </p>
                   </div>
-
-                  {!canPay && payment > 0 ? (
-                    <p className="mt-2 text-xs text-destructive">
-                      Additional payment needed: ₱{formatCurrency(Math.max(total - payment, 0))}
-                    </p>
-                  ) : null}
+                )}
+                <div className={`mt-4 rounded-xl border p-4 ${canPay ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/20' : 'border-border bg-muted/30'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {canPay ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <Banknote className="h-4 w-4 shrink-0 text-primary" />}
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{hasPayment && !canPay ? 'Amount Remaining' : 'Change'}</span>
+                    </div>
+                    <span className={`break-words text-right text-lg font-bold tabular-nums ${canPay ? 'text-emerald-600' : 'text-foreground'}`}>
+                      ₱{formatCurrency(hasPayment && !canPay ? Math.max(-changeInCents, 0) / 100 : Math.max(changeInCents, 0) / 100)}
+                    </span>
+                  </div>
                 </div>
               </section>
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 flex-col-reverse gap-2 border-t border-border bg-muted/20 p-4 sm:flex-row">
+          <DialogFooter className="shrink-0 flex-col-reverse gap-2 border-t border-border bg-muted/20 p-3 sm:flex-row sm:p-4">
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                reset();
-                onClose();
-              }}
+              onClick={() => { reset(); onClose(); }}
               disabled={loading}
-              className={`h-11 w-full rounded-md md:h-9 md:w-auto ${focusClass}`}
+              className={`h-11 w-full rounded-lg sm:w-auto ${focusClass}`}
             >
-              <X className="mr-2 h-4 w-4" />
-              Cancel
+              <X className="mr-2 h-4 w-4" />Cancel
             </Button>
             <Button
               type="button"
-              onClick={handleComplete}
+              onClick={() => void handleComplete()}
               disabled={loading || !canPay}
-              className={`h-11 w-full rounded-md px-5 md:h-9 md:w-auto ${focusClass}`}
+              className={`h-11 w-full rounded-lg px-5 sm:w-auto ${focusClass}`}
             >
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Banknote className="mr-2 h-4 w-4" />
-              )}
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Banknote className="mr-2 h-4 w-4" />}
               {loading ? 'Processing Sale…' : 'Complete Sale'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <PosHistoryModal
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onDetected={handleCameraDetected}
+        title="POS Barcode Scanner"
+        description="Scan a registered inventory barcode to add one unit to the POS cart."
+      />
+      <BarcodeNotFoundModal
+        open={Boolean(barcodeNotFound)}
+        barcode={barcodeNotFound || ''}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setBarcodeNotFound(null); }}
+        onAddManual={() => openInventoryToAdd(false)}
+        onAddWithBarcode={() => openInventoryToAdd(true)}
+      />
+      <PosHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <PosReceiptModal
+        open={Boolean(receiptTransaction)}
+        transaction={receiptTransaction}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setReceiptTransaction(null); }}
       />
     </>
   );

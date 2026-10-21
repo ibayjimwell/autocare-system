@@ -1,67 +1,79 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { paymentsPosApi } from '@/lib/payments/pos';
 
-export function usePosHistory() {
+/** Fetch history only while its dialog is open; refetch on every reopen. */
+export function usePosHistory(enabled = true) {
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const requestCounter = useRef(0);
 
   const load = useCallback(async () => {
+    if (!enabled) return;
+    const requestId = ++requestCounter.current;
     setLoading(true);
-
+    setError('');
     try {
-      const res = await paymentsPosApi.getHistory({
+      const result = await paymentsPosApi.getHistory({
         search: search.trim() || undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
         page,
         limit: 20,
       });
-
-      if (res?.error) {
-        setTransactions([]);
-        setTotalPages(1);
-        setTotalCount(0);
-        return;
-      }
-
-      setTransactions(Array.isArray(res?.data) ? res.data : []);
-      setTotalPages(Math.max(1, Number(res?.pagination?.pages || 1)));
-      setTotalCount(Number(res?.pagination?.total || 0));
-    } catch (error) {
-      console.error('[usePosHistory] Load error:', error);
+      if (requestId !== requestCounter.current) return;
+      if (result?.error) throw new Error(result.errorMessage || 'Unable to load POS history.');
+      setTransactions(Array.isArray(result?.data) ? result.data : []);
+      setTotalPages(Math.max(1, Number(result?.pagination?.pages || 1)));
+      setTotalCount(Number(result?.pagination?.total || 0));
+    } catch (problem: any) {
+      if (requestId !== requestCounter.current) return;
+      console.error('[usePosHistory] Error:', problem);
+      setError(problem?.message || 'Unable to load POS history.');
       setTransactions([]);
-      setTotalPages(1);
       setTotalCount(0);
+      setTotalPages(1);
     } finally {
-      setLoading(false);
+      if (requestId === requestCounter.current) setLoading(false);
     }
-  }, [search, dateFrom, dateTo, page]);
+  }, [enabled, search, dateFrom, dateTo, page]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (enabled) void load();
+    return () => { requestCounter.current += 1; };
+  }, [enabled, load]);
 
-  useEffect(() => {
+  const changeSearch = useCallback((value: string) => {
+    setSearch(value);
     setPage(1);
-  }, [search, dateFrom, dateTo]);
+  }, []);
+  const changeDateFrom = useCallback((value: string) => {
+    setDateFrom(value);
+    setPage(1);
+  }, []);
+  const changeDateTo = useCallback((value: string) => {
+    setDateTo(value);
+    setPage(1);
+  }, []);
 
   return {
     transactions,
     loading,
+    error,
     search,
-    setSearch,
+    setSearch: changeSearch,
     dateFrom,
-    setDateFrom,
+    setDateFrom: changeDateFrom,
     dateTo,
-    setDateTo,
+    setDateTo: changeDateTo,
     page,
     setPage,
     totalPages,

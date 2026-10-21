@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -123,6 +123,27 @@ export default function InventoryList() {
   const [restockBarcodeScannerOpen, setRestockBarcodeScannerOpen] = useState(false);
   const [barcodeNotFound, setBarcodeNotFound] = useState<string | null>(null);
   const [initialBarcode, setInitialBarcode] = useState('');
+
+  // POS may direct staff here after scanning an unregistered barcode.
+  // Prefill the *existing* Add Item form instead of creating a second form.
+  // Remove the one-shot query parameters so refresh does not reopen the form.
+  const posAddIntentHandled = useRef(false);
+  useEffect(() => {
+    if (posAddIntentHandled.current || typeof window === 'undefined') return;
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.get('source') !== 'pos') return;
+    const barcode = currentUrl.searchParams.get('addBarcode')?.trim() || '';
+    const manual = currentUrl.searchParams.get('addManual') === '1';
+    if (!barcode && !manual) return;
+    posAddIntentHandled.current = true;
+    setEditing(null);
+    setInitialBarcode(barcode);
+    setFormOpen(true);
+    currentUrl.searchParams.delete('source');
+    currentUrl.searchParams.delete('addBarcode');
+    currentUrl.searchParams.delete('addManual');
+    window.history.replaceState(window.history.state, '', currentUrl.pathname + currentUrl.search + currentUrl.hash);
+  }, []);
 
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('ALL');
   const [alertFilter, setAlertFilter] = useState<AlertFilter>('ALL');

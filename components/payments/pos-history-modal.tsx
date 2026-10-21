@@ -21,6 +21,8 @@ import {
 import { usePosHistory } from '@/hooks/payments/use-pos-history';
 import { formatCurrency } from '@/app-utils/inventory/inventory';
 import { format, parseISO } from 'date-fns';
+import PosReceiptModal, { type PosReceiptTransaction } from './pos-receipt-modal';
+import { Printer, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface PosHistoryModalProps {
   open: boolean;
@@ -37,9 +39,12 @@ export default function PosHistoryModal({
   open,
   onClose,
 }: PosHistoryModalProps) {
+  const [receiptTransaction, setReceiptTransaction] = React.useState<PosReceiptTransaction | null>(null);
   const {
     transactions,
     loading,
+    error,
+    load,
     search,
     setSearch,
     dateFrom,
@@ -50,7 +55,7 @@ export default function PosHistoryModal({
     setPage,
     totalPages,
     totalCount,
-  } = usePosHistory();
+  } = usePosHistory(open);
 
   const grouped = React.useMemo(() => {
     const map = new Map<string, any[]>();
@@ -66,6 +71,7 @@ export default function PosHistoryModal({
   }, [transactions]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-4xl flex-col overflow-hidden rounded-xl p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-full">
         <DialogHeader className="shrink-0 border-b border-border p-4 sm:p-5">
@@ -78,7 +84,7 @@ export default function PosHistoryModal({
                 Transaction History
               </DialogTitle>
               <DialogDescription className="mt-0.5 text-sm">
-                {totalCount} total transactions
+                {totalCount} total transactions · Print or reprint saved receipts
               </DialogDescription>
             </div>
           </div>
@@ -115,7 +121,15 @@ export default function PosHistoryModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5">
-          {loading ? (
+          {error && !loading ? (
+            <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-4 text-center">
+              <AlertTriangle className="h-7 w-7 text-destructive" />
+              <p className="text-sm font-medium text-destructive">{error}</p>
+              <Button type="button" variant="outline" onClick={() => void load()}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Retry
+              </Button>
+            </div>
+          ) : loading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, index) => (
                 <div
@@ -170,16 +184,27 @@ export default function PosHistoryModal({
 
                               <div className="sm:text-right">
                                 <p className="text-sm font-semibold text-primary">
-                                  Total: {formatCurrency(tx.totalAmount)}
+                                  Total: ₱{formatCurrency(tx.totalAmount)}
                                 </p>
                                 <p className="mt-0.5 text-[10px] text-muted-foreground">
-                                  Paid: {formatCurrency(tx.paymentReceived)}
+                                  Paid: ₱{formatCurrency(tx.paymentReceived)}
                                   {' · '}
-                                  Change: {formatCurrency(tx.changeGiven)}
+                                  Change: ₱{formatCurrency(tx.changeGiven)}
                                 </p>
                               </div>
                             </div>
 
+                            <div className="mt-3 flex justify-end">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setReceiptTransaction(tx as PosReceiptTransaction)}
+                                className="h-9 rounded-md"
+                              >
+                                <Printer className="mr-2 h-4 w-4" /> Reprint Receipt
+                              </Button>
+                            </div>
                             <div className="mt-4 border-t border-border pt-3">
                               <div className="space-y-2">
                                 {items.map((item: any, idx: number) => (
@@ -236,5 +261,11 @@ export default function PosHistoryModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <PosReceiptModal
+      open={Boolean(receiptTransaction)}
+      onOpenChange={(nextOpen) => { if (!nextOpen) setReceiptTransaction(null); }}
+      transaction={receiptTransaction}
+    />
+    </>
   );
 }
