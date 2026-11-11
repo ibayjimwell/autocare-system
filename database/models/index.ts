@@ -76,3 +76,6 @@ export * from "./payments/payment-transactions.model";
 
 // Diagnostic Checklist (independent Service Tracking submodule)
 export * from './diagnostic-checklist/diagnostic-checklists.model';
+
+// Staff-reviewed customer-initiated electronic transfers
+export * from "./payments/manual-transfer-submissions.model";

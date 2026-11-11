@@ -1,3 +1,4 @@
+import { rejectFinalCostMonetaryEdit } from '@/lib/payments/final-cost-lock';
 import {
   NextRequest,
   NextResponse,
@@ -57,6 +58,8 @@ export async function POST(
     }>;
   },
 ) {
+  return rejectFinalCostMonetaryEdit((await params).id);
+
   const { id } = await params;
 
   if (!isValidUUID(id)) {

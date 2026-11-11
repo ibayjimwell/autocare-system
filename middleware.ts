@@ -2,8 +2,6 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { getFirstAccessibleRoute } from "@/lib/auth/get-first-access-route";
-
 const routeToPermission: Record<string, string> = {
   "/dashboard": "dashboard",
   "/customers": "customers",
@@ -25,15 +23,26 @@ export default withAuth(
       return NextResponse.next();
     }
 
-    // 2. Public frontend pages.
+    // 2. Public-facing business pages (PayMongo onboarding): no staff login required.
     if (
+      pathname === "/explore" ||
+      pathname === "/contact" ||
+      pathname === "/privacy" ||
+      pathname === "/terms" ||
+      pathname === "/refund-policy" ||
       pathname === "/login" ||
       pathname === "/unauthorized"
     ) {
       return NextResponse.next();
     }
 
-    // 3. Every other frontend page requires an authenticated token.
+    // 3. Root is the public landing page for ALL visitors, including staff.
+    // Staff-only modules remain protected by the rules below.
+    if (pathname === "/") {
+      return NextResponse.next();
+    }
+
+    // 4. Every other operational page requires an authenticated token.
     if (!token) {
       const loginUrl = new URL("/login", req.url);
 
@@ -53,23 +62,6 @@ export default withAuth(
       | Record<string, boolean>
       | null
       | undefined;
-
-    // 4. Root route: redirect to the first permitted sidebar module.
-    // This prevents "/" from ever acting as an implicit Dashboard page.
-    if (pathname === "/") {
-      const firstRoute = getFirstAccessibleRoute(userAccess);
-
-      if (firstRoute) {
-        return NextResponse.redirect(
-          new URL(firstRoute, req.url),
-        );
-      }
-
-      // Authenticated but no enabled module.
-      return NextResponse.redirect(
-        new URL("/unauthorized", req.url),
-      );
-    }
 
     // 5. Normal module permission check.
     const matchedRoute = Object.keys(routeToPermission).find(
@@ -101,6 +93,12 @@ export default withAuth(
 
         if (
           pathname.startsWith("/api") ||
+          pathname === "/" ||
+          pathname === "/explore" ||
+          pathname === "/contact" ||
+          pathname === "/privacy" ||
+          pathname === "/terms" ||
+          pathname === "/refund-policy" ||
           pathname === "/login" ||
           pathname === "/unauthorized"
         ) {

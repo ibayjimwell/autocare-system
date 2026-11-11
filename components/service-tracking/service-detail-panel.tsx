@@ -147,6 +147,8 @@ import {
   cn,
 } from "@/lib/utils";
 
+import ServiceJourneyPanel from "./service-journey-panel";
+
 /* ================================================================
    TRACKING STATUSES
 ================================================================ */
@@ -2059,6 +2061,9 @@ export default function ServiceDetailPanel({
               =================================================== */}
 
               <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                <div className="xl:col-span-2">
+                  <ServiceJourneyPanel appointmentId={appointment.id} allowDelayEdit={isInspection || isInProgress || isWaitingForApproval} />
+                </div>
                 <CustomerCard
                   customerId={
                     appointment.customerId

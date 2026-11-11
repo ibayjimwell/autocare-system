@@ -17,6 +17,7 @@ import {
 import {
   FinalBill,
 } from '@/database/models/payments/final-bill.model';
+import { QrPhPaymentAttempts } from '@/database/models/payments/qrph-payment-attempt.model';
 
 import {
   Appointments,
@@ -27,7 +28,7 @@ import {
 } from '@/database/models/customers/customers.model';
 
 import {
-  eq,
+  eq, and, ne,
 } from 'drizzle-orm';
 
 import {
@@ -772,6 +773,21 @@ export async function POST(
     eventType ===
     'qrph.expired'
   ) {
+    const eventIntentId = getWebhookPaymentIntentId(event);
+    if (eventIntentId) {
+      try {
+        await Database.update(QrPhPaymentAttempts)
+          .set({ status: 'EXPIRED', updatedAt: new Date() })
+          .where(and(
+            eq(QrPhPaymentAttempts.paymentIntentId, eventIntentId),
+            ne(QrPhPaymentAttempts.status, 'SUCCEEDED'),
+          ));
+      } catch (cause) {
+        console.error('[PayMongo Webhook] Could not persist qrph.expired feedback:', cause);
+        return NextResponse.json({ error: true }, { status: 500 });
+      }
+    }
+
     console.warn(
       '[PayMongo Webhook] QRPh payment expired.',
     );
@@ -802,6 +818,21 @@ export async function POST(
     eventType ===
     'payment.failed'
   ) {
+    const eventIntentId = getWebhookPaymentIntentId(event);
+    if (eventIntentId) {
+      try {
+        await Database.update(QrPhPaymentAttempts)
+          .set({ status: 'FAILED', updatedAt: new Date() })
+          .where(and(
+            eq(QrPhPaymentAttempts.paymentIntentId, eventIntentId),
+            ne(QrPhPaymentAttempts.status, 'SUCCEEDED'),
+          ));
+      } catch (cause) {
+        console.error('[PayMongo Webhook] Could not persist payment.failed feedback:', cause);
+        return NextResponse.json({ error: true }, { status: 500 });
+      }
+    }
+
     console.warn(
       '[PayMongo Webhook] Payment failed.',
     );
@@ -1409,6 +1440,14 @@ export async function POST(
         receiptResult.alreadyProcessed,
     },
   );
+
+  try {
+    await Database.update(QrPhPaymentAttempts)
+      .set({ status: 'SUCCEEDED', updatedAt: new Date() })
+      .where(eq(QrPhPaymentAttempts.paymentIntentId, paymentIntentId));
+  } catch (cause) {
+    console.error('[PayMongo Webhook] Could not update QRPh attempt feedback:', cause);
+  }
 
   /* --------------------------------------------------------------------------
      MOBILE CUSTOMER NOTIFICATION

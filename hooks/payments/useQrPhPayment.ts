@@ -51,6 +51,7 @@ export interface QrPhPaymentState {
   creatingQr: boolean;
   verifying: boolean;
   paid: boolean;
+  paymentStatus: string;
   paymentIntentId: string | null;
   qrImageUrl: string | null;
   testUrl: string | null;
@@ -67,6 +68,7 @@ export function useQrPhPayment(
     creatingQr: false,
     verifying: false,
     paid: false,
+    paymentStatus: 'NONE',
     paymentIntentId: null,
     qrImageUrl: null,
     testUrl: null,
@@ -225,16 +227,71 @@ export function useQrPhPayment(
     [billId, state.paymentIntentId, stopPolling],
   );
 
-  const startPolling = useCallback(
-    (paymentIntentId: string) => {
-      stopPolling();
+  // Read-only provider status; the backend checks PayMongo with its secret key.
+  // FAILED and EXPIRED are not treated as proof of payment.
+  const checkQrStatus = useCallback(async (intentId?: string | null, showLoading = false) => {
+    if (!billId) return false;
+    if (showLoading && mountedRef.current) {
+      setState(prev => ({ ...prev, verifying: true }));
+    }
+    try {
+      const query = intentId ? `?paymentIntentId=${encodeURIComponent(intentId)}` : '';
+      const response = await fetch(
+        `/api/payments/final-bills/${encodeURIComponent(billId)}/qrph-status${query}`,
+        { cache: 'no-store' },
+      );
+      const data = await response.json();
+      if (!response.ok || data?.error) {
+        throw new Error(data?.errorMessage || 'Could not check QRPh status.');
+      }
+      const nextStatus = String(data?.data?.status ?? 'NONE').toUpperCase();
+      if (mountedRef.current) {
+        setState(prev => ({ ...prev, paymentStatus: nextStatus,
+          ...(data?.data?.qrImageUrl && !prev.qrImageUrl ? {
+            qrImageUrl: String(data.data.qrImageUrl).startsWith('data:image/')
+              ? data.data.qrImageUrl : String(data.data.qrImageUrl).startsWith('https://')
+                ? data.data.qrImageUrl : `data:image/png;base64,${data.data.qrImageUrl}`,
+          } : {}),
+        }));
+      }
+      if (data?.data?.paid) {
+        stopPolling();
+        await loadBill();
+        return true;
+      }
+      if (nextStatus === 'SUCCEEDED' && intentId) {
+        return verifyPayment(intentId, showLoading);
+      }
+      if (nextStatus === 'FAILED' || nextStatus === 'EXPIRED') {
+        stopPolling();
+        if (mountedRef.current) {
+          setState(prev => ({
+            ...prev,
+            paymentStatus: nextStatus,
+            qrImageUrl: null,
+            error: nextStatus === 'EXPIRED'
+              ? 'The QRPh code expired without a confirmed payment. Generate a new code.'
+              : 'PayMongo reported that the payment was unsuccessful. Generate a new QRPh code to retry.',
+          }));
+        }
+      }
+      return false;
+    } catch (cause) {
+      if (showLoading && mountedRef.current) {
+        setState(prev => ({ ...prev, error: cause instanceof Error ? cause.message : 'Unable to check payment status.' }));
+      }
+      return false;
+    } finally {
+      if (showLoading && mountedRef.current) setState(prev => ({ ...prev, verifying: false }));
+    }
+  }, [billId, loadBill, stopPolling, verifyPayment]);
 
-      pollTimerRef.current = setInterval(() => {
-        void verifyPayment(paymentIntentId, false);
-      }, POLL_INTERVAL_MS);
-    },
-    [stopPolling, verifyPayment],
-  );
+  const startPolling = useCallback((paymentIntentId: string) => {
+    stopPolling();
+    pollTimerRef.current = setInterval(() => {
+      void checkQrStatus(paymentIntentId);
+    }, POLL_INTERVAL_MS);
+  }, [stopPolling, checkQrStatus]);
 
   const createQr = useCallback(async () => {
     if (!billId || state.creatingQr || state.verifying) {
@@ -270,6 +327,7 @@ export function useQrPhPayment(
       creatingQr: true,
       error: null,
       qrImageUrl: null,
+      paymentStatus: 'INITIATED',
       testUrl: null,
       expiresAt: null,
     }));
@@ -293,10 +351,27 @@ export function useQrPhPayment(
         intent?.paymentIntentId ?? intent?.id ?? null;
       const clientKey = intent?.clientKey ?? intent?.client_key ?? null;
 
-      if (!paymentIntentId || !clientKey) {
+      if (!paymentIntentId || (!clientKey && !intent?.qrImageUrl)) {
         throw new Error(
           'PayMongo did not return the credentials needed to generate the QRPh code.',
         );
+      }
+
+      // If another device already generated the QR, display that same intent.
+      if (intent?.existing && intent?.qrImageUrl) {
+        const rawImage = String(intent.qrImageUrl);
+        const existingImage = rawImage.startsWith('data:image/') ? rawImage
+          : rawImage.startsWith('https://') ? rawImage
+            : `data:image/png;base64,${rawImage}`;
+        if (mountedRef.current) setState(prev => ({
+          ...prev, creatingQr: false, paymentIntentId, qrImageUrl: existingImage,
+          testUrl: intent.qrTestUrl ?? null,
+          paymentStatus: 'PENDING',
+          expiresAt: intent.expiresAt ? Date.parse(intent.expiresAt) : Date.now() + QRPH_EXPIRY_SECONDS * 1000,
+          error: null,
+        }));
+        startPolling(paymentIntentId);
+        return true;
       }
 
       const paymentMethodId = await createQrPhPaymentMethod();
@@ -330,6 +405,7 @@ export function useQrPhPayment(
           creatingQr: false,
           paymentIntentId,
           qrImageUrl,
+          paymentStatus: 'PENDING',
           testUrl,
           expiresAt: Date.now() + QRPH_EXPIRY_SECONDS * 1000,
           error: null,
@@ -406,5 +482,6 @@ export function useQrPhPayment(
     loadBill,
     createQr,
     verifyPayment,
+    checkQrStatus,
   };
 }

@@ -12,6 +12,8 @@ import {
 import {
   FinalBill,
 } from '@/database/models/payments/final-bill.model';
+import { QrPhPaymentAttempts } from '@/database/models/payments/qrph-payment-attempt.model';
+import { canAccessQrPhBill } from '@/lib/payments/qrph-access';
 
 import {
   Appointments,
@@ -251,6 +253,13 @@ export async function POST(
     bill =
       row ??
       null;
+    if (bill) {
+      const [owner] = await Database.select({ customerId: Appointments.customerId })
+        .from(Appointments).where(eq(Appointments.id, bill.appointmentId)).limit(1);
+      if (!owner || !(await canAccessQrPhBill(req, owner.customerId))) {
+        return NextResponse.json({ error: true, errorMessage: 'Not authorized to verify this Final Cost.' }, { status: 403 });
+      }
+    }
   } catch (
     error
   ) {
@@ -662,6 +671,15 @@ export async function POST(
           500,
       },
     );
+  }
+
+  // Status feedback for both applications; receipt finalization above remains authoritative.
+  try {
+    await Database.update(QrPhPaymentAttempts)
+      .set({ status: 'SUCCEEDED', updatedAt: new Date() })
+      .where(eq(QrPhPaymentAttempts.paymentIntentId, paymentIntentId));
+  } catch (error) {
+    console.error('[VerifyPayment] Could not update QRPh attempt feedback:', error);
   }
 
   /* --------------------------------------------------------------------------

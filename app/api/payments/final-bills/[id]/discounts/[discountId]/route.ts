@@ -1,3 +1,4 @@
+import { rejectFinalCostMonetaryEdit } from '@/lib/payments/final-cost-lock';
 import {
   NextRequest,
   NextResponse,
@@ -113,6 +114,8 @@ export async function PATCH(
     }>;
   },
 ) {
+  return rejectFinalCostMonetaryEdit((await params).id);
+
   const {
     id,
     discountId,
@@ -320,6 +323,8 @@ export async function DELETE(
     }>;
   },
 ) {
+  return rejectFinalCostMonetaryEdit((await params).id);
+
   void req;
 
   const {

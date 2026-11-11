@@ -1,0 +1,57 @@
+/* All styles scoped to AutoCare public pages. Admin design tokens stay intact. */
+.ac-public { color-scheme: light; }
+.ac-public ::selection { background: rgba(193,39,45,.18); }
+.ac-public .ac-site-header { -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+.ac-public .ac-hero {
+  background-color: #101319;
+  background-image:
+    linear-gradient(90deg, #101319 0%, rgba(16,19,25,.98) 23%, rgba(16,19,25,.78) 58%, rgba(16,19,25,.57) 100%),
+    url('https://images.pexels.com/photos/8986040/pexels-photo-8986040.jpeg?auto=compress&cs=tinysrgb&w=1800');
+  background-position: center, center 45%;
+  background-size: cover, cover;
+}
+.ac-public .ac-hero::after {
+  content: ''; pointer-events: none; position: absolute; inset: 0;
+  opacity: .21;
+  background-image: linear-gradient(rgba(255,255,255,.11) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.11) 1px, transparent 1px);
+  background-size: 70px 70px;
+  -webkit-mask-image: linear-gradient(to right, transparent 22%, #000 90%);
+  mask-image: linear-gradient(to right, transparent 22%, #000 90%);
+}
+.ac-public .ac-hero-glow {
+  position: absolute; width: 550px; height: 550px; right: -160px; top: -180px;
+  background: radial-gradient(circle, rgba(193,39,45,.34), transparent 64%); filter: blur(35px); pointer-events:none;
+}
+.ac-public .ac-hero-title { animation: ac-rise .8s cubic-bezier(.2,.8,.2,1) both; }
+.ac-public .ac-hero-copy { animation: ac-rise .85s .12s cubic-bezier(.2,.8,.2,1) both; }
+.ac-public .ac-hero-action { animation: ac-rise .8s .22s cubic-bezier(.2,.8,.2,1) both; }
+.ac-public .ac-queue-panel { animation: ac-float-in .92s .15s cubic-bezier(.2,.8,.2,1) both; }
+.ac-public .ac-queue-topline { height:3px; background:linear-gradient(90deg, #C1272D, #f16d74 38%, transparent 100%); }
+.ac-public .ac-live-dot { width:8px; height:8px; border-radius:999px; background:#f76b70; flex-shrink:0; box-shadow:0 0 0 0 rgba(247,107,112,.7); animation:ac-pulse 2.5s infinite; }
+.ac-public .ac-queue-row { animation:ac-rise .35s ease both; }
+.ac-public .ac-lift-card { transition:transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease, border-color .35s ease; }
+.ac-public .ac-lift-card:hover, .ac-public .ac-lift-card:focus-within { transform:translateY(-5px); box-shadow:0 22px 50px rgba(24,30,39,.09); border-color:rgba(193,39,45,.26); }
+.ac-public .ac-photo-panel {
+  background:linear-gradient(180deg, rgba(18,20,24,.06), rgba(18,20,24,.63)), url('https://images.pexels.com/photos/4116231/pexels-photo-4116231.jpeg?auto=compress&cs=tinysrgb&w=1200');
+  background-size:cover; background-position:center;
+}
+.ac-public .ac-mobile-nav { animation: ac-drop .18s ease both; }
+.ac-public .ac-phone {
+  box-shadow:0 0 0 7px rgba(255,255,255,.05), 0 30px 90px rgba(0,0,0,.38);
+  transform: rotate(8deg) translateY(12px); transition:transform .6s cubic-bezier(.2,.8,.2,1);
+}
+.ac-public .ac-phone:hover { transform: rotate(3deg) translateY(0); }
+.ac-public .ac-timeline-line { background: linear-gradient(to bottom,#C1272D 0%,rgba(193,39,45,.12) 100%); }
+.ac-public [data-ac-reveal].ac-revealed { animation: ac-rise .7s cubic-bezier(.2,.8,.2,1) both; }
+.ac-public .ac-accent-line { display:block; height:3px; width:50px; background:#C1272D; border-radius:99px; }
+@keyframes ac-rise { from{opacity:0; transform:translateY(25px)}to{opacity:1;transform:translateY(0)} }
+@keyframes ac-float-in { from{opacity:0;transform:translate(28px, 26px) scale(.97)}to{opacity:1;transform:translate(0,0) scale(1)} }
+@keyframes ac-drop { from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)} }
+@keyframes ac-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(247,107,112,.5)} 60%{box-shadow:0 0 0 9px rgba(247,107,112,0)} }
+@media (prefers-reduced-motion: reduce) {
+  .ac-public *, .ac-public *::before, .ac-public *::after {
+    animation-duration:.01ms !important; animation-iteration-count:1 !important;
+    scroll-behavior:auto !important; transition-duration:.01ms !important;
+  }
+  .ac-public .ac-phone { transform:none; }
+}

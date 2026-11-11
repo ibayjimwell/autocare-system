@@ -181,9 +181,9 @@ const ESTIMATE_STATUS_PRIORITY: Record<string, number> = {
 };
 
 const FINAL_BILL_STATUS_PRIORITY: Record<string, number> = {
-  PENDING: 0,
-  PARKED: 1,
-  OFFICIAL: 2,
+  OFFICIAL: 0,
+  PENDING: 1,
+  PARKED: 2,
   PAID: 3,
 };
 

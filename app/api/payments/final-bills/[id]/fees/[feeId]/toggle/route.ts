@@ -1,3 +1,4 @@
+import { rejectFinalCostMonetaryEdit } from '@/lib/payments/final-cost-lock';
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { FinalBillFees } from "@/database/models/payments/final-bill-fees.model";
@@ -11,6 +12,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; feeId: string }> },
 ) {
+  return rejectFinalCostMonetaryEdit((await params).id);
+
   const { id: billId, feeId } = await params;
   if (!isValidUUID(billId) || !isValidUUID(feeId)) {
     return NextResponse.json(

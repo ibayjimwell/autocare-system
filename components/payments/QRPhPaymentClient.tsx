@@ -82,6 +82,8 @@ export default function QRPhPaymentClient({
     creatingQr,
     verifying,
     paid,
+    paymentStatus,
+    checkQrStatus,
     qrImageUrl,
     testUrl,
     expiresAt,
@@ -325,6 +327,13 @@ export default function QRPhPaymentClient({
               </div>
             ) : null}
 
+            <div role="status" aria-live="polite" className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+              {paymentStatus === 'PROCESSING' ? 'Payment is processing. Await verified confirmation.'
+                : paymentStatus === 'FAILED' ? 'Payment unsuccessful. Generate another QR Ph code only after the failed attempt is confirmed.'
+                : paymentStatus === 'EXPIRED' || expired ? 'QR code expired. Generate a new QR Ph code.'
+                : 'Awaiting QR Ph payment. This screen updates automatically when PayMongo confirms payment.'}
+            </div>
+
             {error ? (
               <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                 {error}
@@ -396,7 +405,7 @@ export default function QRPhPaymentClient({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void verifyPayment(undefined, true)}
+                onClick={() => void checkQrStatus(undefined, true)}
                 disabled={!qrImageUrl || creatingQr || verifying}
               >
                 {verifying ? (

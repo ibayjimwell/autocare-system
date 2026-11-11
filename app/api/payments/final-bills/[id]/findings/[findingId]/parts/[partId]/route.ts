@@ -1,3 +1,4 @@
+import { rejectFinalCostMonetaryEdit } from '@/lib/payments/final-cost-lock';
 import {
   NextRequest,
   NextResponse,
@@ -89,6 +90,8 @@ export async function PATCH(
     }>;
   },
 ) {
+  return rejectFinalCostMonetaryEdit((await params).id);
+
   const {
     id: billId,
     findingId,

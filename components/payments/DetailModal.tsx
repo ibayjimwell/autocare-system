@@ -497,13 +497,8 @@ export default function DetailModal({
     return null;
   }
 
-  const isFinalBillEditable =
-    detailType ===
-      'final-bill' &&
-    (selectedItem?.status ===
-      'PENDING' ||
-      selectedItem?.status ===
-        'PARKED');
+  // Panel revision: Final Cost is a locked snapshot; edit the Estimate instead.
+  const isFinalBillEditable = false;
 
   const isEditable =
     detailType ===

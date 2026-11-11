@@ -14,7 +14,6 @@ import {
   ArrowUpFromLine,
   ClipboardList,
   FileCheck2,
-  QrCode,
   ReceiptText,
   WalletCards,
   Settings2,
@@ -89,12 +88,12 @@ import FinalCostChangeConfirmationModal from '@/components/payments/FinalCostCha
 
 import CashierModal from '@/components/payments/cashier-modal';
 
-import QRScannerModal from '@/components/payments/QRScannerModal';
 
 import ReceiptModal from '@/components/payments/receipt-modal';
 
 import PaymentsConfigurationModal from '@/components/payments/PaymentsConfigurationModal';
 import POSModal from '@/components/payments/pos-modal';
+import ManualTransferReview from '@/components/payments/ManualTransferReview';
 import PosHistoryModal from '@/components/payments/pos-history-modal';
 import PaymentTransactionHistoryModal from '@/components/payments/PaymentTransactionHistoryModal';
 
@@ -277,18 +276,6 @@ export default function PaymentsPage() {
   } = useReceipt(
     receiptBillId,
   );
-
-  /* ==============================================================
-     QR STATE
-  ============================================================== */
-
-  const [
-    qrScannerOpen,
-    setQrScannerOpen,
-  ] =
-    useState(
-      false,
-    );
 
   /* ==============================================================
      PAYMENTS CONFIGURATION
@@ -884,45 +871,6 @@ export default function PaymentsPage() {
     );
 
   /* ==============================================================
-     QR SCAN
-  ============================================================== */
-
-  const handleQrScan =
-    async (
-      billId: string,
-    ) => {
-      try {
-        const res =
-          await finalBillsApi.get(
-            billId,
-          );
-
-        if (
-          res.error ||
-          !res.data
-        ) {
-          toast.error(
-            res.errorMessage ||
-              'Bill not found.',
-          );
-
-          return;
-        }
-
-        billActions.handleOpenCashier(
-          res.data,
-        );
-      } catch (
-        err: any
-      ) {
-        toast.error(
-          err?.message ||
-            'Failed to load bill.',
-        );
-      }
-    };
-
-  /* ==============================================================
      TAB CHANGE
   ============================================================== */
 
@@ -1188,6 +1136,8 @@ export default function PaymentsPage() {
           </div>
         </section>
 
+        <ManualTransferReview onSettled={reload} />
+
         {/* ========================================================
             TOOLBAR
         ========================================================= */}
@@ -1303,34 +1253,6 @@ export default function PaymentsPage() {
               handleClearFilters
             }
           />
-
-          <div className="mt-3 flex justify-end">
-            <Button
-              type="button"
-              onClick={() =>
-                setQrScannerOpen(
-                  true,
-                )
-              }
-              className="
-                h-11
-                w-full
-                rounded-md
-                bg-primary
-                px-4
-                text-primary-foreground
-                shadow-sm
-                hover:bg-primary/90
-
-                sm:w-auto
-
-                md:h-9
-              "
-            >
-              <QrCode className="mr-2 h-4 w-4" />
-              Scan QR
-            </Button>
-          </div>
         </section>
 
         {/* ========================================================
@@ -1692,22 +1614,6 @@ export default function PaymentsPage() {
         }
         onPaid={
           handlePaymentSuccess
-        }
-      />
-
-      {/* ==========================================================
-          QR SCANNER
-      =========================================================== */}
-
-      <QRScannerModal
-        open={
-          qrScannerOpen
-        }
-        onOpenChange={
-          setQrScannerOpen
-        }
-        onScan={
-          handleQrScan
         }
       />
 

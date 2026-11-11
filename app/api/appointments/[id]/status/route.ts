@@ -1,3 +1,4 @@
+import { issueWarrantyForCompletedAppointment } from '@/lib/service-journey/warranty';
 import {
   NextRequest,
   NextResponse,
@@ -800,6 +801,11 @@ export async function PATCH(
       ).catch(
         console.error,
       );
+    }
+
+    // Idempotent service warranty; failure never rolls back an already committed status.
+    if (updated.status === 'COMPLETED' && current.status !== 'COMPLETED') {
+      await issueWarrantyForCompletedAppointment(id).catch(error => console.error('[Warranty] issuance failed', error));
     }
 
     /* ============================================================
