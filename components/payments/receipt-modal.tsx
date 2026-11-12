@@ -348,6 +348,8 @@ export default function ReceiptModal({
     receipt,
   );
 
+  const isDemo = payment?.simulated === true;
+
   const services =
     getReceiptServices(
       rawServices,
@@ -438,11 +440,11 @@ export default function ReceiptModal({
         "
       >
         <DialogTitle className="sr-only">
-          AutoCare Official Receipt
+          {isDemo ? 'AutoCare Demonstration Receipt' : 'AutoCare Official Receipt'}
         </DialogTitle>
 
         <DialogDescription className="sr-only">
-          Official AutoCare receipt for the paid Final Cost.
+          {isDemo ? 'Capstone demonstration only. No money collected.' : 'Official AutoCare receipt for the paid Final Cost.'}
         </DialogDescription>
 
         {/* ========================================================
@@ -456,7 +458,7 @@ export default function ReceiptModal({
 
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-foreground">
-                Official Receipt
+                {isDemo ? 'Demonstration Receipt' : 'Official Receipt'}
               </p>
 
               <p className="truncate text-[11px] text-muted-foreground">
@@ -562,10 +564,16 @@ export default function ReceiptModal({
                   </p>
 
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Official Receipt
+                    {isDemo ? 'Demonstration Receipt' : 'Official Receipt'}
                   </p>
                 </div>
 
+                {isDemo && (
+                  <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-center text-amber-900">
+                    <p className="text-sm font-bold">CAPSTONE DEMONSTRATION</p>
+                    <p className="mt-1 text-xs">NO FUNDS COLLECTED. NOT A TAX OR OFFICIAL SALES RECEIPT.</p>
+                  </div>
+                )}
                 {/* Dashed line */}
                 <div className="mb-4 border-b border-dashed border-border" />
 
@@ -1002,7 +1010,7 @@ export default function ReceiptModal({
                   </p>
 
                   <p className="mt-1 text-[10px] text-muted-foreground">
-                    This is an electronic receipt.
+                    {isDemo ? 'No funds were collected. For capstone demonstration only.' : 'This is an electronic receipt.'}
                   </p>
                 </div>
               </div>

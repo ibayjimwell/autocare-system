@@ -20,6 +20,14 @@ export function paymongoIsLive(): boolean {
   return getSecretKey().startsWith('sk_live_');
 }
 
+/** Capstone settlement is allowed only with a dedicated demo database and test credentials. */
+export function capstoneSimulationEnabled(): boolean {
+  return process.env.AUTOCARE_CAPSTONE_DEMO === 'true' &&
+    process.env.AUTOCARE_DEMO_DATABASE === 'true' &&
+    /^sk_test_[A-Za-z0-9_-]+$/.test(process.env.PAYMONGO_SECRET_KEY?.trim() ?? '') &&
+    (process.env.AUTOCARE_DEMO_CHECKOUT_SECRET?.trim().length ?? 0) >= 32;
+}
+
 function authHeader() {
   return `Basic ${Buffer.from(`${getSecretKey()}:`).toString('base64')}`;
 }
@@ -161,8 +169,8 @@ export async function reconcileHostedAttempt(attemptId: string) {
   const [bill] = await Database.select().from(FinalBill).where(eq(FinalBill.id, attempt.finalBillId)).limit(1);
   if (!bill) throw new Error('Final Cost not found.');
 
-  if (attempt.status === 'PAID' || attempt.status === 'SIMULATED') {
-    return { status: attempt.status, paid: bill.status === 'PAID', simulated: attempt.status === 'SIMULATED', livemode: attempt.livemode };
+  if (['PAID', 'SIMULATED', 'DEMO_PAID'].includes(attempt.status)) {
+    return { status: attempt.status, paid: bill.status === 'PAID', simulated: !attempt.livemode, livemode: attempt.livemode };
   }
   const resource = await getHostedCheckoutSession(attempt.checkoutSessionId);
   const attrs = resource.attributes ?? {};
@@ -183,17 +191,23 @@ export async function reconcileHostedAttempt(attemptId: string) {
     if (String(p.currency).toUpperCase() !== 'PHP' || Number(p.amount) !== attempt.amountCentavos || !/^pay_[A-Za-z0-9_-]+$/.test(String(payment.id))) {
       throw new Error('The payment amount or currency could not be verified.');
     }
-    if (attempt.livemode) {
+    const demoSettlement = !attempt.livemode && capstoneSimulationEnabled();
+    if (attempt.livemode || demoSettlement) {
       if (bill.status !== 'OFFICIAL' && bill.status !== 'PAID') throw new Error('Final Cost is not payable.');
-      await generatePaymentReceipt(attempt.finalBillId, {
-        paymentMethod: attempt.paymentMethod === 'paymaya' ? 'MAYA' : attempt.paymentMethod.toUpperCase(),
+      const receipt = await generatePaymentReceipt(attempt.finalBillId, {
+        paymentMethod: demoSettlement ? `DEMO_${attempt.paymentMethod === 'paymaya' ? 'MAYA' : attempt.paymentMethod.toUpperCase()}` :
+          (attempt.paymentMethod === 'paymaya' ? 'MAYA' : attempt.paymentMethod.toUpperCase()),
         paymentReference: payment.id, idempotent: true, expectedStatus: 'OFFICIAL',
+        simulation: demoSettlement, simulationSource: demoSettlement ? 'PAYMONGO_SANDBOX' : undefined,
       });
+      if (demoSettlement && receipt.receiptData?.payment?.simulated !== true) {
+        throw new Error('This Final Cost was already settled through another payment channel.');
+      }
     }
-    const status = attempt.livemode ? 'PAID' : 'SIMULATED';
+    const status = attempt.livemode ? 'PAID' : demoSettlement ? 'DEMO_PAID' : 'SIMULATED';
     await Database.update(HostedCheckoutAttempts).set({ status, paymentId: payment.id, updatedAt: new Date() })
       .where(and(eq(HostedCheckoutAttempts.id, attempt.id), eq(HostedCheckoutAttempts.status, attempt.status)));
-    return { status, paid: attempt.livemode, simulated: !attempt.livemode, livemode: attempt.livemode };
+    return { status, paid: attempt.livemode || demoSettlement, simulated: !attempt.livemode, livemode: attempt.livemode };
   }
   if (attrs.status === 'expired') {
     await Database.update(HostedCheckoutAttempts).set({ status: 'EXPIRED', updatedAt: new Date() })

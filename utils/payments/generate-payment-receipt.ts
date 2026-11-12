@@ -120,6 +120,10 @@ export interface GeneratePaymentReceiptOptions {
    * Cash keeps the previous behavior by leaving this undefined.
    */
   expectedStatus?: 'OFFICIAL';
+
+  /** Marks this settlement as a simulated capstone transaction, not a real receipt. */
+  simulation?: boolean;
+  simulationSource?: 'PAYMONGO_SANDBOX' | 'AUTOCARE_SIMULATOR';
 }
 
 export interface GeneratePaymentReceiptResult {
@@ -850,11 +854,17 @@ export async function generatePaymentReceipt(
 
       reference:
         paymentReference,
+
+      simulated: options.simulation === true,
+
+      source: options.simulation ? options.simulationSource ?? 'AUTOCARE_SIMULATOR' : 'LIVE_OR_COUNTER',
+
+      notice: options.simulation ? 'CAPSTONE DEMONSTRATION. NO FUNDS WERE COLLECTED. NOT A TAX RECEIPT.' : null,
     },
   };
 
   const referenceNumber =
-    generateReferenceNumber();
+    options.simulation ? `SIM-${generateReferenceNumber().slice(4)}` : generateReferenceNumber();
 
   /* --------------------------------------------------------------------------
      9. ATOMIC PAYMENT FINALIZATION
@@ -1186,7 +1196,7 @@ export async function generatePaymentReceipt(
         bill.appointmentId,
 
       eventType:
-        'PAYMENT_COMPLETED',
+        options.simulation ? 'DEMO_PAYMENT_COMPLETED' : 'PAYMENT_COMPLETED',
 
       fromStatus:
         transactionResult.previousStatus,
@@ -1201,6 +1211,8 @@ export async function generatePaymentReceipt(
 
       referenceNumber:
         transactionResult.referenceNumber,
+
+      details: options.simulation ? { simulated: true, source: options.simulationSource ?? 'AUTOCARE_SIMULATOR', noRealMoney: true } : null,
     });
   } catch (error) {
     /*
@@ -1219,7 +1231,7 @@ export async function generatePaymentReceipt(
   -------------------------------------------------------------------------- */
 
   try {
-    await paymentsTriggers
+    if (!options.simulation) await paymentsTriggers
       .onPaymentCompleted({
         trackingNumber:
           appointment.trackingNumber,

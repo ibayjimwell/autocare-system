@@ -1,3 +1,4 @@
+import { capstoneSimulationEnabled } from '@/lib/payments/hosted-checkout';
 // app/api/payments/final-bills/[id]/verify-payment/route.ts
 
 import {
@@ -603,6 +604,17 @@ export async function POST(
     );
   }
 
+  // Distinguish sandbox completion from a genuine payment. Never let test
+  // credentials silently settle an operational invoice.
+  const isSandboxPayment = (process.env.PAYMONGO_SECRET_KEY ?? '').trim().startsWith('sk_test_');
+  if (typeof intentAttributes?.livemode === 'boolean' && intentAttributes.livemode === isSandboxPayment) {
+    return NextResponse.json({ error: true, errorMessage: 'PayMongo payment mode mismatch.' }, { status: 409 });
+  }
+  if (isSandboxPayment && !capstoneSimulationEnabled()) {
+    return NextResponse.json({ error: false, paid: false, simulated: true,
+      message: 'Sandbox authorization confirmed; capstone settlement is disabled.' });
+  }
+
   /* --------------------------------------------------------------------------
      PAYMONGO CONFIRMED SUCCESS
 
@@ -632,7 +644,7 @@ export async function POST(
         billId,
         {
           paymentMethod:
-            'QRPH',
+            isSandboxPayment ? 'DEMO_QRPH' : 'QRPH',
 
           paymentReference:
             paymentIntentId,
@@ -642,6 +654,9 @@ export async function POST(
 
           expectedStatus:
             'OFFICIAL',
+
+          simulation: isSandboxPayment,
+          simulationSource: isSandboxPayment ? 'PAYMONGO_SANDBOX' : undefined,
         },
       );
   } catch (
@@ -694,7 +709,7 @@ export async function POST(
   -------------------------------------------------------------------------- */
 
   if (
-    receiptResult.created
+    receiptResult.created && !isSandboxPayment
   ) {
     try {
       const [

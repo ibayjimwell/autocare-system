@@ -37,6 +37,7 @@ export default function PrintReceiptButton({ receipt }: { receipt: any }) {
     const customer = details?.customer ?? {};
     const vehicle = details?.vehicle ?? {};
     const payment = details?.payment ?? {};
+    const isDemo = payment.simulated === true;
     const finalBill = details?.finalBill ?? {};
     const services = Array.isArray(details?.services) ? details.services : [];
     const findings = Array.isArray(details?.inspection?.findings)
@@ -138,7 +139,7 @@ export default function PrintReceiptButton({ receipt }: { receipt: any }) {
 </head>
 <body>
   <div class="center brand">AUTOCARE</div>
-  <div class="center muted">OFFICIAL PAYMENT RECEIPT</div>
+  <div class="center muted">${isDemo ? 'CAPSTONE DEMONSTRATION - NOT A TAX RECEIPT' : 'OFFICIAL PAYMENT RECEIPT'}</div>
   <div class="rule"></div>
   <div class="line"><span>Receipt</span><b>${escapeHtml(referenceNumber)}</b></div>
   <div class="line"><span>Date</span><b>${escapeHtml(printedAt.toLocaleDateString('en-PH'))}</b></div>
@@ -160,13 +161,13 @@ export default function PrintReceiptButton({ receipt }: { receipt: any }) {
   ${discountRows ? `<div class="rule"></div><div class="section-title">DISCOUNTS</div>${discountRows}` : ''}
 
   <div class="rule"></div>
-  <div class="line total"><span>TOTAL PAID</span><b>₱${money(total)}</b></div>
+  <div class="line total"><span>${isDemo ? 'SIMULATED AMOUNT' : 'TOTAL PAID'}</span><b>₱${money(total)}</b></div>
   <div class="line"><span>Method</span><b>${escapeHtml(payment?.method || payment?.paymentMethod || '—')}</b></div>
   ${payment?.referenceNumber ? `<div class="line"><span>Payment Ref.</span><b>${escapeHtml(payment.referenceNumber)}</b></div>` : ''}
 
   <div class="rule"></div>
   <div class="center thank-you">Thank you for choosing AutoCare.</div>
-  <div class="center muted">Keep this receipt for your records.</div>
+  <div class="center muted">${isDemo ? 'NO REAL MONEY WAS COLLECTED. DEMONSTRATION ONLY.' : 'Keep this receipt for your records.'}</div>
   <script>
     window.addEventListener('load', () => {
       window.print();
