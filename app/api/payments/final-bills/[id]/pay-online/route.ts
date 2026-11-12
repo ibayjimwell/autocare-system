@@ -11,6 +11,8 @@ import {
   FinalBill,
 } from '@/database/models/payments/final-bill.model';
 import { QrPhPaymentAttempts } from '@/database/models/payments/qrph-payment-attempt.model';
+import { HostedCheckoutAttempts } from '@/database/models/payments/hosted-checkout-attempt.model';
+import { paymongoIsLive } from '@/lib/payments/hosted-checkout';
 import { Appointments } from '@/database/models/appointments/appointments.model';
 import { canAccessQrPhBill } from '@/lib/payments/qrph-access';
 
@@ -201,6 +203,25 @@ export async function POST(
       Math.round(
         amount * 100,
       );
+
+    // The native QR Ph flow creates Payment Methods with the public key.
+    // Test and live public/secret keys must always be from the same mode.
+    const publicKey = process.env.NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY?.trim() ?? '';
+    if (!publicKey.startsWith(paymongoIsLive() ? 'pk_live_' : 'pk_test_')) {
+      return NextResponse.json({ error: true, errorMessage: 'QR Ph payment keys are not correctly paired.' }, { status: 503 });
+    }
+
+
+    // The hosted GCash/Maya/card checkout and direct QR Ph must not both
+    // remain payable for the same Final Cost.
+    const [hostedAttempt] = await Database.select({ id: HostedCheckoutAttempts.id })
+      .from(HostedCheckoutAttempts).where(and(
+        eq(HostedCheckoutAttempts.finalBillId, id),
+        inArray(HostedCheckoutAttempts.status, ['CREATING', 'CREATE_UNKNOWN', 'ACTIVE', 'PROCESSING']),
+      )).limit(1);
+    if (hostedAttempt) {
+      return NextResponse.json({ error: true, errorMessage: 'An online checkout is already open for this Final Cost. Finish or cancel it before generating QR Ph.' }, { status: 409 });
+    }
 
     // Only one payable QRPh intent at a time. A second code could result in
     // double charging even though receipt creation is idempotent.

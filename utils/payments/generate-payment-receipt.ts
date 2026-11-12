@@ -215,6 +215,17 @@ export async function generatePaymentReceipt(
       options.paymentMethod,
     );
 
+  // PayMongo's sandbox does not transfer money. Never settle an actual
+  // Final Cost from a simulated QR Ph payment. For an isolated staging
+  // database, an operator may explicitly enable sandbox receipts.
+  if (
+    paymentMethod === 'QRPH' &&
+    process.env.PAYMONGO_SECRET_KEY?.startsWith('sk_test_') &&
+    process.env.PAYMONGO_ALLOW_TEST_RECEIPTS !== 'true'
+  ) {
+    throw new Error('QR Ph demonstration payment cannot settle a real Final Cost.');
+  }
+
   const paymentReference =
     options.paymentReference ??
     null;
