@@ -18,6 +18,7 @@ interface VehicleData {
   make: string;
   model: string;
   year: number | null;
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -145,9 +146,11 @@ export default function VehicleCard({
           bg-primary/10 text-primary
         "
       >
-        <Car className="h-4 w-4" />
+        {vehicle.imageUrl ? (
+          <img src={vehicle.imageUrl} alt={`${vehicle.make} ${vehicle.model}`} className="absolute inset-0 h-full w-full rounded-md object-cover" loading="lazy" />
+        ) : <Car className="h-4 w-4" />}
 
-        {vehicle.year && (
+        {!vehicle.imageUrl && vehicle.year && (
           <span className="mt-0.5 text-[9px] font-bold text-muted-foreground">
             {vehicle.year}
           </span>

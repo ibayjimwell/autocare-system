@@ -25,6 +25,8 @@ import {
   Clock,
   GitCommit,
   User,
+  ImagePlus,
+  X,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -71,6 +73,7 @@ interface Vehicle {
   make: string;
   model: string;
   year: number | null;
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +122,17 @@ export default function CustomerDetail({
     model: '',
     year: '',
   });
+
+  const [vehiclePhoto, setVehiclePhoto] = useState<File | null>(null);
+  const [vehiclePhotoPreview, setVehiclePhotoPreview] = useState<string | null>(null);
+  const [removeVehiclePhoto, setRemoveVehiclePhoto] = useState(false);
+
+  useEffect(() => {
+    if (!vehiclePhoto) { setVehiclePhotoPreview(null); return; }
+    const preview = URL.createObjectURL(vehiclePhoto);
+    setVehiclePhotoPreview(preview);
+    return () => URL.revokeObjectURL(preview);
+  }, [vehiclePhoto]);
 
   const [savingVehicle, setSavingVehicle] = useState(false);
   const [vehicleFormErrors, setVehicleFormErrors] = useState<any>({});
@@ -255,6 +269,8 @@ export default function CustomerDetail({
 
   const openCreateVehicle = () => {
     setEditingVehicle(null);
+    setVehiclePhoto(null);
+    setRemoveVehiclePhoto(false);
 
     setVehicleForm({
       plateNumber: '',
@@ -270,6 +286,8 @@ export default function CustomerDetail({
 
   const openEditVehicle = (vehicle: Vehicle) => {
     setEditingVehicle(vehicle);
+    setVehiclePhoto(null);
+    setRemoveVehiclePhoto(false);
 
     setVehicleForm({
       plateNumber: vehicle.plateNumber || '',
@@ -350,12 +368,20 @@ export default function CustomerDetail({
             res.errorMessage || 'Operation failed.',
         });
       } else {
-        toast.success(
-          editingVehicle
-            ? 'Vehicle updated.'
-            : 'Vehicle added.'
-        );
-
+        const savedId = editingVehicle?.id || res?.data?.id;
+        let photoIssue: string | null = null;
+        if (savedId && (vehiclePhoto || removeVehiclePhoto)) {
+          try {
+            const photoResponse = vehiclePhoto
+              ? await vehiclesApi.uploadPhoto(customer.id, savedId, vehiclePhoto)
+              : await vehiclesApi.removePhoto(customer.id, savedId);
+            if (photoResponse?.error) photoIssue = photoResponse.errorMessage || 'Photo update failed.';
+          } catch (error: any) {
+            photoIssue = error?.message || 'Photo update failed.';
+          }
+        }
+        if (photoIssue) toast.warning(`Vehicle saved, but its photo was not updated: ${photoIssue}`);
+        else toast.success(editingVehicle ? 'Vehicle updated.' : 'Vehicle added.');
         setVehicleModalOpen(false);
         await loadVehicles();
       }
@@ -657,8 +683,12 @@ export default function CustomerDetail({
                         "
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/10 bg-primary/10 text-primary">
-                            <Car className="h-5 w-5" />
+                          <div className="flex h-14 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted text-muted-foreground">
+                            {v.imageUrl ? (
+                              <img src={v.imageUrl} alt={`${v.make} ${v.model}`} className="h-full w-full object-cover" loading="lazy" />
+                            ) : (
+                              <Car className="h-6 w-6" />
+                            )}
                           </div>
 
                           <div className="min-w-0">
@@ -984,6 +1014,54 @@ export default function CustomerDetail({
               Keep the vehicle record aligned with the customer's
               service history.
             </p>
+          </div>
+
+          <div className="space-y-3">
+            <Label className="text-sm font-medium text-foreground">Vehicle photo (optional)</Label>
+            <div className="overflow-hidden rounded-xl border border-border bg-muted/30">
+              {vehiclePhotoPreview || (editingVehicle?.imageUrl && !removeVehiclePhoto) ? (
+                <img
+                  src={vehiclePhotoPreview || editingVehicle?.imageUrl || ''}
+                  alt="Vehicle photo preview"
+                  className="h-40 w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-32 flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <Car className="h-8 w-8" />
+                  <span className="text-xs">No photo selected</span>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 p-3">
+                <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring md:min-h-9">
+                  <ImagePlus className="h-4 w-4 text-primary" />
+                  {vehiclePhotoPreview || editingVehicle?.imageUrl ? 'Change photo' : 'Choose photo'}
+                  <input
+                    className="sr-only"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={savingVehicle}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 3 * 1024 * 1024) {
+                        toast.error('Select a JPG, PNG or WebP image smaller than 3 MB.');
+                        event.target.value = '';
+                        return;
+                      }
+                      setVehiclePhoto(file);
+                      setRemoveVehiclePhoto(false);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+                {(vehiclePhotoPreview || (editingVehicle?.imageUrl && !removeVehiclePhoto)) && (
+                  <Button type="button" variant="outline" onClick={() => { setVehiclePhoto(null); setRemoveVehiclePhoto(true); }} disabled={savingVehicle}>
+                    <X className="mr-2 h-4 w-4" /> Remove photo
+                  </Button>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">JPG, PNG or WebP · Maximum 3 MB.</p>
           </div>
 
           <div className="space-y-2">

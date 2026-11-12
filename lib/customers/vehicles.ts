@@ -25,6 +25,18 @@ export const vehiclesApi = {
     });
     return res.json();
   },
+  uploadPhoto: async (customerId: string, vehicleId: string, file: File) => {
+    const form = new FormData();
+    form.append('photo', file);
+    const res = await fetch(`${API_BASE}/api/customers/${customerId}/vehicles/${vehicleId}/photo`, {
+      method: 'POST', body: form,
+    });
+    return res.json();
+  },
+  removePhoto: async (customerId: string, vehicleId: string) => {
+    const res = await fetch(`${API_BASE}/api/customers/${customerId}/vehicles/${vehicleId}/photo`, { method: 'DELETE' });
+    return res.json();
+  },
   delete: async (customerId: string, vehicleId: string) => {
     const res = await fetch(`${API_BASE}/api/customers/${customerId}/vehicles/${vehicleId}`, {
       method: 'DELETE',

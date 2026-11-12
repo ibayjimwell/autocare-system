@@ -3,6 +3,7 @@ import { Database } from "@/lib/drizzle";
 import { Vehicles } from "@/database/models/customers/vehicles.model";
 import { validateCustomerId, validateVehicleData } from "@/utils/customers";
 import { eq } from "drizzle-orm";
+import { canAccessCustomerVehicles } from "@/lib/customers/vehicle-access";
 
 // ------------------------------------------------------------------
 // POST /api/customers/[id]/vehicles – Add a new vehicle for a customer
@@ -16,6 +17,9 @@ export async function POST(
   // Validate customer ID
   const validationError = await validateCustomerId(customerId);
   if (validationError) return validationError;
+  if (!(await canAccessCustomerVehicles(req, customerId))) {
+    return NextResponse.json({ error: true, errorMessage: 'Not authorized to access these vehicles.' }, { status: 403 });
+  }
 
   // Parse JSON body
   let body: any;
@@ -108,6 +112,9 @@ export async function GET(
   // Validate customer ID
   const validationError = await validateCustomerId(customerId);
   if (validationError) return validationError;
+  if (!(await canAccessCustomerVehicles(req, customerId))) {
+    return NextResponse.json({ error: true, errorMessage: 'Not authorized to access these vehicles.' }, { status: 403 });
+  }
 
   try {
     const vehicles = await Database.select()

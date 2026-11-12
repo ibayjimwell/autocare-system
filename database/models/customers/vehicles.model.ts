@@ -8,6 +8,8 @@ export const Vehicles = pgTable('vehicles', {
   make: varchar('make', { length: 100 }).notNull(),
   model: varchar('model', { length: 100 }).notNull(),
   year: integer('year'),
+  imageUrl: varchar('image_url', { length: 1000 }),
+  imagePublicId: varchar('image_public_id', { length: 255 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({

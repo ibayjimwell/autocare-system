@@ -3,6 +3,8 @@ import { Database } from "@/lib/drizzle";
 import { Vehicles } from "@/database/models/customers/vehicles.model";
 import { validateCustomerId, validateVehicleUpdate } from "@/utils/customers";
 import { eq, and } from "drizzle-orm";
+import { canAccessCustomerVehicles } from "@/lib/customers/vehicle-access";
+import { deleteVehicleImage } from "@/lib/customers/vehicle-image";
 
 // ------------------------------------------------------------------
 // GET /api/customers/[id]/vehicles/[vehicleId] – Get a specific vehicle
@@ -15,6 +17,9 @@ export async function GET(
 
   const validationError = await validateCustomerId(id);
   if (validationError) return validationError;
+  if (!(await canAccessCustomerVehicles(req, id))) {
+    return NextResponse.json({ error: true, errorMessage: 'Not authorized to access this vehicle.' }, { status: 403 });
+  }
 
   try {
     const [vehicle] = await Database.select()
@@ -61,6 +66,9 @@ export async function PUT(
   // Validate customer ID
   const validationError = await validateCustomerId(id);
   if (validationError) return validationError;
+  if (!(await canAccessCustomerVehicles(req, id))) {
+    return NextResponse.json({ error: true, errorMessage: 'Not authorized to access this vehicle.' }, { status: 403 });
+  }
 
   // Fetch the current vehicle (needed for plate comparison)
   let currentVehicle;
@@ -216,6 +224,9 @@ export async function DELETE(
 
   const validationError = await validateCustomerId(id);
   if (validationError) return validationError;
+  if (!(await canAccessCustomerVehicles(req, id))) {
+    return NextResponse.json({ error: true, errorMessage: 'Not authorized to access this vehicle.' }, { status: 403 });
+  }
 
   try {
     // Verify it exists before deleting (optional but safe)
@@ -235,6 +246,10 @@ export async function DELETE(
 
     await Database.delete(Vehicles)
       .where(and(eq(Vehicles.id, vehicleId), eq(Vehicles.customerId, id)));
+    if (vehicle.imagePublicId) {
+      await deleteVehicleImage(vehicle.imagePublicId).catch((error) =>
+        console.warn('[Vehicle] Cloudinary cleanup failed:', error));
+    }
 
     return NextResponse.json({
       error: false,
