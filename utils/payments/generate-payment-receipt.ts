@@ -123,7 +123,7 @@ export interface GeneratePaymentReceiptOptions {
 
   /** Marks this settlement as a simulated capstone transaction, not a real receipt. */
   simulation?: boolean;
-  simulationSource?: 'PAYMONGO_SANDBOX' | 'AUTOCARE_SIMULATOR';
+  simulationSource?: 'PAYMONGO_SANDBOX' | 'AUTOCARE_SIMULATOR' | 'PAYPAL_SANDBOX';
 }
 
 export interface GeneratePaymentReceiptResult {

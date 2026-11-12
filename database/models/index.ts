@@ -79,3 +79,6 @@ export * from './diagnostic-checklist/diagnostic-checklists.model';
 
 // Staff-reviewed customer-initiated electronic transfers
 export * from "./payments/manual-transfer-submissions.model";
+
+// PayPal sandbox: standalone capstone payment attempts
+export * from "./payments/paypal-checkout-attempt.model";

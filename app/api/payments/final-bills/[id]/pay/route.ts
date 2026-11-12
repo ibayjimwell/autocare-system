@@ -7,6 +7,7 @@ import { Database } from '@/lib/drizzle';
 import { isValidUUID } from '@/utils/shared';
 import { HostedCheckoutAttempts } from '@/database/models/payments/hosted-checkout-attempt.model';
 import { QrPhPaymentAttempts } from '@/database/models/payments/qrph-payment-attempt.model';
+import { PaypalCheckoutAttempts } from '@/database/models/payments/paypal-checkout-attempt.model';
 import { generatePaymentReceipt } from '@/utils/payments/generate-payment-receipt';
 
 // Cashier payment must never be callable anonymously or by an unrelated customer.
@@ -24,9 +25,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const [qr] = await Database.select({ id: QrPhPaymentAttempts.id }).from(QrPhPaymentAttempts)
       .where(and(eq(QrPhPaymentAttempts.finalBillId, id),
         inArray(QrPhPaymentAttempts.status, ['INITIATED','PENDING','PROCESSING','SUCCEEDED']))).limit(1);
-    if (hosted || qr) {
+    const [paypal] = await Database.select({id:PaypalCheckoutAttempts.id}).from(PaypalCheckoutAttempts)
+      .where(and(eq(PaypalCheckoutAttempts.finalBillId,id),
+        inArray(PaypalCheckoutAttempts.status,['READY','CREATING','ACTIVE','CAPTURING','CREATE_UNKNOWN']))).limit(1);
+    if (hosted || qr || paypal) {
       return NextResponse.json({ error: true,
-        errorMessage: 'A PayMongo checkout is already open. Confirm or cancel it before collecting cash to avoid duplicate payments.' }, { status: 409 });
+        errorMessage: 'An online checkout is already open. Confirm or resolve it before collecting cash to avoid duplicate payments.' }, { status: 409 });
     }
     const result = await generatePaymentReceipt(id);
     return NextResponse.json({ error: false, message: 'Payment processed and receipt generated.', data: result }, { status: 201 });

@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import type { FinalBill } from '@/hooks/payments/usePaymentsData';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/shared/empty-state';
 import { formatCurrency } from '@/app-utils/payments/payments';
-import { Banknote, CheckCircle2, ChevronDown, ChevronUp, CircleParking, Clock3, DollarSign, Eye, QrCode, ReceiptText, Send, Trash2 } from 'lucide-react';
+import { Banknote, CheckCircle2, ChevronDown, ChevronUp, CircleParking, Clock3, DollarSign, Eye, CreditCard, ReceiptText, Send, Trash2 } from 'lucide-react';
 import { paymentsConfigurationApi } from '@/lib/payments/configuration';
 import ParkVehicleConfirmationModal from './ParkVehicleConfirmationModal';
 import StopParkingConfirmationModal from './StopParkingConfirmationModal';
@@ -59,7 +58,7 @@ export default function FinalBillsList({
   bills, statusFilter, onPay, onViewReceipt, onOpenDetail, onDelete,
   onPark, onMakeOfficial, onStopParking, actionLoading,
 }: FinalBillsListProps) {
-  const router = useRouter();
+
   const [paidExpanded, setPaidExpanded] = useState(false);
   const [parkOpen, setParkOpen] = useState(false);
   const [stopParkOpen, setStopParkOpen] = useState(false);
@@ -112,14 +111,34 @@ export default function FinalBillsList({
     }
   };
 
-  const openQr = (bill: FinalBill) => router.push(`/payments/qrph/${encodeURIComponent(bill.id)}`);
+  const [paypalStarting, setPaypalStarting] = useState(false);
+  const openPaypal = async (bill: FinalBill) => {
+    setPaypalStarting(true);
+    try {
+      const response = await fetch(`/api/payments/final-bills/${encodeURIComponent(bill.id)}/paypal`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+        body: '{}',
+      });
+      const json = await response.json();
+      if (!response.ok || json.error || !json.data?.checkoutUrl) {
+        throw new Error(json.errorMessage || 'Unable to open PayPal checkout.');
+      }
+      const target = new URL(json.data.checkoutUrl);
+      if (target.origin !== window.location.origin || !target.pathname.startsWith('/paypal/checkout/')) {
+        throw new Error('Unexpected PayPal checkout destination.');
+      }
+      window.location.assign(target.href);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to open PayPal checkout.');
+    } finally { setPaypalStarting(false); }
+  };
   const actions = (bill: FinalBill) => {
     const busy = actionLoading || configLoading;
     const status = String(bill.status).toUpperCase();
     if (status === 'OFFICIAL') {
       return <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" disabled={busy} onClick={() => openQr(bill)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <QrCode className="mr-1.5 h-4 w-4" /> Show QR Ph
+        <Button type="button" size="sm" disabled={busy || paypalStarting} onClick={() => void openPaypal(bill)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <CreditCard className="mr-1.5 h-4 w-4" /> PayPal Sandbox
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onPay(bill)}>
           <Banknote className="mr-1.5 h-4 w-4" /> Cash

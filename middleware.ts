@@ -25,6 +25,7 @@ export default withAuth(
 
     // 2. Public-facing business pages (PayMongo onboarding): no staff login required.
     if (
+      pathname.startsWith("/paypal/checkout/") ||
       pathname === "/explore" ||
       pathname === "/contact" ||
       pathname === "/privacy" ||
@@ -94,7 +95,8 @@ export default withAuth(
         if (
           pathname.startsWith("/api") ||
           pathname === "/" ||
-          pathname === "/explore" ||
+          pathname.startsWith("/paypal/checkout/") ||
+      pathname === "/explore" ||
           pathname === "/contact" ||
           pathname === "/privacy" ||
           pathname === "/terms" ||
