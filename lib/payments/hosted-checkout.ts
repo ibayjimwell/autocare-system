@@ -53,6 +53,28 @@ async function providerRequest(path: string, options: RequestInit = {}) {
   }
 }
 
+/** A definite 404 for the API route, not a missing individual checkout resource. */
+function isMissingCheckoutApiRoute(error: unknown): error is PayMongoRequestError {
+  return error instanceof PayMongoRequestError &&
+    error.status === 404 &&
+    /(?:requested\s+route\s+does\s+not\s+exist|route\s+not\s+found|endpoint\s+does\s+not\s+exist)/i.test(error.message);
+}
+
+/**
+ * PayMongo documents /v2 as preferred and /v1 as supported. Some merchant
+ * environments may return a definitive route-level 404 for /v2. Fallback is
+ * restricted to THAT explicit error; do not retry on timeouts or ambiguous
+ * provider failures, which could create two payable sessions.
+ */
+async function hostedCheckoutRequest(suffix: string, options: RequestInit = {}) {
+  try {
+    return await providerRequest(`/v2/checkout_sessions${suffix}`, options);
+  } catch (error) {
+    if (!isMissingCheckoutApiRoute(error)) throw error;
+    return providerRequest(`/v1/checkout_sessions${suffix}`, options);
+  }
+}
+
 export function billAmountInCentavos(input: unknown) {
   const raw = String(input ?? '').trim();
   if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(raw)) return 0;
@@ -78,7 +100,7 @@ export async function createHostedCheckoutSession(args: {
 }) {
   const origin = publicWebOrigin();
   const returnPath = `/api/payments/paymongo/checkout-return?billId=${encodeURIComponent(args.billId)}`;
-  const resource = await providerRequest('/v2/checkout_sessions', {
+  const resource = await hostedCheckoutRequest('', {
     method: 'POST',
     body: JSON.stringify({ data: { attributes: {
       line_items: [{ name: 'AutoCare vehicle service – Final Cost', amount: args.amountCentavos, currency: 'PHP', quantity: 1 }],
@@ -103,12 +125,12 @@ export async function createHostedCheckoutSession(args: {
 
 export async function getHostedCheckoutSession(checkoutSessionId: string) {
   if (!/^cs_[A-Za-z0-9_-]{3,160}$/.test(checkoutSessionId)) throw new Error('Invalid PayMongo Checkout Session ID.');
-  return providerRequest(`/v2/checkout_sessions/${encodeURIComponent(checkoutSessionId)}`);
+  return hostedCheckoutRequest(`/${encodeURIComponent(checkoutSessionId)}`);
 }
 
 export async function expireHostedCheckoutSession(checkoutSessionId: string) {
   if (!/^cs_[A-Za-z0-9_-]{3,160}$/.test(checkoutSessionId)) throw new Error('Invalid checkout session ID.');
-  return providerRequest(`/v2/checkout_sessions/${encodeURIComponent(checkoutSessionId)}/expire`, { method: 'POST' });
+  return hostedCheckoutRequest(`/${encodeURIComponent(checkoutSessionId)}/expire`, { method: 'POST' });
 }
 
 /** Validates PayMongo's raw-body HMAC against the correct te/li signature. */
