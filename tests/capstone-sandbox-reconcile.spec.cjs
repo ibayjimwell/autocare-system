@@ -24,7 +24,7 @@ const mocks = {
   '@/database/models/payments/final-bill.model':{FinalBill:final},
   '@/utils/payments/generate-payment-receipt':{generatePaymentReceipt:async(id, options) => {
     receiptOptions = options; bill.status = 'PAID';
-    return {receiptData:{payment:{simulated:options.simulation===true,reference: options.paymentReference}}};
+    return {receiptData:{payment:{simulated:options.simulation===true,reference: options.paymentReference,source:options.simulation?'PAYMONGO_SANDBOX':'LIVE_OR_COUNTER'}}};
   }},
 };
 const src=fs.readFileSync(path.join(__dirname,'../lib/payments/hosted-checkout.ts'),'utf8');

@@ -169,9 +169,21 @@ export async function reconcileHostedAttempt(attemptId: string) {
   const [bill] = await Database.select().from(FinalBill).where(eq(FinalBill.id, attempt.finalBillId)).limit(1);
   if (!bill) throw new Error('Final Cost not found.');
 
-  if (['PAID', 'SIMULATED', 'DEMO_PAID'].includes(attempt.status)) {
-    return { status: attempt.status, paid: bill.status === 'PAID', simulated: !attempt.livemode, livemode: attempt.livemode };
+  // A verified PayMongo TEST payment can be recorded as SIMULATED before
+  // capstone settlement is enabled. It must NOT stay permanently stuck there:
+  // after explicit demo configuration, re-fetch that exact payment from
+  // PayMongo and settle it with an auditable demonstration receipt.
+  //
+  // Never interpret a previous SIMULATED status as proof that this Final Cost
+  // is PAID. Likewise, never promote it when this is not a demo database.
+  const demoSettlement = !attempt.livemode && capstoneSimulationEnabled();
+  if (attempt.status === 'SIMULATED' && !demoSettlement) {
+    return { status: 'SIMULATED', paid: bill.status === 'PAID', simulated: true, livemode: false };
   }
+  if (['PAID', 'DEMO_PAID'].includes(attempt.status) && bill.status === 'PAID') {
+    return { status: attempt.status, paid: true, simulated: !attempt.livemode, livemode: attempt.livemode };
+  }
+
   const resource = await getHostedCheckoutSession(attempt.checkoutSessionId);
   const attrs = resource.attributes ?? {};
   if (resource.id !== attempt.checkoutSessionId || attrs.livemode !== attempt.livemode ||
@@ -191,7 +203,6 @@ export async function reconcileHostedAttempt(attemptId: string) {
     if (String(p.currency).toUpperCase() !== 'PHP' || Number(p.amount) !== attempt.amountCentavos || !/^pay_[A-Za-z0-9_-]+$/.test(String(payment.id))) {
       throw new Error('The payment amount or currency could not be verified.');
     }
-    const demoSettlement = !attempt.livemode && capstoneSimulationEnabled();
     if (attempt.livemode || demoSettlement) {
       if (bill.status !== 'OFFICIAL' && bill.status !== 'PAID') throw new Error('Final Cost is not payable.');
       const receipt = await generatePaymentReceipt(attempt.finalBillId, {
@@ -200,7 +211,12 @@ export async function reconcileHostedAttempt(attemptId: string) {
         paymentReference: payment.id, idempotent: true, expectedStatus: 'OFFICIAL',
         simulation: demoSettlement, simulationSource: demoSettlement ? 'PAYMONGO_SANDBOX' : undefined,
       });
-      if (demoSettlement && receipt.receiptData?.payment?.simulated !== true) {
+      // Receipt generation is idempotent. If another checkout/cashier won a
+      // payment race, it may return their existing receipt. Never attribute
+      // someone else's receipt to this checkout or report false settlement.
+      const recorded = receipt.receiptData?.payment;
+      if (recorded?.reference !== payment.id || recorded?.simulated !== demoSettlement ||
+          (demoSettlement && recorded?.source !== 'PAYMONGO_SANDBOX')) {
         throw new Error('This Final Cost was already settled through another payment channel.');
       }
     }

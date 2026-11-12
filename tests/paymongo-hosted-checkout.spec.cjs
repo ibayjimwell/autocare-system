@@ -28,7 +28,7 @@ const mocks = {
   '@/lib/drizzle':{Database},
   '@/database/models/payments/hosted-checkout-attempt.model':{HostedCheckoutAttempts:{id:'attemptsId',finalBillId:'bill',createdAt:'created',status:'status'}},
   '@/database/models/payments/final-bill.model':{FinalBill:{id:'id'}},
-  '@/utils/payments/generate-payment-receipt': {generatePaymentReceipt:async () => { receiptCalls++;return {created:true}; }},
+  '@/utils/payments/generate-payment-receipt': {generatePaymentReceipt:async (billId, options) => { receiptCalls++; bill.status='PAID'; return {created:true, receiptData:{payment:{reference:options.paymentReference, simulated:options.simulation===true, source:options.simulation?'PAYMONGO_SANDBOX':'LIVE_OR_COUNTER'}}}; }},
 };
 const source=fs.readFileSync(path.join(__dirname,'../lib/payments/hosted-checkout.ts'),'utf8');
 const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
