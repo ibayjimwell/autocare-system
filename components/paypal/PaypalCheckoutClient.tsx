@@ -14,7 +14,7 @@ async function post(url:string,body?:object) {
 const fmt=(num:string)=>`₱${Number(num).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const getAppLink=(billId:string)=>`autocare://payment-success?billId=${encodeURIComponent(billId)}`;
 
-export default function PaypalCheckoutClient({ticket}:{ticket:string}) {
+export default function PaypalCheckoutClient({ticket,returnTo}:{ticket:string;returnTo?:string}) {
   const [info,setInfo]=useState<Checkout|null>(null);
   const [error,setError]=useState('');
   const [phase,setPhase]=useState<'loading'|'ready'|'paying'|'paid'|'error'>('loading');
@@ -30,8 +30,8 @@ export default function PaypalCheckoutClient({ticket}:{ticket:string}) {
   const finish=useCallback((billId:string)=>{completeRef.current=true;setPhase('paid');
     // Only server-confirmed captured PayPal orders can reach here.
     // Browser auto deep-link is not guaranteed on all devices; show explicit button.
-    if (/Android|iPhone|iPad/i.test(navigator.userAgent)) setTimeout(()=>{window.location.href=getAppLink(billId);},900);
-  },[]);
+    if (!returnTo && /Android|iPhone|iPad/i.test(navigator.userAgent)) setTimeout(()=>{window.location.href=getAppLink(billId);},900);
+  },[returnTo]);
   useEffect(()=>{let live=true;
     fetch(base(ticket),{cache:'no-store',credentials:'same-origin'})
       .then(async r=>{const j=await r.json();if(!r.ok||j.error)throw new Error(j.errorMessage||'Checkout is unavailable.');return j.data as Checkout;})
@@ -180,7 +180,7 @@ export default function PaypalCheckoutClient({ticket}:{ticket:string}) {
       {paid ? <div className="mt-8 space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
         <CheckCircle2 className="mx-auto text-emerald-700" size={46}/><h1 className="text-xl font-bold text-emerald-900">Payment confirmed</h1>
         <p className="text-sm text-emerald-800">Your Final Cost and demonstration receipt are ready in AutoCare.</p>
-        <a href={getAppLink(info?.billId||'')} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[#C1272D] px-6 font-bold text-white">Open AutoCare</a>
+        <a href={returnTo||getAppLink(info?.billId||'')} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[#C1272D] px-6 font-bold text-white">{returnTo?'View Final Cost and receipt':'Open AutoCare'}</a>
       </div> : <>
         <h1 className="mt-8 text-lg font-bold">Choose a payment method</h1>
         <p className="mt-1 text-sm text-gray-500">PayPal shows methods supported by your sandbox account and device.</p>

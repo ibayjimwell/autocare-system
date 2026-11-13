@@ -82,3 +82,6 @@ export * from "./payments/manual-transfer-submissions.model";
 
 // PayPal sandbox: standalone capstone payment attempts
 export * from "./payments/paypal-checkout-attempt.model";
+
+// Private, time-limited public document links
+export * from "./payments/payment-document-links.model";

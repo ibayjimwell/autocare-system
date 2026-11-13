@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/button';
 
 import EmptyState from '@/components/shared/empty-state';
+import ShareDocumentButton from './ShareDocumentButton';
 
 import {
   formatCurrency,
@@ -528,6 +529,8 @@ export default function EstimatesList({
                       </>
                     )}
 
+                    <ShareDocumentButton kind="estimate" documentId={est.id} compact/>
+
                     <Button
                       type="button"
                       variant="outline"
@@ -847,6 +850,8 @@ export default function EstimatesList({
                               </Button>
                             </>
                           )}
+
+                          <ShareDocumentButton kind="estimate" documentId={est.id} compact/>
 
                           <Button
                             type="button"

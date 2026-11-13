@@ -33,6 +33,7 @@ import LoadingSpinner from '@/components/shared/loading-spinner';
 import ServiceCard from '@/components/services/service-card';
 
 import PrintPaymentDocumentButton from '@/components/payments/PrintPaymentDocumentButton';
+import ShareDocumentButton from '@/components/payments/ShareDocumentButton';
 import DiagnosticChecklistReadOnly from '@/components/diagnostic-checklist/DiagnosticChecklistReadOnly';
 
 import {
@@ -628,6 +629,7 @@ export default function DetailModal({
                     detailType={detailType}
                     selectedItem={selectedItem}
                   />
+                  {selectedItem?.id && <ShareDocumentButton kind={detailType} documentId={selectedItem.id}/> }
 
                   <StatusBadge
                     status={

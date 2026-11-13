@@ -76,16 +76,6 @@ export default function CashierModal({
     setIsProcessing,
   ] = useState(false);
 
-  const [counterQrOpen,setCounterQrOpen]=useState(false);
-  const [counterCheckin,setCounterCheckin]=useState(null as null | string);
-  useEffect(()=>{
-    if(!open||!bill?.id)return;
-    let active=true;
-    const load=async()=>{try{const r=await fetch(`/api/payments/counter-checkin?billId=${encodeURIComponent(bill.id)}`,{cache:'no-store'});const j=await r.json();if(active&&!j.error)setCounterCheckin(j.data?.scannedAt||null);}catch{}};
-    void load();const timer=setInterval(()=>void load(),5000);
-    return()=>{active=false;clearInterval(timer);};
-  },[open,bill?.id]);
-
   const totalAmount =
     bill?.grandTotal
       ? Number.parseFloat(
@@ -305,11 +295,6 @@ export default function CashierModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="border-b border-border px-5 py-2 flex flex-wrap items-center gap-3">
-          <Button type="button" size="sm" variant="outline" onClick={()=>setCounterQrOpen(v=>!v)}>Show Counter QR</Button>
-          {counterCheckin?<span className="text-xs text-green-700 font-semibold">Customer scanned the counter QR. Verify cash before payment.</span>:<span className="text-xs text-muted-foreground">Waiting for customer counter check-in (optional).</span>}
-          {counterQrOpen?<div className="w-full flex flex-col items-center gap-2 py-2"><img src="/autocare-cash-counter-qr.png" alt="AutoCare customer cash check-in QR" className="h-44 w-44 border rounded-lg"/><p className="text-xs text-muted-foreground">Customer uses AutoCare Mobile → Scan Counter QR. This does not collect or verify cash.</p></div>:null}
-        </div>
         {/* =========================================================
             SCROLLABLE BODY
         ========================================================== */}
