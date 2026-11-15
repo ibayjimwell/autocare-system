@@ -42,6 +42,7 @@ interface FilterBarProps {
 const ESTIMATE_STATUSES = [
   ['ALL', 'All statuses'],
   ['PENDING', 'Pending'],
+  ['PARKED', 'Parked'],
   ['WAITING_FOR_APPROVAL', 'Waiting for approval'],
   ['APPROVED', 'Approved'],
   ['DECLINED', 'Declined'],
@@ -49,8 +50,6 @@ const ESTIMATE_STATUSES = [
 
 const FINAL_BILL_STATUSES = [
   ['ALL', 'All statuses'],
-  ['PENDING', 'Pending'],
-  ['PARKED', 'Parked'],
   ['OFFICIAL', 'Official'],
   ['PAID', 'Paid'],
 ] as const;

@@ -8,7 +8,7 @@ export const FinalBill = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     appointmentId: uuid('appointment_id').references(() => Appointments.id, { onDelete: 'cascade' }).notNull(),
     estimateId: uuid('estimate_id').references(() => EstimatedCosts.id, { onDelete: 'set null' }),
-    status: text('status').default('PENDING').notNull(),
+    status: text('status').default('OFFICIAL').notNull(),
     serviceSubtotal: decimal('service_subtotal', { precision: 10, scale: 2 }).default('0').notNull(),
     findingsSubtotal: decimal('findings_subtotal', { precision: 10, scale: 2 }).default('0').notNull(),
     workTasksSubtotal: decimal('work_tasks_subtotal', { precision: 10, scale: 2 }).default('0').notNull(),

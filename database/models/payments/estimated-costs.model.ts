@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, decimal, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, decimal, timestamp, index, boolean } from 'drizzle-orm/pg-core';
 import { Appointments } from '../appointments/appointments.model';
 
 export const EstimatedCosts = pgTable('estimated_costs', {
@@ -11,6 +11,9 @@ export const EstimatedCosts = pgTable('estimated_costs', {
   discountTotal: decimal('discount_total', { precision: 10, scale: 2 }).default('0').notNull(),
   grandTotal: decimal('grand_total', { precision: 10, scale: 2 }).default('0').notNull(),
   reason: text('reason'),
+  parkedAt: timestamp('parked_at', { withTimezone: true }),
+  parkingFeeEnabled: boolean('parking_fee_enabled').default(false).notNull(),
+  parkingFeeRate: decimal('parking_fee_rate', { precision: 10, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({

@@ -1,4 +1,8 @@
 import type { Metadata } from 'next';
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+import { authOptions } from '@/lib/auth/staffs/auth';
+import { getFirstAccessibleRoute } from '@/lib/auth/get-first-access-route';
 import Link from 'next/link';
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck2,
@@ -56,6 +60,25 @@ const niceTime = (time: string) => {
 };
 
 export default async function HomePage() {
+  // Keep the public landing page for visitors. Authenticated staff go
+  // directly to the first module they are allowed to use in the sidebar.
+  // This is a server-side redirect, so the public page cannot flash first.
+  const session = await getServerSession(authOptions);
+  if (session?.user) {
+    // The login page handles mandatory password changes for staff.
+    if (
+      session.user.requiresPasswordChange === true ||
+      session.user.tempPassword === true
+    ) {
+      redirect('/login');
+    }
+
+    const destination = getFirstAccessibleRoute(
+      session.user.access as Record<string, boolean> | null | undefined,
+    );
+    redirect(destination ?? '/unauthorized');
+  }
+
   const [catalog, liveQueue, popular] = await Promise.all([
     getPublicCatalog(), getPublicLiveQueue(), getPublicTrendingServices(),
   ]);

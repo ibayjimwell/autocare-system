@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const record = await Database.transaction(async tx => {
       const [estimate] = await tx.select().from(EstimatedCosts).where(eq(EstimatedCosts.id,id)).for('update').limit(1);
       if (!estimate) throw new Error('Estimate does not exist.');
-      if (estimate.status!=='PENDING' && estimate.status!=='WAITING_FOR_APPROVAL') throw new Error('Warranty terms are locked after estimate approval/decline.');
+      if (estimate.status!=='PENDING') throw new Error('Warranty terms are locked after estimate approval/decline.');
       const selected = data.inventoryIds.length ? await tx.select({id:Inventory.id,name:Inventory.name,active:Inventory.active}).from(Inventory).where(inArray(Inventory.id,data.inventoryIds)) : [];
       if (selected.length!==data.inventoryIds.length || selected.some(i=>!i.active)) throw new Error('Select only existing, active inventory items.');
       const [created] = await tx.insert(ServiceWarranties).values({estimateId:id,title:data.title,coverageType:data.coverageType,

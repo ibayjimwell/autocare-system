@@ -3,6 +3,9 @@ import {
   NextResponse,
 } from 'next/server';
 
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/staffs/auth';
+
 import {
   Database,
 } from '@/lib/drizzle';
@@ -14,6 +17,8 @@ import {
 import {
   WorkTasks,
 } from '@/database/models/service-tracking/work-tasks.model';
+
+import { areAllWorkTasksFinished } from '@/lib/service-tracking/work-completion';
 
 import {
   Appointments,
@@ -55,6 +60,11 @@ import {
 export async function POST(
   req: NextRequest,
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: true, errorMessage: 'Staff login required.' }, { status: 401 });
+  }
+
   let body: any;
 
   try {
@@ -99,6 +109,30 @@ export async function POST(
   }
 
   try {
+    // Reject stale/repeated requests and prevent Final Cost generation before
+    // the appointment actually reaches the repair stage.
+    const [currentAppointment] = await Database
+      .select({ status: Appointments.status })
+      .from(Appointments)
+      .where(eq(Appointments.id, appointmentId))
+      .limit(1);
+
+    if (!currentAppointment) {
+      return NextResponse.json({
+        error: true,
+        errorTitle: 'Appointment not found',
+        errorMessage: 'The appointment no longer exists.',
+      }, { status: 404 });
+    }
+
+    if (currentAppointment.status !== 'IN_PROGRESS') {
+      return NextResponse.json({
+        error: true,
+        errorTitle: 'Service is not in progress',
+        errorMessage: 'Only an in-progress service can be completed. Refresh Service Tracking.',
+      }, { status: 409 });
+    }
+
     /* ==============================================================
        1. Check all work tasks are complete
     ============================================================== */
@@ -114,12 +148,7 @@ export async function POST(
           ),
         );
 
-    if (
-      workTasks.some(
-        task =>
-          task.status !== 'DONE',
-      )
-    ) {
+    if (!areAllWorkTasksFinished(workTasks)) {
       return NextResponse.json(
         {
           error: true,
@@ -127,7 +156,7 @@ export async function POST(
           errorTitle:
             'Work not complete',
           errorMessage:
-            'All work tasks must be completed before generating the Final Cost.',
+            'At least one work task is required, and every work task must be DONE before generating the Final Cost.',
           errorLog: null,
         },
         { status: 422 },

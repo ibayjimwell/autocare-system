@@ -42,6 +42,9 @@ export async function GET(
       discountTotal: EstimatedCosts.discountTotal,
       grandTotal: EstimatedCosts.grandTotal,
       reason: EstimatedCosts.reason,
+      parkedAt: EstimatedCosts.parkedAt,
+      parkingFeeEnabled: EstimatedCosts.parkingFeeEnabled,
+      parkingFeeRate: EstimatedCosts.parkingFeeRate,
       createdAt: EstimatedCosts.createdAt,
       updatedAt: EstimatedCosts.updatedAt,
       appointment: {

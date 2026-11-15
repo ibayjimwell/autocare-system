@@ -30,6 +30,7 @@ import {
 
 import { useRouter } from "next/navigation";
 import { signIn, getSession } from "next-auth/react";
+import { getFirstAccessibleRoute } from "@/lib/auth/get-first-access-route";
 import ErrorHandler from "@/components/shared/error-handler";
 import ChangePasswordModal from "./change-password-modal";
 
@@ -158,7 +159,13 @@ export default function LoginForm({
         return;
       }
 
-      router.push("/");
+      // Navigate to the first sidebar tab allowed by the current session.
+      // If the session is not visible yet, let the server-side root page
+      // resolve the destination as soon as the auth cookie is available.
+      const destination = getFirstAccessibleRoute(
+        session?.user?.access as Record<string, boolean> | null | undefined,
+      );
+      router.replace(destination ?? (session ? "/unauthorized" : "/"));
       router.refresh();
     } catch (err: unknown) {
       let errorMessage =

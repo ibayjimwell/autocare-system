@@ -35,7 +35,7 @@ import StatusBadge from "@/components/shared/status-badge";
 
 import LoadingSpinner from "@/components/shared/loading-spinner";
 
-import ConfirmationDialog from "@/components/shared/confimation-dialog";
+import { areAllWorkTasksFinished, workCompletionFingerprint } from "@/lib/service-tracking/work-completion";
 
 import AddTaskModal from "@/components/shared/add-task-modal";
 
@@ -349,9 +349,13 @@ export default function ServiceDetailPanel({
   const [
     doneConfirmOpen,
     setDoneConfirmOpen,
-  ] = useState(
-    false
-  );
+  ] = useState(false);
+
+  // A dismissed completion prompt stays dismissed for the current set of
+  // completed tasks. It will appear again if the task set changes and all
+  // tasks become DONE, and it always appears after a fresh page visit.
+  const [dismissedCompletionKey, setDismissedCompletionKey] = useState<string | null>(null);
+  const completingWorkRef = useRef(false);
 
   /* ==============================================================
      DEFAULT GROUPS
@@ -532,16 +536,23 @@ export default function ServiceDetailPanel({
     : null;
 
 
-  const allTasksDone =
-    currentTasks.length >
-      0 &&
-    currentTasks.every(
-      (
-        task
-      ) =>
-        task.status ===
-        "DONE"
-    );
+  const allTasksDone = areAllWorkTasksFinished(currentTasks);
+  const completionKey = isInProgress ? workCompletionFingerprint(workTasks) : null;
+
+  // When the LAST repair task is marked DONE (including via another staff
+  // session or a realtime refresh), open the completion decision immediately.
+  // Do not open it while staff are adding/editing a task or generating a bill.
+  useEffect(() => {
+    if (!completionKey) {
+      setDoneConfirmOpen(false);
+      setDismissedCompletionKey(null);
+      return;
+    }
+    if (addTaskModalOpen || editingTask || isSubmitting) return;
+    if (dismissedCompletionKey !== completionKey) {
+      setDoneConfirmOpen(true);
+    }
+  }, [completionKey, addTaskModalOpen, editingTask, isSubmitting, dismissedCompletionKey]);
 
   /* ==============================================================
      INITIAL LOAD REF
@@ -839,6 +850,37 @@ export default function ServiceDetailPanel({
   });
 
   /* ==============================================================
+     FALLBACK REFRESH FOR WORK COMPLETION
+
+     Realtime can be unavailable if the connection drops. While the staff
+     detail view is visible, recheck the small work-task list every 10 s so
+     the completion decision still appears if the last task was finished
+     by a different staff session.
+  ============================================================== */
+  useEffect(() => {
+    if (!isInProgress) return;
+    let active = true;
+    const refreshWorkTaskStatuses = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const result = await workTasksApi.list(appointment.id);
+        if (active && !result?.error && Array.isArray(result?.data)) {
+          setWorkTasks(result.data);
+        }
+      } catch (error) {
+        console.error('[ServiceTracking] Work task refresh failed', error);
+      }
+    };
+    const interval = window.setInterval(() => void refreshWorkTaskStatuses(), 10000);
+    document.addEventListener('visibilitychange', refreshWorkTaskStatuses);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWorkTaskStatuses);
+    };
+  }, [isInProgress, appointment.id]);
+
+  /* ==============================================================
      REALTIME APPOINTMENT
   ============================================================== */
 
@@ -1092,6 +1134,16 @@ export default function ServiceDetailPanel({
           return false;
         }
 
+        // Immediately reflect a newly created repair task, then refresh from
+        // the API. This prevents the all-DONE decision from staying open.
+        if (phase === 'WORK' && res?.data?.id) {
+          setWorkTasks((previous) => previous.some((task) => task.id === res.data.id)
+            ? previous : [...previous, res.data]);
+        }
+        await loadData(false);
+        window.dispatchEvent(new CustomEvent('autocare-task-updated', {
+          detail: { appointmentId: appointment.id },
+        }));
         return true;
       } catch (
         err: any
@@ -1713,69 +1765,43 @@ export default function ServiceDetailPanel({
      COMPLETE WORK
   ============================================================== */
 
-  const handleWorkDone =
-    async () => {
-      setIsSubmitting(
-        true
-      );
+  const handleWorkDone = async () => {
+    // Prevent double submissions from rapid taps or repeated modal events.
+    if (completingWorkRef.current || isSubmitting) return;
+    if (!isInProgress || !areAllWorkTasksFinished(workTasks)) {
+      toast.error('Finish all repair tasks before completing the service.');
+      return;
+    }
 
-      setProcessingAction(
-        "COMPLETE_WORK"
-      );
+    completingWorkRef.current = true;
+    setIsSubmitting(true);
+    setProcessingAction('COMPLETE_WORK');
 
-      try {
-        const billRes =
-          await finalBillsApi.generate(
-            appointment.id
-          );
-
-        if (
-          billRes.error
-        ) {
-          toast.error(
-            billRes.errorMessage ||
-              "Failed to generate Final Cost."
-          );
-        } else {
-          toast.success(
-            "Job completed! Final Cost generated."
-          );
-
-          await recordTasksToHistory(
-            "WORK",
-            workTasks
-          );
-
-          await appointmentsApi.updateStatus(
-            appointment.id,
-            "COMPLETED"
-          );
-
-          onStatusChanged();
-
-          onBack();
-        }
-      } catch (
-        err: any
-      ) {
-        toast.error(
-          err.message ||
-            "Error completing job."
-        );
-      } finally {
-        setIsSubmitting(
-          false
-        );
-
-        setProcessingAction(
-          null
-        );
-
-        setDoneConfirmOpen(
-          false
-        );
+    try {
+      // The server independently checks appointment status, work-task count,
+      // every task's DONE status, and the approved estimate.
+      const billRes = await finalBillsApi.generate(appointment.id);
+      if (billRes.error) {
+        toast.error(billRes.errorMessage || 'Failed to generate Final Cost.');
+        // Keep the decision modal open so staff can correct/retry.
+        return;
       }
-    };
+
+      // The Final Cost API itself sets the appointment to COMPLETED.
+      // Do not issue a second, redundant appointment status request.
+      await recordTasksToHistory('WORK', workTasks);
+      toast.success('Job completed! Final Cost generated.');
+      setDoneConfirmOpen(false);
+      onStatusChanged();
+      onBack();
+    } catch (err: any) {
+      toast.error(err?.message || 'Error completing job.');
+    } finally {
+      completingWorkRef.current = false;
+      setIsSubmitting(false);
+      setProcessingAction(null);
+    }
+  };
 
   /* ==============================================================
      LOADING
@@ -2490,27 +2516,21 @@ export default function ServiceDetailPanel({
                   </div>
                 )}
 
-              {isInProgress &&
-                allTasksDone &&
-                !isCompleted && (
-                  <div className="flex justify-end border-t border-border pt-4">
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        setDoneConfirmOpen(
-                          true
-                        )
-                      }
-                      className="h-11 w-full rounded-md bg-green-600 text-white hover:bg-green-700 sm:w-auto sm:px-6 md:h-9"
-                      disabled={
-                        isSubmitting
-                      }
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Complete Work
-                    </Button>
-                  </div>
-                )}
+              {isInProgress && allTasksDone && (
+                <div className="flex justify-end border-t border-border pt-4">
+                  {/* Recovery action if staff dismissed the automatic prompt. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDoneConfirmOpen(true)}
+                    disabled={isSubmitting}
+                    className="h-11 w-full rounded-md sm:w-auto sm:px-6 md:h-9"
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Review Completion
+                  </Button>
+                </div>
+              )}
             </div>
           </section>
 
@@ -3297,20 +3317,55 @@ export default function ServiceDetailPanel({
           </DialogContent>
         </Dialog>
 
-        <ConfirmationDialog
-          open={
-            doneConfirmOpen
-          }
-          onOpenChange={
-            setDoneConfirmOpen
-          }
-          title="Complete Work"
-          description="All repair tasks are done. This will generate the Final Cost and complete the job. Continue?"
-          onConfirm={
-            handleWorkDone
-          }
-          confirmText="Complete Job"
-        />
+        {/* Automatically opens when all repair tasks are DONE. Staff must
+            choose whether the service is complete or more work is needed. */}
+        <Dialog
+          open={doneConfirmOpen && isInProgress && allTasksDone}
+          onOpenChange={(open) => {
+            if (isSubmitting) return;
+            setDoneConfirmOpen(open);
+            if (!open) setDismissedCompletionKey(completionKey);
+          }}
+        >
+          <DialogContent className="max-w-lg" showCloseButton={!isSubmitting}
+            onEscapeKeyDown={(event) => { if (isSubmitting) event.preventDefault(); }}
+            onPointerDownOutside={(event) => { if (isSubmitting) event.preventDefault(); }}
+          >
+            <DialogHeader>
+              <DialogTitle>The service is now Completed?</DialogTitle>
+              <DialogDescription>
+                All {workTasks.length} repair task{workTasks.length === 1 ? '' : 's'} have been marked finished.
+                Is the service now completed, or do you need to add another task?
+                Confirming completion will close the appointment and generate its official Final Cost.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSubmitting}
+                className="h-11 sm:h-9"
+                onClick={() => {
+                  setDoneConfirmOpen(false);
+                  setEditingTask(null);
+                  setAddTaskModalOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Another Task
+              </Button>
+              <Button
+                type="button"
+                disabled={isSubmitting}
+                className="h-11 bg-green-600 text-white hover:bg-green-700 sm:h-9"
+                onClick={() => void handleWorkDone()}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Yes, Completed
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Diagnostic Checklist is independent from task and findings editors. */}
         <div className="fixed bottom-5 right-4 z-40 sm:bottom-7 sm:right-7">

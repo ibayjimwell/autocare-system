@@ -175,9 +175,10 @@ async function enrichFinalBillsWithAppointments(
 
 const ESTIMATE_STATUS_PRIORITY: Record<string, number> = {
   PENDING: 0,
-  WAITING_FOR_APPROVAL: 1,
-  APPROVED: 2,
-  DECLINED: 3,
+  PARKED: 1,
+  WAITING_FOR_APPROVAL: 2,
+  APPROVED: 3,
+  DECLINED: 4,
 };
 
 const FINAL_BILL_STATUS_PRIORITY: Record<string, number> = {

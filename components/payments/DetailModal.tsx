@@ -1,5 +1,6 @@
 'use client';
 import WarrantyDisplay from '@/components/payments/WarrantyDisplay';
+import WarrantyManager from '@/components/payments/WarrantyManager';
 
 import React from 'react';
 
@@ -487,6 +488,8 @@ export default function DetailModal({
   onToggleFinding,
   togglingFindingId,
 }: DetailModalProps) {
+  const [warrantyRevision, setWarrantyRevision] = React.useState(0);
+
   /*
    * Keep the existing behavior:
    *
@@ -626,6 +629,9 @@ export default function DetailModal({
 
               {selectedItem && (
                 <div className="flex flex-wrap items-center gap-2">
+                  {detailType === 'estimate' && selectedItem?.id && (
+                    <WarrantyManager estimateId={selectedItem.id} estimateStatus={selectedItem.status} onChanged={() => setWarrantyRevision(v => v + 1)} />
+                  )}
                   <PrintPaymentDocumentButton
                     detailType={detailType}
                     selectedItem={selectedItem}
@@ -1481,7 +1487,7 @@ export default function DetailModal({
                 </div>
               </div>
 
-              {selectedItem?.id && <WarrantyDisplay documentId={selectedItem.id} kind={detailType} />}
+              {selectedItem?.id && <WarrantyDisplay documentId={selectedItem.id} kind={detailType} refreshKey={warrantyRevision} />}
 
               <DiagnosticChecklistReadOnly appointmentId={selectedItem?.appointmentId || selectedItem?.appointment?.id} />
 

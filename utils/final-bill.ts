@@ -407,6 +407,9 @@ export async function generateFinalBill(
       .limit(1);
 
   if (existingBill) {
+    if (!['OFFICIAL', 'PAID'].includes(existingBill.status)) {
+      throw new Error('Legacy provisional Final Cost must be reconciled before issuing an official bill.');
+    }
     return existingBill;
   }
 
@@ -494,7 +497,7 @@ export async function generateFinalBill(
       .values({
         appointmentId,
         estimateId,
-        status: 'PENDING',
+        status: 'OFFICIAL',
         serviceSubtotal:
           String(
             estimate.serviceSubtotal ??

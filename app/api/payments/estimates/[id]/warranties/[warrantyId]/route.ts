@@ -17,7 +17,7 @@ export async function DELETE(_request:NextRequest,{params}:{params:Promise<{id:s
     const result=await Database.transaction(async tx=>{
       const [estimate]=await tx.select().from(EstimatedCosts).where(eq(EstimatedCosts.id,id)).for('update').limit(1);
       if(!estimate)return 'NOT_FOUND';
-      if(!['PENDING','WAITING_FOR_APPROVAL'].includes(estimate.status))return 'LOCKED';
+      if(!['PENDING'].includes(estimate.status))return 'LOCKED';
       const deleted=await tx.delete(ServiceWarranties).where(and(eq(ServiceWarranties.id,warrantyId),eq(ServiceWarranties.estimateId,id))).returning({id:ServiceWarranties.id});
       return deleted.length?'OK':'NOT_FOUND';
     });

@@ -33,7 +33,7 @@ import {
 const NAV_GROUP_CONFIG = [
   {
     label: "Main",
-    paths: ["/", "/customers", "/appointments"],
+    paths: ["/dashboard", "/customers", "/appointments"],
   },
   {
     label: "Operations",
@@ -88,10 +88,7 @@ export function NavLinks({
   const groups = groupNavItems(items);
 
   const isActive = (item: any) =>
-    item.path === "/"
-      ? pathname === "/"
-      : pathname === item.path ||
-        pathname.startsWith(item.path + "/");
+    pathname === item.path || pathname.startsWith(item.path + "/");
 
   return (
     <nav
@@ -175,10 +172,7 @@ function MobileBottomNav({
   const pathname = usePathname();
 
   const isActive = (item: any) =>
-    item.path === "/"
-      ? pathname === "/"
-      : pathname === item.path ||
-        pathname.startsWith(item.path + "/");
+    pathname === item.path || pathname.startsWith(item.path + "/");
 
   const primaryItems = items.slice(0, 5);
 
@@ -271,7 +265,7 @@ export function Sidebar({
   // ==============================================================
   const NAV_ITEMS = [
     {
-      path: "/",
+      path: "/dashboard",
       label: "Dashboard",
       icon: LayoutDashboard,
       module: "dashboard",

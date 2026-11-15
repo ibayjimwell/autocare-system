@@ -127,8 +127,7 @@ export async function POST(
       );
     }
     if (
-      estimate.status !== "PENDING" &&
-      estimate.status !== "WAITING_FOR_APPROVAL"
+      estimate.status !== "PENDING"
     ) {
       return NextResponse.json(
         {
@@ -136,7 +135,7 @@ export async function POST(
           errorType: "fve",
           errorTitle: "Invalid status",
           errorMessage:
-            "Fees can only be added to PENDING or WAITING_FOR_APPROVAL estimates.",
+            "Fees can only be added to PENDING estimates.",
           errorLog: null,
         },
         { status: 422 },

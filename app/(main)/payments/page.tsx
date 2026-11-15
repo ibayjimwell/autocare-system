@@ -84,7 +84,6 @@ import DeleteConfirmationModal from '@/components/payments/DeleteConfirmationMod
 
 import EditAdjustmentModal from '@/components/payments/EditAdjustmentModal';
 
-import FinalCostChangeConfirmationModal from '@/components/payments/FinalCostChangeConfirmationModal';
 
 import CashierModal from '@/components/payments/cashier-modal';
 
@@ -93,7 +92,6 @@ import ReceiptModal from '@/components/payments/receipt-modal';
 
 import PaymentsConfigurationModal from '@/components/payments/PaymentsConfigurationModal';
 import POSModal from '@/components/payments/pos-modal';
-import ManualTransferReview from '@/components/payments/ManualTransferReview';
 import PosHistoryModal from '@/components/payments/pos-history-modal';
 import PaymentTransactionHistoryModal from '@/components/payments/PaymentTransactionHistoryModal';
 
@@ -956,6 +954,8 @@ export default function PaymentsPage() {
      SUMMARY
   ============================================================== */
 
+  const legacyDraftCount = finalBills.filter(b => !['OFFICIAL','PAID'].includes(String(b.status).toUpperCase())).length;
+
   const totalRecords =
     estimates.length +
     finalBills.length;
@@ -1043,6 +1043,15 @@ export default function PaymentsPage() {
                   error.message
                 }
               />
+            </CardContent>
+          </Card>
+        )}
+
+        {legacyDraftCount > 0 && statusFilter === 'ALL' && (
+          <Card className="border-amber-300 bg-amber-50/30 shadow-sm">
+            <CardContent className="p-4 text-sm text-amber-800">
+              {legacyDraftCount} Final Cost draft record(s) from older versions need reconciliation.
+              They have not been promoted to Official or deleted. Use the included legacy audit SQL.
             </CardContent>
           </Card>
         )}
@@ -1136,7 +1145,6 @@ export default function PaymentsPage() {
           </div>
         </section>
 
-        <ManualTransferReview onSettled={reload} />
 
         {/* ========================================================
             TOOLBAR
@@ -1280,6 +1288,7 @@ export default function PaymentsPage() {
               onRequestDecline={
                 handleRequestDecline
               }
+              onUpdated={reload}
               onOpenDetail={(
                 item,
               ) =>
@@ -1521,36 +1530,6 @@ export default function PaymentsPage() {
           adjustments.submittingAdjustment
         }
       />
-
-      {/* ==========================================================
-          FINAL COST CHANGE CONFIRMATION
-      =========================================================== */}
-
-      {adjustments.finalCostChangeAction && (
-        <FinalCostChangeConfirmationModal
-          open={
-            adjustments.finalCostChangeConfirmationOpen
-          }
-          onOpenChange={
-            adjustments.setFinalCostChangeConfirmationOpen
-          }
-          action={
-            adjustments.finalCostChangeAction.operation
-          }
-          type={
-            adjustments.finalCostChangeAction.type
-          }
-          targetName={
-            adjustments.finalCostChangeTargetName
-          }
-          onConfirm={
-            adjustments.confirmFinalCostChange
-          }
-          saving={
-            adjustments.submittingAdjustment
-          }
-        />
-      )}
 
       {/* ==========================================================
           EDIT PART
