@@ -338,11 +338,13 @@ function buildPrintHtml({
   item,
   appointment,
   diagnosticHtml = '',
+  warranties = [],
 }: {
   detailType: 'estimate' | 'final-bill';
   item: any;
   appointment: any;
   diagnosticHtml?: string;
+  warranties?: any[];
 }): string {
   const isEstimate = detailType === 'estimate';
   const documentTitle = isEstimate
@@ -849,6 +851,17 @@ table th:last-child { width: 125px; }
     </div>
   </section>
 
+  <section class="section"><div class="section-title">Service Warranty</div>
+    ${warranties.length ? warranties.map(w=>`<div class="finding"><div class="item-name">${escapeHtml(w.title)} (${escapeHtml(w.coverageType)})</div>
+      <div class="subtext">Provider: ${escapeHtml(w.provider)} | ${escapeHtml(w.startDate)} to ${escapeHtml(w.endDate)}</div>
+      <div class="subtext">Coverage: ${escapeHtml(w.coverage)}</div>
+      <div class="subtext">Covered inventory parts: ${escapeHtml((w.parts||[]).map((p:any)=>p.partName).join(', ')||'None')}</div>
+      <div class="subtext">Terms: ${escapeHtml(w.terms)}</div>
+      <div class="subtext">Exclusions: ${escapeHtml(w.exclusions||'None')}</div>
+      <div class="subtext">How to claim: ${escapeHtml(w.claimInstructions)}</div>
+      <div class="subtext">Contact: ${escapeHtml(w.contact||'Contact AutoCare')}</div></div>`).join('') : '<p>No warranty attached.</p>'}
+  </section>
+
   ${diagnosticHtml}
 
   <section class="ack">
@@ -1002,11 +1015,21 @@ export default function PrintPaymentDocumentButton({
         } catch (error) { console.warn('[Print] Diagnostic Checklist unavailable', error); }
       }
 
+      let warranties: any[] = [];
+      if (selectedItem?.id) {
+        try {
+          const res = await fetch(`/api/payments/${detailType==='estimate'?'estimates':'final-bills'}/${encodeURIComponent(selectedItem.id)}`,{cache:'no-store'});
+          const body=await res.json();
+          if(res.ok && !body.error && Array.isArray(body?.data?.warranties)) warranties=body.data.warranties;
+        } catch (error) { console.warn('[Print] Warranties unavailable:',error); }
+      }
+
       const html = buildPrintHtml({
         detailType,
         item: selectedItem,
         appointment: printableAppointment,
         diagnosticHtml,
+        warranties,
       });
 
       printWindow.document.open();

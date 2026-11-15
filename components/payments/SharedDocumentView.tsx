@@ -81,6 +81,18 @@ export default function SharedDocumentView({token,initial}:{token:string;initial
         {finding.parts.length?<div className="mt-3 space-y-2 border-t pt-3">{finding.parts.map((part,j)=><div key={j} className="flex flex-wrap justify-between gap-2 text-sm">
           <p>{part.name} · {part.quantity} × {fmt(part.unitPrice)}{part.isPms?' · PMS':''}</p><strong>{fmt(part.total)}</strong></div>)}</div>:<p className="mt-2 text-sm text-[#737880]">No parts listed</p>}
         <p className="mt-3 text-right text-sm font-bold">Parts subtotal: {fmt(finding.partsSubtotal)}</p></div>)}</div>:<Empty label="No findings recorded."/>}</section>
+    <section className={card}><Heading title="Service warranty"/>
+      {doc.warranties.length?<div className="mt-4 space-y-3">{doc.warranties.map(w=><article key={w.id} className="rounded-lg border p-4 text-sm">
+        <div className="flex flex-wrap justify-between gap-2"><strong className="text-base">{w.title}</strong><span>{w.coverageType}</span></div>
+        <p className="mt-1"><strong>Provider:</strong> {w.provider} · {w.startDate} to {w.endDate}</p>
+        <p className="mt-2 whitespace-pre-wrap"><strong>Coverage:</strong> {w.coverage}</p>
+        <p className="mt-1"><strong>Covered parts:</strong> {w.parts.map(p=>p.partName).join(', ')||'None'}</p>
+        <p className="mt-2 whitespace-pre-wrap"><strong>Terms:</strong> {w.terms}</p>
+        <p className="mt-1 whitespace-pre-wrap"><strong>Exclusions:</strong> {w.exclusions||'None'}</p>
+        <p className="mt-1 whitespace-pre-wrap"><strong>Claim procedure:</strong> {w.claimInstructions}</p>
+        <p className="mt-1"><strong>Contact:</strong> {w.contact||'Contact AutoCare'}</p>
+      </article>)}</div>:<Empty label="No warranty attached."/>}
+    </section>
     <section className={card}><Heading title="Service tasks"/>
       {doc.tasks.length?<ul className="mt-4 space-y-2">{doc.tasks.map((task,i)=><li key={i} className="flex flex-wrap justify-between gap-2 rounded-lg bg-[#f5f5f7] p-3 text-sm"><strong>{task.title}</strong>
         <span className="text-[#666b73]">{'status' in task?task.status:''}{'durationMinutes' in task&&task.durationMinutes!=null?` · ${task.durationMinutes} min`:''}</span></li>)}</ul>:<Empty label="No tasks recorded."/>}</section>

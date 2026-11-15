@@ -1,3 +1,4 @@
+import { loadEstimateWarranties } from '@/lib/payments/warranties';
 import {eq,inArray} from 'drizzle-orm';
 import {Database} from '@/lib/drizzle';
 import {Appointments} from '@/database/models/appointments/appointments.model';
@@ -84,6 +85,7 @@ export async function loadDocument(kind:DocumentKind,id:string) {
     customer:{name:customer?.fullname||'Customer'},
     vehicle:{make:vehicle?.make||'',model:vehicle?.model||'',year:vehicle?.year||null,plateNumber:vehicle?.plateNumber||''},
     services,
+    warranties: await loadEstimateWarranties(estimate ? id : (record as typeof FinalBill.$inferSelect).estimateId),
     findings:findings.map(f=>({description:f.description,included:f.included,
       partsSubtotal:money(f.partsSubtotal),parts:parts.filter(p=>
         estimate?'estimateFindingId' in p && p.estimateFindingId===f.id:'finalBillFindingId' in p && p.finalBillFindingId===f.id)
@@ -120,7 +122,12 @@ export function documentLines(doc:NonNullable<SharedDocument>):string[] {
       ...f.parts.map(part=>`  - ${part.name} | Qty ${part.quantity} x ${p(part.unitPrice)} = ${p(part.total)}${part.isPms?' | PMS':''}`)]),
     `Saved findings subtotal: ${p(doc.totals.findings)}`,'','TASKS',
     ...doc.tasks.map(t=>`${t.title}${'status' in t?` | ${t.status}`:''}${'durationMinutes' in t&&t.durationMinutes!=null?` | ${t.durationMinutes} min`:''}`),
-    `Saved work tasks subtotal: ${p(doc.totals.workTasks)}`,'','ADDITIONAL FEES',
+    `Saved work tasks subtotal: ${p(doc.totals.workTasks)}`,'','SERVICE WARRANTIES',
+    ...doc.warranties.flatMap(w=>[`${w.title} | ${w.coverageType} | Provider: ${w.provider} | ${w.startDate} to ${w.endDate}`,
+      `Coverage: ${w.coverage}`,`Terms: ${w.terms}`,`Exclusions: ${w.exclusions||'None'}`,
+      `Claims: ${w.claimInstructions}`,`Contact: ${w.contact||'Not provided'}`,
+      `Covered inventory parts: ${w.parts.map(p=>p.partName).join(', ')||'None'}`]),
+    '','ADDITIONAL FEES',
     ...doc.fees.map(f=>`${f.title}: ${p(f.amount)}`),`Saved fee subtotal: ${p(doc.totals.fees)}`,'',
     'DISCOUNTS',...doc.discounts.map(d=>`${d.title} (${d.type} ${d.value}): -${p(d.amount)}`),
     `Saved discount total: -${p(doc.totals.discount)}`,'',`FINAL TOTAL: ${p(doc.totals.grand)}`,

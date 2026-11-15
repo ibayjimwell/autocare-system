@@ -85,3 +85,5 @@ export * from "./payments/paypal-checkout-attempt.model";
 
 // Private, time-limited public document links
 export * from "./payments/payment-document-links.model";
+
+export * from "./payments/service-warranties.model";

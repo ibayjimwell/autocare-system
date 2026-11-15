@@ -1,3 +1,4 @@
+import { loadEstimateWarranties } from '@/lib/payments/warranties';
 // utils/payments/generate-payment-receipt.ts
 
 import {
@@ -632,7 +633,10 @@ export async function generatePaymentReceipt(
   const paidAt =
     new Date().toISOString();
 
+  const warranties = await loadEstimateWarranties(bill.estimateId);
+
   const receiptData = {
+    warranties,
     customer:
       customer
         ? {

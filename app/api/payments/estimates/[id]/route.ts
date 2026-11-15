@@ -1,3 +1,4 @@
+import { loadEstimateWarranties } from '@/lib/payments/warranties';
 import { NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/drizzle";
 import { EstimatedCosts } from "@/database/models/payments/estimated-costs.model";
@@ -126,6 +127,7 @@ export async function GET(
         fees,
         discounts,
         tasks,
+        warranties: await loadEstimateWarranties(id),
       },
     }, { status: 200 });
   } catch (e) {

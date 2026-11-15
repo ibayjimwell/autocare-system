@@ -1,3 +1,4 @@
+import { loadEstimateWarranties } from '@/lib/payments/warranties';
 import {
   NextRequest,
   NextResponse,
@@ -197,6 +198,7 @@ export async function GET(
       fees,
       discounts,
       workTasks,
+      warranties: await loadEstimateWarranties(bill.estimateId),
     };
 
     return NextResponse.json(

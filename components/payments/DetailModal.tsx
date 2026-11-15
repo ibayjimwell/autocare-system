@@ -1,4 +1,5 @@
 'use client';
+import WarrantyDisplay from '@/components/payments/WarrantyDisplay';
 
 import React from 'react';
 
@@ -1479,6 +1480,8 @@ export default function DetailModal({
                   </p>
                 </div>
               </div>
+
+              {selectedItem?.id && <WarrantyDisplay documentId={selectedItem.id} kind={detailType} />}
 
               <DiagnosticChecklistReadOnly appointmentId={selectedItem?.appointmentId || selectedItem?.appointment?.id} />
 

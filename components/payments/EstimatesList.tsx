@@ -1,4 +1,5 @@
 'use client';
+import WarrantyManager from './WarrantyManager';
 
 import {
   Estimate,
@@ -529,6 +530,7 @@ export default function EstimatesList({
                       </>
                     )}
 
+                    <WarrantyManager estimateId={est.id} estimateStatus={est.status} compact/>
                     <ShareDocumentButton kind="estimate" documentId={est.id} compact/>
 
                     <Button
@@ -851,7 +853,8 @@ export default function EstimatesList({
                             </>
                           )}
 
-                          <ShareDocumentButton kind="estimate" documentId={est.id} compact/>
+                          <WarrantyManager estimateId={est.id} estimateStatus={est.status} compact/>
+                    <ShareDocumentButton kind="estimate" documentId={est.id} compact/>
 
                           <Button
                             type="button"

@@ -45,6 +45,7 @@ export default function PrintReceiptButton({ receipt }: { receipt: any }) {
       : Array.isArray(finalBill?.findings)
         ? finalBill.findings
         : [];
+    const warranties = Array.isArray(details?.warranties) ? details.warranties : [];
     const fees = Array.isArray(finalBill?.fees) ? finalBill.fees : [];
     const discounts = Array.isArray(finalBill?.discounts) ? finalBill.discounts : [];
 
@@ -159,6 +160,15 @@ export default function PrintReceiptButton({ receipt }: { receipt: any }) {
   ${findingRows ? `<div class="rule"></div><div class="section-title">FINDINGS / PARTS</div>${findingRows}` : ''}
   ${feeRows ? `<div class="rule"></div><div class="section-title">FEES</div>${feeRows}` : ''}
   ${discountRows ? `<div class="rule"></div><div class="section-title">DISCOUNTS</div>${discountRows}` : ''}
+
+  <div class="rule"></div>
+  <div class="section-title">SERVICE WARRANTY</div>
+  ${warranties.length ? warranties.map((w:any)=>`<div class="finding-name">${escapeHtml(w.title)} (${escapeHtml(w.coverageType)})</div>
+    <div>Provider: ${escapeHtml(w.provider)}</div><div>Valid: ${escapeHtml(w.startDate)} - ${escapeHtml(w.endDate)}</div>
+    <div>Coverage: ${escapeHtml(w.coverage)}</div>
+    <div>Parts: ${escapeHtml((w.parts||[]).map((p:any)=>p.partName).join(', ')||'None')}</div>
+    <div>Terms: ${escapeHtml(w.terms)}</div><div>Exclusions: ${escapeHtml(w.exclusions||'None')}</div>
+    <div>Claims: ${escapeHtml(w.claimInstructions)}</div><div>Contact: ${escapeHtml(w.contact||'Contact AutoCare')}</div>`).join('') : '<div>No warranty attached.</div>'}
 
   <div class="rule"></div>
   <div class="line total"><span>${isDemo ? 'SIMULATED AMOUNT' : 'TOTAL PAID'}</span><b>₱${money(total)}</b></div>

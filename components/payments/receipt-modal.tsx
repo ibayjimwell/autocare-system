@@ -349,6 +349,7 @@ export default function ReceiptModal({
   );
 
   const isDemo = payment?.simulated === true;
+  const warranties = Array.isArray(receipt?.details?.warranties) ? receipt.details.warranties : Array.isArray(receipt?.data?.warranties) ? receipt.data.warranties : [];
 
   const services =
     getReceiptServices(
@@ -904,6 +905,20 @@ export default function ReceiptModal({
                       </div>
                     </div>
                   )}
+
+                {/* Service warranty included in receipt snapshot */}
+                <div className="mb-4 rounded-lg border border-border p-3">
+                  <p className="mb-2 text-[10px] font-black uppercase text-muted-foreground">Service Warranty</p>
+                  {!warranties.length?<p className="text-sm text-muted-foreground">No warranty attached.</p>:
+                    warranties.map((w:any)=><div key={w.id} className="mb-3 space-y-1 text-xs">
+                      <p className="font-bold text-sm">{w.title} ({w.coverageType})</p>
+                      <p>Provider: {w.provider} | {w.startDate} to {w.endDate}</p>
+                      <p>Coverage: {w.coverage}</p>
+                      <p>Covered parts: {(w.parts||[]).map((p:any)=>p.partName).join(', ')||'None'}</p>
+                      <p>Terms: {w.terms}</p><p>Exclusions: {w.exclusions||'None'}</p>
+                      <p>Claims: {w.claimInstructions}</p><p>Contact: {w.contact||'Contact AutoCare'}</p>
+                    </div>)}
+                </div>
 
                 {/* Discounts */}
                 {Array.isArray(

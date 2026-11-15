@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseWarrantyInput} from '../lib/payments/warranty-validation.ts';
+const id='11223344-5566-4788-8899-aabbccddeeff';
+const base={title:'Engine service',coverageType:'BOTH',provider:'AutoCare',startDate:'2026-11-15',endDate:'2027-11-15',coverage:'Labor and supplied filter',terms:'Present receipt',exclusions:'Accidental damage',claimInstructions:'Contact shop',contact:'help@example.com',inventoryIds:[id]};
+test('accepts service warranty with linked inventory part',()=>assert.equal(parseWarrantyInput(base).inventoryIds.length,1));
+test('does not accept a parts warranty without inventory',()=>assert.throws(()=>parseWarrantyInput({...base,inventoryIds:[]})));
+test('requires explicit coverage and terms',()=>assert.throws(()=>parseWarrantyInput({...base,terms:''})));
+test('rejects inverted dates',()=>assert.throws(()=>parseWarrantyInput({...base,endDate:'2025-11-15'})));
+test('rejects impossible calendar dates',()=>assert.throws(()=>parseWarrantyInput({...base,startDate:'2026-02-30'})));
+test('rejects invalid inventory IDs',()=>assert.throws(()=>parseWarrantyInput({...base,inventoryIds:['not-a-uuid']})));
+test('deduplicates inventory IDs',()=>assert.deepEqual(parseWarrantyInput({...base,inventoryIds:[id,id]}).inventoryIds,[id]));
+test('can record labor-only coverage with no parts',()=>assert.equal(parseWarrantyInput({...base,coverageType:'SERVICE',inventoryIds:[]}).inventoryIds.length,0));

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, {useState} from 'react';
 import { Button } from '@/components/ui/button';
 import {
   AlertTriangle,
@@ -26,6 +26,15 @@ export default function InventoryCard({
   onEdit,
   onRestock,
 }: InventoryCardProps) {
+  const [warranties, setWarranties] = useState<any[] | null>(null);
+  const [warrantyError, setWarrantyError] = useState('');
+  const showWarranties=async()=>{
+    if(warranties!==null){setWarranties(null);return;}
+    setWarrantyError('');
+    try {const r=await fetch(`/api/inventory/${encodeURIComponent(item.id)}/warranties`,{cache:'no-store'});const b=await r.json();
+      if(!r.ok||b.error)throw new Error(b.errorMessage||'Lookup failed');setWarranties(Array.isArray(b.data)?b.data:[]);
+    } catch(e){setWarrantyError(e instanceof Error?e.message:'Failed to load warranties');}
+  };
   const quantity = Number(item?.quantity) || 0;
   const reorderLevel = Number(item?.reorderLevel) || 0;
   const low = isLowStock(item);
@@ -143,6 +152,15 @@ export default function InventoryCard({
 
         </div>
 
+        <div className="mt-3 rounded-md border border-border p-2">
+          <Button type="button" variant="ghost" size="sm" className="w-full" onClick={()=>void showWarranties()}>
+            {warranties===null?'Show linked service warranties':'Hide linked warranties'}
+          </Button>
+          {warrantyError&&<p className="text-xs text-red-600">{warrantyError}</p>}
+          {warranties!==null&&<div className="space-y-1 text-xs">{!warranties.length?'No linked warranties.':warranties.map(item=><div key={item.id} className="rounded bg-muted/30 p-2">
+            <strong>{item.title}</strong> · {item.startDate} to {item.endDate}<span className="block text-muted-foreground">Estimate #{String(item.estimateId).slice(0,8).toUpperCase()}</span>
+          </div>)}</div>}
+        </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button
             type="button"
