@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 
 import PageContainer from '@/components/shared/page-container';
+import ProgressSmsSettings from '@/components/service-tracking/ProgressSmsSettings';
 import ServiceTrackingSkeleton from '@/components/skeleton/service-tracking-skeleton';
 import ServiceDetailPanel from '@/components/service-tracking/service-detail-panel';
 import QueueList from '@/components/queue/QueueList';
@@ -1136,6 +1137,7 @@ export default function ServiceTrackingPage() {
             ----------------------------------------------------- */}
 
             <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+              <ProgressSmsSettings />
               {isConfirmedTab && (
                 <Button
                   type="button"
