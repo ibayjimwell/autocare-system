@@ -27,13 +27,14 @@ import ConfirmationDialog from '@/components/shared/confimation-dialog';
 
 interface TaskCardProps {
   task: any;
-  onUpdate: (taskId: string, status: string) => void;
+  onUpdate: (taskId: string, status: string) => Promise<boolean>;
   onDelete: (taskId: string) => void;
   onEdit: () => void;
   appointmentId: string;
   isInProgress: boolean;
   taskPhase: 'INSPECTION' | 'WORK';
   onExtended: () => void | Promise<void>;
+  promptAllowed: boolean;
 }
 
 export default function TaskCard({
@@ -45,6 +46,7 @@ export default function TaskCard({
   isInProgress,
   taskPhase,
   onExtended,
+  promptAllowed,
 }: TaskCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
@@ -54,12 +56,14 @@ export default function TaskCard({
   const [extendOpen, setExtendOpen] = useState(false);
   const [extraMinutes, setExtraMinutes] = useState('15');
   const [extending, setExtending] = useState(false);
+  const [finishingExpired, setFinishingExpired] = useState(false);
+  const [expiredExtraMinutes, setExpiredExtraMinutes] = useState('15');
   const baseDuration = Number(task.durationMinutes) || 0;
   const extensionMinutes = Number(task.extensionMinutes) || 0;
   const duration = baseDuration + extensionMinutes;
 
-  const extend = async () => {
-    const additionalMinutes = Number(extraMinutes);
+  const extend = async (fromExpiredModal = false) => {
+    const additionalMinutes = Number(fromExpiredModal ? expiredExtraMinutes : extraMinutes);
     if (!Number.isInteger(additionalMinutes) || additionalMinutes < 5 || additionalMinutes > 240) {
       toast.error('Enter a whole number between 5 and 240 minutes.');
       return;
@@ -107,12 +111,31 @@ export default function TaskCard({
   const progressPercent = task.status === 'DONE'
     ? (finishedPercent === null ? 0 : Math.min(100, Math.round(finishedPercent)))
     : task.status === 'PENDING' || duration <= 0 ? 0
-      : Math.min(100, Math.round(elapsedMinutes / duration * 100));
+      : Math.min(100, Math.floor(elapsedMinutes / duration * 100));
   const nearFinish = task.status === 'IN_PROGRESS' && duration > 0 && elapsedMinutes >= duration * 0.8;
   const effectiveRemaining = Math.max(0, Math.ceil(duration - elapsedMinutes));
 
   const isActive = task.status === 'IN_PROGRESS';
   const isDone = task.status === 'DONE';
+  const expiredNeedsDecision = promptAllowed && isActive && duration > 0 &&
+    elapsed >= duration * 60_000;
+  const availableExtension = Math.max(0, 1440 - extensionMinutes);
+  const canExtendExpired = availableExtension >= 5;
+
+  const finishExpiredTask = async () => {
+    if (finishingExpired || extending || !expiredNeedsDecision) return;
+    setFinishingExpired(true);
+    try {
+      const saved = await onUpdate(task.id, 'DONE');
+      if (saved) toast.success(`Finished "${task.title}".`);
+      // A rejected API call keeps the task IN_PROGRESS and the prompt open.
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to finish task.');
+    } finally {
+      setFinishingExpired(false);
+    }
+  };
+
 
   return (
     <>
@@ -180,9 +203,19 @@ export default function TaskCard({
                         Extended · Delay
                       </Badge>
                     )}
-                    {finishedEarly && (
+                    {isDone && finishedEarly && extensionMinutes === 0 && (
                       <Badge variant="outline" className="h-5 rounded-md border-green-300 px-1.5 text-[10px] text-green-700">
                         Finished early
+                      </Badge>
+                    )}
+                    {isDone && extensionMinutes === 0 && !finishedEarly && finishedPercent !== null && (
+                      <Badge variant="outline" className="h-5 rounded-md px-1.5 text-[10px]">
+                        Completed · Not early
+                      </Badge>
+                    )}
+                    {isDone && extensionMinutes === 0 && finishedPercent === null && (
+                      <Badge variant="outline" className="h-5 rounded-md px-1.5 text-[10px]">
+                        Completion timing unavailable
                       </Badge>
                     )}
                   </div>
@@ -270,6 +303,11 @@ export default function TaskCard({
                       ? ` · Finished in ${Math.round(finishedMinutes ?? 0)} min${finishedEarly ? ' (early)' : ''}`
                       : ''}
                 </p>
+                {isActive && progressPercent >= 100 && (
+                  <p role="status" className="mb-2 text-xs font-semibold text-amber-700">
+                    Estimated time reached. This task is still In Progress until staff choose Finish or Extend.
+                  </p>
+                )}
                 {(!isDone || finishedPercent !== null) && (
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
@@ -349,6 +387,65 @@ export default function TaskCard({
           </div>
         </CardContent>
       </Card>
+
+      {/* Same elapsed clock as the progress bar: no independent prompt timer.
+          Keep the dialog open until staff finish or extend the task. */}
+      <Dialog open={expiredNeedsDecision} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-lg"
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>{task.title} is finished?</DialogTitle>
+            <DialogDescription>
+              The estimated duration is 100% used, but this task is still In Progress.
+              Confirm it is finished or extend the estimated duration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-semibold">Estimated task time reached (100%).</p>
+            <p className="mt-1">
+              Original: {formatDurationMinutes(baseDuration)}
+              {extensionMinutes > 0 ? ` · Extended: ${formatDurationMinutes(extensionMinutes)}` : ''}
+            </p>
+            <p className="mt-1 text-xs">The timer cannot decide if the actual work is complete.</p>
+          </div>
+          {canExtendExpired ? (
+            <div className="space-y-2">
+              <label htmlFor={`decision-extra-${task.id}`} className="text-sm font-medium">
+                Additional estimated minutes (5–{Math.min(240, availableExtension)})
+              </label>
+              <Input
+                id={`decision-extra-${task.id}`}
+                type="number" min={5} max={Math.min(240, availableExtension)} step={1}
+                value={expiredExtraMinutes}
+                onChange={(event) => setExpiredExtraMinutes(event.target.value)}
+                disabled={extending || finishingExpired}
+              />
+            </div>
+          ) : <p className="text-sm text-amber-800">Maximum extension limit reached. Staff must resolve this task manually.</p>}
+          <DialogFooter className="gap-2 sm:justify-end">
+            {canExtendExpired && (
+              <Button
+                type="button" variant="outline" disabled={extending || finishingExpired}
+                onClick={() => void extend(true)}
+              >
+                <TimerReset className="mr-2 h-4 w-4" />
+                {extending ? 'Extending…' : 'Extend'}
+              </Button>
+            )}
+            <Button
+              type="button" className="bg-green-600 text-white hover:bg-green-700"
+              disabled={finishingExpired || extending}
+              onClick={() => void finishExpiredTask()}
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              {finishingExpired ? 'Finishing…' : 'Finish'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={extendOpen} onOpenChange={setExtendOpen}>
         <DialogContent>

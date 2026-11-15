@@ -71,10 +71,16 @@ export default function ServiceJourneyPanel({ appointmentId }: { appointmentId: 
       if (document.visibilityState === 'visible') void refresh();
     }, 15_000);
     const onFocus = () => void refresh();
+    const onTaskUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ appointmentId?: string }>).detail;
+      if (detail?.appointmentId === appointmentId) void refresh();
+    };
     window.addEventListener('focus', onFocus);
+    window.addEventListener('autocare-task-updated', onTaskUpdated);
     return () => {
       clearInterval(timer);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('autocare-task-updated', onTaskUpdated);
     };
   }, [refresh]);
 
@@ -156,9 +162,9 @@ export default function ServiceJourneyPanel({ appointmentId }: { appointmentId: 
                     </span>
                     <span className="text-right">
                       Original {formatMinutes(row.baselineMinutes)}
-                      {row.extensionMinutes > 0 ? ` · Extended +${formatMinutes(row.extensionMinutes)} (delay)` : ''}
-                      {row.finishedEarly ? ` · Finished early (${Math.round(row.completionPercent ?? 0)}% of estimate)` : ''}
-                      {row.status === 'DONE' && !row.finishedEarly && row.completionPercent !== null
+                      {row.extensionMinutes > 0 ? ` · Delayed (extended +${formatMinutes(row.extensionMinutes)})` : ''}
+                      {row.finishedEarly && row.extensionMinutes === 0 ? ` · Finished early (${Math.round(row.completionPercent ?? 0)}% of estimate)` : ''}
+                      {row.status === 'DONE' && row.extensionMinutes === 0 && !row.finishedEarly && row.completionPercent !== null
                         ? ` · Finished at ${Math.round(row.completionPercent)}% of estimate`
                         : ''}
                     </span>

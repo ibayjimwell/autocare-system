@@ -32,6 +32,11 @@ export type TaskTimingRow = {
   extensionMinutes: number;
   effectiveMinutes: number;
   elapsedMinutes: number | null;
+  /** Server timestamps let Mobile keep its bar ticking between API refreshes. */
+  startedAt: string | null;
+  completedAt: string | null;
+  /** A completed task is EARLY (<80%), DELAYED (extended), COMPLETED, or UNKNOWN. */
+  outcome: 'EARLY' | 'DELAYED' | 'COMPLETED' | 'UNKNOWN' | 'IN_PROGRESS' | 'PENDING';
   remainingMinutes: number | null;
   /** Percentage of the original estimate used before finishing (may exceed 100). */
   completionPercent: number | null;
@@ -85,6 +90,11 @@ export function calculateTaskTiming(tasks: TimedTask[], now = new Date()) {
     const remainingMinutes = projected
       ? Math.max(0, effectiveMinutes - elapsedMinutes!) : null;
     // The Extend button still unlocks at 80% of the CURRENT estimate.
+    const outcome: TaskTimingRow['outcome'] = isDone
+      ? extensionMinutes > 0 ? 'DELAYED'
+        : !measured ? 'UNKNOWN'
+          : finishedEarly ? 'EARLY' : 'COMPLETED'
+      : isInProgress ? 'IN_PROGRESS' : 'PENDING';
     const nearFinish = projected && effectiveMinutes > 0 &&
       elapsedMinutes! >= effectiveMinutes * EARLY_THRESHOLD;
 
@@ -97,6 +107,9 @@ export function calculateTaskTiming(tasks: TimedTask[], now = new Date()) {
       extensionMinutes,
       effectiveMinutes,
       elapsedMinutes,
+      startedAt: startMs === null ? null : new Date(startMs).toISOString(),
+      completedAt: endMs === null ? null : new Date(endMs).toISOString(),
+      outcome,
       remainingMinutes,
       completionPercent,
       finishedEarly,

@@ -45,6 +45,7 @@ import InventoryShortageResolutionModal from "./inventory-shortage-resolution-mo
 import { inventoryShortagesApi, type InventoryShortageReport } from "@/lib/service-tracking/inventory-shortages";
 
 import TaskCard from "./task-card";
+import { isTaskDecisionDue } from "@/lib/service-journey/task-decision";
 
 import CustomerCard from "@/components/customers/customer-card";
 
@@ -509,6 +510,27 @@ export default function ServiceDetailPanel({
     "INSPECTION"
       ? inspectionTasks
       : workTasks;
+
+  // The modal and visible task bars use the same persisted timestamps and
+  // effective duration. Only one expired task can request a decision at once.
+  const [decisionNowMs, setDecisionNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isInspection && !isInProgress) return;
+    const tick = () => setDecisionNowMs(Date.now());
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('focus', tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('focus', tick);
+    };
+  }, [isInspection, isInProgress, appointment.id]);
+  const firstExpiredTaskId = (isInspection || isInProgress)
+    ? (currentTasks.find(task => isTaskDecisionDue(task, decisionNowMs))?.id ?? null)
+    : null;
+
 
   const allTasksDone =
     currentTasks.length >
@@ -1247,41 +1269,25 @@ export default function ServiceDetailPanel({
      UPDATE TASK
   ============================================================== */
 
-  const handleTaskUpdate =
-    async (
-      taskId: string,
-      status: string
-    ) => {
-      try {
-        const res =
-          taskPhase ===
-          "INSPECTION"
-            ? await inspectionTasksApi.updateStatus(
-                taskId,
-                status
-              )
-            : await workTasksApi.updateStatus(
-                taskId,
-                status
-              );
-
-        if (
-          res.error
-        ) {
-          toast.error(
-            res.errorMessage ||
-              "Failed to update task."
-          );
-        }
-      } catch (
-        err: any
-      ) {
-        toast.error(
-          err.message ||
-            "Error updating task."
-        );
+  const handleTaskUpdate = async (taskId: string, status: string): Promise<boolean> => {
+    try {
+      const result = taskPhase === 'INSPECTION'
+        ? await inspectionTasksApi.updateStatus(taskId, status)
+        : await workTasksApi.updateStatus(taskId, status);
+      if (result.error) {
+        toast.error(result.errorMessage || 'Failed to update task.');
+        return false;
       }
-    };
+      await loadData(false);
+      window.dispatchEvent(new CustomEvent('autocare-task-updated', {
+        detail: { appointmentId: appointment.id },
+      }));
+      return true;
+    } catch (error: any) {
+      toast.error(error?.message || 'Error updating task.');
+      return false;
+    }
+  };
 
   /* ==============================================================
      EDIT EXISTING INDIVIDUAL TASK
@@ -2390,23 +2396,6 @@ export default function ServiceDetailPanel({
                     )
                   )}
                 </div>
-              ) : tasksLoading &&
-                currentTasks.length >
-                  0 ? (
-                <div className="space-y-3">
-                  {currentTasks.map(
-                    (
-                      _,
-                      index
-                    ) => (
-                      <TaskCardSkeleton
-                        key={
-                          index
-                        }
-                      />
-                    )
-                  )}
-                </div>
               ) : currentTasks.length ===
                 0 ? (
                 <div className="flex min-h-[280px] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-6 text-center">
@@ -2466,12 +2455,20 @@ export default function ServiceDetailPanel({
                           isInProgress
                         }
                         taskPhase={taskPhase}
-                        onExtended={() => loadData(false)}
+                        promptAllowed={firstExpiredTaskId === task.id}
+                        onExtended={async () => {
+                          await loadData(false);
+                          window.dispatchEvent(new CustomEvent('autocare-task-updated', {
+                            detail: { appointmentId: appointment.id },
+                          }));
+                        }}
                       />
                     )
                   )}
                 </div>
               )}
+
+
 
               {isInspection &&
                 allTasksDone &&
