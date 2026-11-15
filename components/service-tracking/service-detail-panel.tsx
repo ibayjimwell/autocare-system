@@ -2465,6 +2465,8 @@ export default function ServiceDetailPanel({
                         isInProgress={
                           isInProgress
                         }
+                        taskPhase={taskPhase}
+                        onExtended={() => loadData(false)}
                       />
                     )
                   )}

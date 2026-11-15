@@ -24,6 +24,8 @@ export const InspectionTasks = pgTable(
     order: integer("order").default(0),
     durationMinutes: integer("duration_minutes"), // estimated duration in minutes (nullable)
     startedAt: timestamp("started_at"), // when task was started
+    completedAt: timestamp("completed_at"), // exact finish time for early/late calculations
+    extensionMinutes: integer("extension_minutes").default(0).notNull(), // added duration without changing baseline
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

@@ -183,6 +183,9 @@ export async function PUT(
     if (appointment?.status !== 'IN_PROGRESS') {
       return NextResponse.json({ error: true, errorMessage: 'Tasks can be edited only during their active appointment phase.' }, { status: 409 });
     }
+    if (task.status !== 'PENDING' && duration !== task.durationMinutes) {
+      return NextResponse.json({ error: true, errorMessage: 'Once a task starts, its original duration is locked. Use Extend near its planned finish time.' }, { status: 409 });
+    }
     const [updated] = await Database.update(WorkTasks).set({
       title,
       durationMinutes: duration == null ? null : duration,

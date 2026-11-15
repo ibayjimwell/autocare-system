@@ -18,7 +18,7 @@ interface AddTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddTask: (title: string, durationMinutes?: number) => void | boolean | Promise<void | boolean>;   // extended signature
-  editingTask?: { id: string; title: string; durationMinutes?: number } | null;
+  editingTask?: { id: string; title: string; durationMinutes?: number; status?: string } | null;
   onEditTask?: (id: string, title: string, durationMinutes?: number) => void | boolean | Promise<void | boolean>;
   isLoading?: boolean;
 }
@@ -44,6 +44,7 @@ export default function AddTaskModal({
     }
   }, [editingTask, open]);
 
+  const durationLocked = Boolean(editingTask && editingTask.status !== 'PENDING');
   const durationParts = splitDurationMinutes(durationMinutes);
   const updateDuration = (hours: unknown, minutes: unknown) => {
     const combined = combineDurationMinutes(hours, minutes);
@@ -99,6 +100,7 @@ export default function AddTaskModal({
                 <Label htmlFor="task-hours" className="mb-1 block text-xs text-muted-foreground">Hours</Label>
                 <Input id="task-hours" type="number" min="0" step="1" inputMode="numeric"
                   value={durationMinutes === undefined ? '' : durationParts.hours}
+                  disabled={durationLocked}
                   onChange={(e) => updateDuration(e.target.value, durationParts.minutes)}
                   placeholder="0" className="h-11 rounded-xl" />
               </div>
@@ -106,12 +108,13 @@ export default function AddTaskModal({
                 <Label htmlFor="task-minutes" className="mb-1 block text-xs text-muted-foreground">Minutes (0–59)</Label>
                 <Input id="task-minutes" type="number" min="0" max="59" step="1" inputMode="numeric"
                   value={durationMinutes === undefined ? '' : durationParts.minutes}
+                  disabled={durationLocked}
                   onChange={(e) => updateDuration(durationParts.hours, e.target.value)}
                   placeholder="30" className="h-11 rounded-xl" />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              {durationMinutes ? `Estimated: ${formatDurationMinutes(durationMinutes)}`
+              {durationLocked ? 'Original duration is locked after starting. Use Extend near the end of the estimate.' : durationMinutes ? `Estimated: ${formatDurationMinutes(durationMinutes)}`
                 : 'Leave both fields empty for a task without a time estimate.'}
             </p>
           </div>

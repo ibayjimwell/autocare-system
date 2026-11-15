@@ -7,6 +7,9 @@ import { formatDurationMinutes } from '@/app-utils/services/helpers';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 import {
   CheckCircle2,
@@ -15,6 +18,7 @@ import {
   Package,
   Pencil,
   PlayCircle,
+  TimerReset,
   Settings,
   Trash2,
 } from 'lucide-react';
@@ -28,6 +32,8 @@ interface TaskCardProps {
   onEdit: () => void;
   appointmentId: string;
   isInProgress: boolean;
+  taskPhase: 'INSPECTION' | 'WORK';
+  onExtended: () => void | Promise<void>;
 }
 
 export default function TaskCard({
@@ -37,51 +43,73 @@ export default function TaskCard({
   onEdit,
   appointmentId,
   isInProgress,
+  taskPhase,
+  onExtended,
 }: TaskCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
   const [markDoneConfirmOpen, setMarkDoneConfirmOpen] =
     useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [extraMinutes, setExtraMinutes] = useState('15');
+  const [extending, setExtending] = useState(false);
+  const baseDuration = Number(task.durationMinutes) || 0;
+  const extensionMinutes = Number(task.extensionMinutes) || 0;
+  const duration = baseDuration + extensionMinutes;
 
-  const duration = task.durationMinutes;
-
-  useEffect(() => {
-    if (
-      task.status !== 'IN_PROGRESS' ||
-      !task.startedAt ||
-      !duration
-    ) {
+  const extend = async () => {
+    const additionalMinutes = Number(extraMinutes);
+    if (!Number.isInteger(additionalMinutes) || additionalMinutes < 5 || additionalMinutes > 240) {
+      toast.error('Enter a whole number between 5 and 240 minutes.');
       return;
     }
+    setExtending(true);
+    try {
+      const route = taskPhase === 'INSPECTION' ? 'inspection-tasks' : 'work-tasks';
+      const response = await fetch(`/api/service-tracking/${route}/${encodeURIComponent(task.id)}/extend`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ additionalMinutes }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.errorMessage || 'Unable to extend task.');
+      toast.success(result.message || 'Estimated duration extended.');
+      setExtendOpen(false);
+      await onExtended();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to extend task.');
+    } finally { setExtending(false); }
+  };
 
-    const startTime = new Date(task.startedAt).getTime();
-    const durationMs = duration * 60 * 1000;
-
-    const update = () => {
-      const now = Date.now();
-      const diff = Math.max(0, Math.min(durationMs, now - startTime));
-      setElapsed(diff);
-    };
-
+  useEffect(() => {
+    if (task.status !== 'IN_PROGRESS' || !task.startedAt) {
+      setElapsed(0);
+      return;
+    }
+    const started = new Date(task.startedAt).getTime();
+    if (!Number.isFinite(started)) return;
+    const update = () => setElapsed(Math.max(0, Date.now() - started));
     update();
-
     const interval = setInterval(update, 1000);
-
     return () => clearInterval(interval);
-  }, [task.status, task.startedAt, duration]);
+  }, [task.status, task.startedAt]);
 
-  const progressPercent = (() => {
-    if (task.status === 'DONE') return 100;
-    if (task.status === 'PENDING' || !duration) return 0;
-
-    return Math.min(
-      100,
-      Math.round(
-        (elapsed / (duration * 60 * 1000)) * 100
-      )
-    );
-  })();
+  const elapsedMinutes = elapsed / 60000;
+  const startedMs = task.startedAt ? new Date(task.startedAt).getTime() : NaN;
+  const finishedMs = task.completedAt ? new Date(task.completedAt).getTime() : NaN;
+  const hasRecordedFinish = task.status === 'DONE' && baseDuration > 0 &&
+    Number.isFinite(startedMs) && Number.isFinite(finishedMs) && finishedMs >= startedMs;
+  const finishedMinutes = hasRecordedFinish ? (finishedMs - startedMs) / 60000 : null;
+  // Completed tasks use their ORIGINAL estimate, even if their duration was extended.
+  // Active tasks use their current effective estimate to decide when Extend appears.
+  const finishedPercent = finishedMinutes === null ? null : finishedMinutes / baseDuration * 100;
+  const finishedEarly = finishedPercent !== null && finishedPercent < 80;
+  const progressPercent = task.status === 'DONE'
+    ? (finishedPercent === null ? 0 : Math.min(100, Math.round(finishedPercent)))
+    : task.status === 'PENDING' || duration <= 0 ? 0
+      : Math.min(100, Math.round(elapsedMinutes / duration * 100));
+  const nearFinish = task.status === 'IN_PROGRESS' && duration > 0 && elapsedMinutes >= duration * 0.8;
+  const effectiveRemaining = Math.max(0, Math.ceil(duration - elapsedMinutes));
 
   const isActive = task.status === 'IN_PROGRESS';
   const isDone = task.status === 'DONE';
@@ -146,6 +174,17 @@ export default function TaskCard({
                         {formatDurationMinutes(duration)}
                       </Badge>
                     )}
+
+                    {extensionMinutes > 0 && (
+                      <Badge variant="outline" className="h-5 rounded-md border-amber-300 px-1.5 text-[10px] text-amber-700">
+                        Extended · Delay
+                      </Badge>
+                    )}
+                    {finishedEarly && (
+                      <Badge variant="outline" className="h-5 rounded-md border-green-300 px-1.5 text-[10px] text-green-700">
+                        Finished early
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -163,6 +202,12 @@ export default function TaskCard({
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         Start
+                      </Button>
+                    )}
+
+                    {task.status === 'IN_PROGRESS' && nearFinish && extensionMinutes < 1440 && (
+                      <Button type="button" size="sm" variant="outline" onClick={() => setExtendOpen(true)} className="h-11 rounded-md px-3 md:h-9">
+                        <TimerReset className="mr-1 h-4 w-4" /> Extend
                       </Button>
                     )}
 
@@ -212,16 +257,27 @@ export default function TaskCard({
             {duration && (
               <div className="rounded-md bg-muted/40 p-3">
                 <div className="mb-2 flex items-center justify-between text-[10px] font-medium text-muted-foreground">
-                  <span>Progress</span>
-                  <span>{progressPercent}%</span>
+                  <span>{isDone ? 'Original estimated time used' : 'Estimated time elapsed (not task completion)'}</span>
+                  <span>{isDone ? (finishedPercent === null ? 'Unknown' : `${Math.round(finishedPercent)}%`) : `${progressPercent}%`}</span>
                 </div>
 
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-700"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Original estimate {formatDurationMinutes(baseDuration)}
+                  {extensionMinutes > 0 ? ` · Extended +${formatDurationMinutes(extensionMinutes)}` : ''}
+                  {task.status === 'IN_PROGRESS'
+                    ? ` · Elapsed ${Math.floor(elapsedMinutes)} min · ${effectiveRemaining ? `About ${effectiveRemaining} min remaining` : 'Estimated time reached'}`
+                    : task.status === 'DONE' && task.startedAt && task.completedAt
+                      ? ` · Finished in ${Math.round(finishedMinutes ?? 0)} min${finishedEarly ? ' (early)' : ''}`
+                      : ''}
+                </p>
+                {(!isDone || finishedPercent !== null) && (
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-700"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -293,6 +349,27 @@ export default function TaskCard({
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={extendOpen} onOpenChange={setExtendOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Extend estimated task duration</DialogTitle>
+            <DialogDescription>
+              {task.title} is nearing the end of its current estimate. Add extra minutes without changing the original estimate or recorded start time. This may affect the projected service delay.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="space-y-2 text-sm font-medium" htmlFor={`extend-${task.id}`}>
+            Additional minutes (5–240)
+            <Input id={`extend-${task.id}`} type="number" min={5} max={240} step={5}
+              value={extraMinutes} onChange={event => setExtraMinutes(event.target.value)} />
+          </label>
+          <p className="text-xs text-muted-foreground">Current: {formatDurationMinutes(duration)} · Original: {formatDurationMinutes(baseDuration)} · Total extension limit: 24 hours.</p>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={extending} onClick={() => setExtendOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={extending} onClick={() => void extend()}>{extending ? 'Saving…' : 'Extend duration'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmationDialog
         open={startDialogOpen}
