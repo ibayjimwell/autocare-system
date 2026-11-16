@@ -121,11 +121,12 @@ export async function ensurePaypalOrder(ticket: string) {
   if (billCentavos(bill.grandTotal) !== attempt.amountCentavos) throw new PaypalError('The Final Cost amount has changed.',409);
   if (attempt.orderId) return {id:attempt.orderId};
   if (!['READY','CREATE_UNKNOWN'].includes(attempt.status)) throw new PaypalError('Checkout is already being created. Try checking its status.',409);
-  // Only one caller may start the remote order; CREATE_UNKNOWN is intentionally blocked
-  // from creating a different order without manual reconciliation.
-  if (attempt.status === 'CREATE_UNKNOWN') throw new PaypalError('Order status is uncertain. Contact AutoCare before retrying.',409);
+  // CREATE_UNKNOWN means the previous provider response was lost. Retry ONLY
+  // with the same attempt.id as PayPal-Request-Id, within the ticket lifetime.
+  // PayPal retains create-order idempotency keys for 6 hours; this ticket lives
+  // only one hour, so the retry cannot create a second distinct remote order.
   const claimed = await Database.update(PaypalCheckoutAttempts).set({status:'CREATING',updatedAt:new Date()})
-    .where(and(eq(PaypalCheckoutAttempts.id,attempt.id),eq(PaypalCheckoutAttempts.status,'READY')))
+    .where(and(eq(PaypalCheckoutAttempts.id,attempt.id),eq(PaypalCheckoutAttempts.status,attempt.status)))
     .returning({id:PaypalCheckoutAttempts.id});
   if (!claimed.length) throw new PaypalError('Another request is starting checkout.',409);
   try {
@@ -198,6 +199,12 @@ export async function capturePaypalOrder(ticket: string, requestedOrderId: strin
   if (bill.status !== 'OFFICIAL') throw new PaypalError('Final Cost is no longer payable.',409);
   const alreadyCaptured = await reconcilePaypalAttempt(attempt.id);
   if (alreadyCaptured.paid) return alreadyCaptured;
+  // Never capture a checkout retired by an expired-session retry or cashier.
+  // Reconciliation above is intentionally permitted even for retired attempts.
+  if (attempt.status !== 'ACTIVE')
+    throw new PaypalError('This checkout is no longer active. Return to the Final Cost page.',409);
+  if (attempt.expiresAt.getTime() <= Date.now())
+    throw new PaypalError('This checkout has expired. Return to the Final Cost page.',410);
   const order = await paypalRequest(`/v2/checkout/orders/${encodeURIComponent(requestedOrderId)}`);
   if (order.status !== 'APPROVED') throw new PaypalError('Payment is not approved by PayPal.',409);
   if (order.purchase_units?.[0]?.custom_id !== attempt.finalBillId ||

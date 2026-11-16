@@ -1,9 +1,26 @@
 import { NextResponse } from 'next/server';
 import { ensurePaypalOrder } from '@/lib/payments/paypal-sandbox';
-export const dynamic='force-dynamic';
-export async function POST(_:Request,{params}:{params:Promise<{token:string}>}) {
-  try { const order=await ensurePaypalOrder((await params).token);
-    return NextResponse.json({error:false,data:{id:order.id}},{headers:{'Cache-Control':'no-store'}});
-  } catch(error) { console.error('[PayPal sandbox] Create:',error);
-    return NextResponse.json({error:true,errorMessage:error instanceof Error?error.message:'Could not start PayPal order.'},{status:409}); }
+import { paypalStartError } from '@/lib/payments/paypal-start';
+
+export const dynamic = 'force-dynamic';
+
+type Context = { params: Promise<{ token: string }> };
+const headers = { 'Cache-Control': 'private, no-store' };
+
+export async function POST(_: Request, { params }: Context) {
+  try {
+    const order = await ensurePaypalOrder((await params).token);
+    return NextResponse.json(
+      { error: false, data: { id: order.id } },
+      { headers },
+    );
+  } catch (error) {
+    console.error('[PayPal Sandbox] Create order:', error);
+    const failure = paypalStartError(error);
+    return NextResponse.json({
+      error: true,
+      code: failure.code,
+      errorMessage: failure.errorMessage,
+    }, { status: failure.status, headers });
+  }
 }
